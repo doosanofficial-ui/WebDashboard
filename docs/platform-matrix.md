@@ -35,7 +35,7 @@
 - [x] 모바일 런타임 결정(React Native + Native Bridge) 및 ADR 작성
 - [x] Bare React Native 스캐폴딩 생성 및 foreground GPS uplink baseline 구현
 - [x] iOS 우선 파일럿(always 권한 + significant-change 옵션 + Info.plist 자동 설정 스크립트)
-- [ ] Background location 서비스 구현(iOS Significant-Change + Android FGS) — 검증 절차: [`docs/reports/ios-bg-30min-template.md`](reports/ios-bg-30min-template.md)
+- [ ] Background location 서비스 구현(iOS Significant-Change + Android FGS) — iOS: 구현 완료 / Android: FGS 스캐폴드 완료(서비스 구현은 진행 중) — 가이드: [`docs/android-fgs-bg-location.md`](android-fgs-bg-location.md) — 검증 절차: [`docs/reports/ios-bg-30min-template.md`](reports/ios-bg-30min-template.md)
 - [ ] 앱 백그라운드 상태에서도 GPS uplink 지속(저주기 + 배터리 정책)
 - [x] 네트워크 단절/복귀 시 store-and-forward 큐 적용(모바일 baseline)
 - [ ] 배터리/발열 측정 기준 정의(예: 1시간 주행 기준 소모율)
