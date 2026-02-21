@@ -59,6 +59,8 @@ jobs:
           test -f mobile/src/App.js
           test -f mobile/src/telemetry/ws-client.js
           test -f mobile/src/telemetry/gps-client.js
+          test -f mobile/src/telemetry/protocol.js
+          test -f mobile/src/telemetry/store-forward-queue.js
           node mobile/scripts/validate-mobile-scaffold.js
 
       - name: Runtime validation notes

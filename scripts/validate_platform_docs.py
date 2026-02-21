@@ -33,6 +33,12 @@ REQUIRED_FILES = {
         "## 권한 설정 (필수)",
         "## 현재 한계",
     ],
+    "docs/copilot-parallel-runbook.md": [
+        "# Copilot Parallel Tracks: Integration Runbook",
+        "## Merge Order",
+        "## Conflict Resolution Rules",
+        "## Smoke CI: Mobile Telemetry Core Files",
+    ],
 }
 
 
