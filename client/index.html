@@ -6,11 +6,6 @@
     <meta name="theme-color" content="#0f1720" />
     <title>Telemetry Dashboard MVP</title>
     <link rel="manifest" href="/manifest.json" />
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      crossorigin=""
-    />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -55,55 +50,73 @@
         <article class="gauge-card"><h3>Ay</h3><p id="g_ay">-</p><small>m/s²</small></article>
       </section>
 
-      <section class="charts-grid">
-        <article class="panel">
-          <div class="panel-head">
-            <h2>Wheel Speed (FL / FR)</h2>
-            <small>60s window</small>
-          </div>
-          <canvas id="speedChart"></canvas>
-        </article>
+      <div class="bottom-layout" id="bottomLayout">
+        <section class="charts-grid" id="dataPanel">
+          <article class="panel">
+            <div class="panel-head">
+              <h2>Wheel Speed (FL / FR)</h2>
+              <small>60s window</small>
+            </div>
+            <canvas id="speedChart"></canvas>
+          </article>
 
-        <article class="panel">
-          <div class="panel-head">
-            <h2>Dynamics (Yaw / Ay)</h2>
-            <small>60s window</small>
-          </div>
-          <canvas id="dynChart"></canvas>
-        </article>
-      </section>
+          <article class="panel">
+            <div class="panel-head">
+              <h2>Dynamics (Yaw / Ay)</h2>
+              <small>60s window</small>
+            </div>
+            <canvas id="dynChart"></canvas>
+          </article>
+        </section>
 
-      <section class="gps-panel panel">
-        <div class="panel-head">
-          <h2>GPS</h2>
-          <span id="gpsState" class="pill neutral">idle</span>
-        </div>
-        <div class="gps-grid">
-          <div><label>Lat</label><p id="gpsLat">-</p></div>
-          <div><label>Lon</label><p id="gpsLon">-</p></div>
-          <div><label>Speed</label><p id="gpsSpd">-</p></div>
-          <div><label>Heading</label><p id="gpsHdg">-</p></div>
-          <div><label>Accuracy</label><p id="gpsAcc">-</p></div>
-          <div><label>Age</label><p id="gpsAge">-</p></div>
-        </div>
-        <div class="heading-wrap">
-          <div id="headingArrow" class="heading-arrow"></div>
-        </div>
-        <div class="gps-views">
-          <div class="map-wrap">
-            <div id="gpsMap" aria-label="GPS map"></div>
-            <p id="mapHint" class="map-hint">지도 초기화 중...</p>
+        <div
+          id="splitterMain"
+          class="splitter splitter-main"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize data and GPS panels"
+        ></div>
+
+        <section class="gps-panel panel" id="gpsPanel">
+          <div class="panel-head">
+            <h2>GPS</h2>
+            <span id="gpsState" class="pill neutral">idle</span>
           </div>
-          <div class="map-wrap roadview-wrap">
-            <div id="naverRoadview" aria-label="Naver roadview"></div>
-            <p id="naverRoadviewStatus" class="map-hint">NAVER 로드뷰 초기화 중...</p>
-            <p id="naverRoadviewAddress" class="map-hint">주소: -</p>
+          <div class="gps-grid">
+            <div><label>Lat</label><p id="gpsLat">-</p></div>
+            <div><label>Lon</label><p id="gpsLon">-</p></div>
+            <div><label>Speed</label><p id="gpsSpd">-</p></div>
+            <div><label>Heading</label><p id="gpsHdg">-</p></div>
+            <div><label>Accuracy</label><p id="gpsAcc">-</p></div>
+            <div><label>Age</label><p id="gpsAge">-</p></div>
           </div>
-        </div>
-      </section>
+          <div class="heading-wrap">
+            <div id="headingArrow" class="heading-arrow"></div>
+          </div>
+          <div class="gps-views" id="gpsViews">
+            <div class="map-wrap" id="mapWrap">
+              <div id="gpsMap" aria-label="Naver map"></div>
+              <p id="mapHint" class="map-hint">지도 초기화 중...</p>
+            </div>
+
+            <div
+              id="splitterMapRoadview"
+              class="splitter splitter-inner"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize map and roadview"
+            ></div>
+
+            <div class="map-wrap roadview-wrap" id="roadviewWrap">
+              <div id="naverRoadview" aria-label="Naver roadview"></div>
+              <p id="naverRoadviewStatus" class="map-hint">NAVER 로드뷰 초기화 중...</p>
+              <p id="naverRoadviewAddress" class="map-hint">주소: -</p>
+            </div>
+          </div>
+        </section>
+      </div>
     </main>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     <script type="module" src="/app.js"></script>
   </body>
 </html>

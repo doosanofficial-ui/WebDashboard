@@ -1,6 +1,6 @@
 import { ScrollingChart } from "./charts.js";
 import { GpsTracker } from "./gps.js";
-import { GpsMap } from "./map.js";
+import { NaverMap } from "./naver-map.js";
 import { NaverRoadview } from "./naver-roadview.js";
 import { updateConnection, updateGauges, updateGps } from "./ui.js";
 import { JsonCodec, TelemetrySocket } from "./ws.js";
@@ -28,6 +28,10 @@ const els = {
   headingArrow: document.getElementById("headingArrow"),
   gpsMap: document.getElementById("gpsMap"),
   mapHint: document.getElementById("mapHint"),
+  bottomLayout: document.getElementById("bottomLayout"),
+  splitterMain: document.getElementById("splitterMain"),
+  gpsViews: document.getElementById("gpsViews"),
+  splitterMapRoadview: document.getElementById("splitterMapRoadview"),
   naverRoadview: document.getElementById("naverRoadview"),
   naverRoadviewStatus: document.getElementById("naverRoadviewStatus"),
   naverRoadviewAddress: document.getElementById("naverRoadviewAddress"),
@@ -67,14 +71,13 @@ const gpsTracker = new GpsTracker({
   staleMs: 4000,
 });
 
-const gpsMap = new GpsMap({
+const naverMap = new NaverMap({
   container: els.gpsMap,
   hintEl: els.mapHint,
   defaultCenter: [37.5665, 126.978],
   defaultZoom: 16,
   trailLimit: 1200,
 });
-gpsMap.init();
 
 const roadview = new NaverRoadview({
   container: els.naverRoadview,
@@ -91,8 +94,73 @@ let lastServerDrop = 0;
 let localDropCount = 0;
 let rttMs = null;
 let lastGpsView = null;
+const layoutState = {
+  mainSplitPct: 58,
+  mapSplitPct: 50,
+};
+const MOBILE_BREAKPOINT = 860;
 
 els.serverUrl.value = `${window.location.protocol}//${window.location.host}`;
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function applySplitLayout() {
+  if (window.innerWidth <= MOBILE_BREAKPOINT) {
+    if (els.bottomLayout) {
+      els.bottomLayout.style.gridTemplateColumns = "";
+    }
+    if (els.gpsViews) {
+      els.gpsViews.style.gridTemplateColumns = "";
+    }
+    return;
+  }
+
+  if (els.bottomLayout) {
+    const main = clamp(layoutState.mainSplitPct, 38, 72);
+    els.bottomLayout.style.gridTemplateColumns = `${main}% var(--splitter-size, 8px) ${100 - main}%`;
+  }
+
+  if (els.gpsViews) {
+    const inner = clamp(layoutState.mapSplitPct, 30, 70);
+    els.gpsViews.style.gridTemplateColumns = `${inner}% var(--splitter-size, 8px) ${100 - inner}%`;
+  }
+}
+
+function installVerticalSplitter({ splitterEl, containerEl, minPct, maxPct, onRatio }) {
+  if (!splitterEl || !containerEl) {
+    return;
+  }
+
+  const onPointerMove = (event) => {
+    const rect = containerEl.getBoundingClientRect();
+    if (!rect.width) {
+      return;
+    }
+    const ratio = ((event.clientX - rect.left) / rect.width) * 100;
+    onRatio(clamp(ratio, minPct, maxPct));
+  };
+
+  const onPointerUp = () => {
+    window.removeEventListener("pointermove", onPointerMove);
+    window.removeEventListener("pointerup", onPointerUp);
+    window.removeEventListener("pointercancel", onPointerUp);
+    document.body.classList.remove("resizing");
+  };
+
+  splitterEl.addEventListener("pointerdown", (event) => {
+    if (window.innerWidth <= MOBILE_BREAKPOINT) {
+      return;
+    }
+    event.preventDefault();
+    splitterEl.setPointerCapture?.(event.pointerId);
+    document.body.classList.add("resizing");
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
+  });
+}
 
 function fitViewportLayout() {
   const topbar = document.querySelector(".topbar");
@@ -101,9 +169,10 @@ function fitViewportLayout() {
     return;
   }
 
-  if (window.innerWidth <= 860) {
+  if (window.innerWidth <= MOBILE_BREAKPOINT) {
     main.style.height = "auto";
-    gpsMap.resize();
+    applySplitLayout();
+    naverMap.resize();
     roadview.resize();
     return;
   }
@@ -113,7 +182,8 @@ function fitViewportLayout() {
   const mainHeight = Math.max(320, viewportH - topbarH);
   main.style.height = `${mainHeight}px`;
 
-  gpsMap.resize();
+  applySplitLayout();
+  naverMap.resize();
   roadview.resize();
 }
 
@@ -126,6 +196,7 @@ async function initPublicConfig() {
 
     const payload = await res.json();
     const naverClientId = payload?.naver?.clientId;
+    await naverMap.init(naverClientId);
     await roadview.init(naverClientId);
     fitViewportLayout();
   } catch (err) {
@@ -133,6 +204,32 @@ async function initPublicConfig() {
     els.naverRoadviewStatus.classList.add("error");
   }
 }
+
+installVerticalSplitter({
+  splitterEl: els.splitterMain,
+  containerEl: els.bottomLayout,
+  minPct: 38,
+  maxPct: 72,
+  onRatio: (value) => {
+    layoutState.mainSplitPct = value;
+    applySplitLayout();
+    naverMap.resize();
+    roadview.resize();
+  },
+});
+
+installVerticalSplitter({
+  splitterEl: els.splitterMapRoadview,
+  containerEl: els.gpsViews,
+  minPct: 30,
+  maxPct: 70,
+  onRatio: (value) => {
+    layoutState.mapSplitPct = value;
+    applySplitLayout();
+    naverMap.resize();
+    roadview.resize();
+  },
+});
 
 initPublicConfig();
 fitViewportLayout();
@@ -267,7 +364,7 @@ function sendMark() {
   }
 
   if (lastGpsView?.fix) {
-    gpsMap.addMark(lastGpsView.fix, note);
+    naverMap.addMark(lastGpsView.fix, note);
   }
 }
 
@@ -321,7 +418,7 @@ setInterval(() => {
   const gpsView = gpsTracker.tick(nowMs);
   lastGpsView = gpsView;
   updateGps(els, gpsView);
-  gpsMap.updateFromFix(gpsView.fix, gpsView.stale);
+  naverMap.updateFromFix(gpsView.fix, gpsView.stale);
   roadview.updateFromFix(gpsView.fix, gpsView.stale);
 }, 100);
 
