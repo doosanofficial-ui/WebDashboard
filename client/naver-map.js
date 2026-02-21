@@ -38,8 +38,64 @@ function hasValidLatLon(fix) {
   );
 }
 
+function hasNaverAuthFailureText(text) {
+  const normalized = String(text || "")
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+  return (
+    (normalized.includes("open api") &&
+      (normalized.includes("설정 실패") ||
+        normalized.includes("인증 실패") ||
+        normalized.includes("인증이 실패"))) ||
+    normalized.includes("클라이언트 아이디와 웹 서비스 url")
+  );
+}
+
+function setNaverAuthFailed(message) {
+  window.__naverAuthFailed = true;
+  if (message) {
+    window.__naverAuthFailedMessage = message;
+  }
+}
+
+function installNaverAuthConsoleProbe() {
+  if (window.__naverAuthProbeInstalled) {
+    return;
+  }
+
+  const wrap = (originalFn) => {
+    if (typeof originalFn !== "function") {
+      return (...args) => {
+        const joined = args
+          .map((v) => (typeof v === "string" ? v : ""))
+          .join(" ");
+        if (hasNaverAuthFailureText(joined)) {
+          setNaverAuthFailed(joined);
+        }
+      };
+    }
+
+    const originalBound = originalFn.bind(console);
+    return (...args) => {
+      const joined = args
+        .map((v) => (typeof v === "string" ? v : ""))
+        .join(" ");
+      if (hasNaverAuthFailureText(joined)) {
+        setNaverAuthFailed(joined);
+      }
+      originalBound(...args);
+    };
+  };
+
+  console.info = wrap(console.info);
+  console.warn = wrap(console.warn);
+  window.__naverAuthProbeInstalled = true;
+}
+
 function loadNaverScript(clientId) {
   return new Promise((resolve, reject) => {
+    installNaverAuthConsoleProbe();
+
     if (window.naver?.maps) {
       resolve();
       return;
@@ -83,6 +139,8 @@ export class NaverMap {
 
     this.trail = [];
     this.lastTrailPoint = null;
+    this.authFailed = false;
+    this.authWatchTimer = null;
   }
 
   async init(clientId) {
@@ -143,7 +201,16 @@ export class NaverMap {
         strokeWeight: 3,
       });
 
-      this._setHint("NAVER 지도 준비 완료", false);
+      this.authFailed = Boolean(window.__naverAuthFailed);
+      this._startAuthWatch();
+      if (this.authFailed) {
+        this._setHint(
+          `NAVER 지도 인증 실패: 콘솔 웹 서비스 URL에 ${window.location.origin} 등록 후 새로고침`,
+          true
+        );
+      } else {
+        this._setHint("NAVER 지도 준비 완료", false);
+      }
       setTimeout(() => this.resize(), 120);
     } catch (err) {
       this._setHint(`지도 초기화 실패: ${err.message}`, true);
@@ -185,7 +252,9 @@ export class NaverMap {
       this.map.panTo(center);
     }
 
-    this._setHint(stale ? "GPS 신호 지연(stale)" : "GPS 추적 중", false);
+    if (!this.authFailed) {
+      this._setHint(stale ? "GPS 신호 지연(stale)" : "GPS 추적 중", false);
+    }
   }
 
   addMark(fix, note = "") {
@@ -215,6 +284,42 @@ export class NaverMap {
       return;
     }
     window.naver.maps.Event.trigger(this.map, "resize");
+  }
+
+  _startAuthWatch() {
+    this._stopAuthWatch();
+    this.authWatchTimer = window.setInterval(() => {
+      if (window.__naverAuthFailed) {
+        this.authFailed = true;
+        this._setHint(
+          `NAVER 지도 인증 실패: 콘솔 웹 서비스 URL에 ${window.location.origin} 등록 후 새로고침`,
+          true
+        );
+        return;
+      }
+      if (!this.container) {
+        return;
+      }
+      const text = this.container.textContent || "";
+      if (!hasNaverAuthFailureText(text)) {
+        return;
+      }
+      setNaverAuthFailed(text);
+      const origin = window.location.origin;
+      this.authFailed = true;
+      this._setHint(
+        `NAVER 지도 인증 실패: 콘솔 웹 서비스 URL에 ${origin} 등록 후 새로고침`,
+        true
+      );
+    }, 1200);
+  }
+
+  _stopAuthWatch() {
+    if (!this.authWatchTimer) {
+      return;
+    }
+    clearInterval(this.authWatchTimer);
+    this.authWatchTimer = null;
   }
 
   _pushTrail(fix) {

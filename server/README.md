@@ -56,6 +56,13 @@ python app.py
 ```
 `Client Secret`은 서버에서만 사용되며 브라우저로 노출되지 않습니다.
 참고: 로드뷰 JS는 `Client ID`로 동작하지만, reverse-geocode는 NCP API 권한/상품 활성화가 별도로 필요할 수 있습니다(401 시 주소 조회만 비활성).
+지도에 `Open API 설정 실패` 문구가 뜨면 아래를 확인하세요.
+- NCP 콘솔 `웹 서비스 URL` 허용 목록에 정확히 등록:
+- `http://127.0.0.1:8080`
+- `http://localhost:8080`
+- `http://<LAN_IP>:8080`
+- URL 등록 후 브라우저 강력 새로고침
+- VS Code 내장 브라우저에서만 실패하면 Chrome/Safari에서 먼저 확인(웹뷰 리퍼러 차이로 인증 실패 가능)
 
 ## HTTPS 개발 인증서 (선택)
 Geolocation 권한이 HTTP에서 실패하면 HTTPS로 전환하세요.
