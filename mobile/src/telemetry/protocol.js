@@ -38,3 +38,17 @@ export function createMarkPayload(note = "") {
     note,
   };
 }
+
+/**
+ * Stamps a payload as queued for store-and-forward replay.
+ * The `queued_at` field allows the server to distinguish live from replayed
+ * payloads and to measure queuing latency.
+ *
+ * @param {object} payload  - Any telemetry payload (e.g. from createGpsPayload).
+ * @param {number} [nowSec] - Current time as a float (seconds since Unix epoch,
+ *   matching the `t` field convention used by other payload builders).
+ * @returns A new payload object with the `queued_at` field set.
+ */
+export function stampQueued(payload, nowSec = Date.now() / 1000) {
+  return { ...payload, queued_at: nowSec };
+}

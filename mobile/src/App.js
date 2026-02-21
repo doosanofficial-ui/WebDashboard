@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 import { APP_VERSION, inferOsName, normalizeBaseUrl, toWsUrl } from "./config";
-import { createGpsPayload, createMarkPayload } from "./telemetry/protocol";
+import { createGpsPayload, createMarkPayload, stampQueued } from "./telemetry/protocol";
 import { requestLocationPermission, GpsClient } from "./telemetry/gps-client";
 import { StoreForwardQueue } from "./telemetry/store-forward-queue";
 import { TelemetryWsClient } from "./telemetry/ws-client";
@@ -105,7 +105,7 @@ export default function App() {
     const payload = createGpsPayload(fix, buildMeta());
     const sent = wsClientRef.current.sendJson(payload);
     if (!sent) {
-      const depth = await queueRef.current.enqueue(payload);
+      const depth = await queueRef.current.enqueue(stampQueued(payload));
       setQueueDepth(depth);
       return;
     }
