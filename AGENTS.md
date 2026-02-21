@@ -11,11 +11,12 @@ This file defines always-on, repository-level instructions for AI agents in this
 - Main CI entry: `.github/workflows/smoke.yml`
   - Runs on `pull_request` and `push` to `main`.
   - Uses concurrency guard: `${{ github.workflow }}-${{ github.ref }}` with cancel-in-progress.
-  - Uses matrix (`server`, `client`) and delegates to reusable workflow.
+  - Uses matrix (`server`, `client`, `mobile`) and delegates to reusable workflow.
 - Reusable CI: `.github/workflows/reusable-smoke.yml`
-  - Validates runtime input (`server|client`).
+  - Validates runtime input (`server|client|mobile`).
   - `server`: Python setup, dependencies, `py_compile` smoke check.
   - `client`: verifies key runtime files exist.
+  - `mobile`: verifies RN scaffold files + `validate-mobile-scaffold.js`.
 
 ## 3) Session continuity rules (official behavior aligned)
 - New session is independent by default (no automatic carry-over).
@@ -48,7 +49,7 @@ This file defines always-on, repository-level instructions for AI agents in this
 - Implementation: smallest viable patch first.
 - Validation order:
   1. changed-file sanity check
-  2. smoke workflow parity checks (server/client expectations)
+  2. smoke workflow parity checks (server/client/mobile expectations)
   3. status summary with risks and next action
 
 ## 7) Editing conventions
@@ -66,3 +67,45 @@ This file defines always-on, repository-level instructions for AI agents in this
 - Do not create additional `AGENTS.md` files in subfolders.
 - VSCode workspace and Codex extension sessions must point to the same repository root so both read this single file.
 - If using multi-root workspace, include this same folder path (not a copied folder) to avoid instruction drift.
+
+## 10) Standard execution workflow (always use this unless explicitly overridden)
+1. Intake lock:
+   - Restate objective, in-scope/out-of-scope, acceptance criteria.
+   - Confirm target files and risk boundaries.
+2. Plan:
+   - Define 2~4 concrete steps and dependency order.
+   - Split into parallel tracks only when tasks are independent.
+3. Parallel implementation:
+   - Use dedicated branch/worktree per track (`copilot/issue-<id>-<slug>` preferred).
+   - Run workers in parallel (local agent and/or Copilot CLI).
+   - Keep each track minimal and focused; avoid cross-track file overlap where possible.
+4. Review and verification gate (per track):
+   - Changed-file sanity check.
+   - Repository parity checks:
+     - `python3 scripts/validate_platform_docs.py`
+     - `mobile` tests when touched: `npm test -- --runInBand --silent`
+     - `server` Python sanity when touched: compile/import smoke.
+   - Contract/schema consistency check against existing runtime/log formats.
+5. Integration:
+   - Merge in explicit dependency order (lowest-risk/foundation first).
+   - After each merge: fast-forward local `main` and re-check next PR for drift/conflicts.
+6. Finalization:
+   - Verify `main` clean and synced with remote.
+   - Clean temporary worktrees/branches.
+   - Close or update related issues with actual merge references.
+
+## 11) Copilot CLI orchestration policy
+- Copilot CLI is an allowed parallel worker for this repository.
+- Default non-interactive execution pattern:
+  - `copilot -p "<task>" --allow-all-tools --allow-all-paths --allow-all-urls --no-ask-user --silent`
+- One worker per isolated worktree; do not share a worktree across parallel workers.
+- If GitHub assignee mapping for `Copilot` is unavailable, do not block:
+  - create/update issue + comment mention, then proceed with local Copilot CLI execution.
+- Human/primary agent remains responsible for final code review, fixes, and merge decisions.
+
+## 12) PR merge gate checklist (must pass before merge)
+- PR is not draft.
+- Required `smoke` checks are green (`server`, `client`, `mobile`).
+- No unresolved conflicts with current `main`.
+- Any discovered functional/schema mismatch is fixed in-PR before merge.
+- Post-merge local sync and quick regression check completed.
