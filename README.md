@@ -84,6 +84,15 @@ python app.py
 - `Connect` 클릭
 - `Start GPS` 클릭 후 위치 권한 허용
 
+### 3) Mobile 앱 스캐폴딩 (Bare RN)
+```bash
+cd mobile
+npm install
+npm run init-native
+npm run validate
+```
+세부 실행은 `mobile/README.md`를 따른다.
+
 ## 핫스팟 운영 권장
 1. iPad 핫스팟 ON (AP 역할)
 2. Windows 노트북이 해당 SSID 접속

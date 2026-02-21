@@ -14,6 +14,7 @@ const requiredFiles = [
   "src/telemetry/protocol.js",
   "src/telemetry/ws-client.js",
   "src/telemetry/gps-client.js",
+  "scripts/init-native-project.sh",
   "README.md",
 ];
 

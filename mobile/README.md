@@ -12,6 +12,7 @@
 ```bash
 cd mobile
 npm install
+npm run init-native   # 최초 1회: ios/android 네이티브 프로젝트 생성
 npm run validate
 npm run start
 ```
@@ -49,6 +50,8 @@ HOST=0.0.0.0 python app.py
   - Foreground Service 권한/알림 채널
 
 ## 현재 한계
+- 기본 스캐폴딩은 경량 커밋을 위해 `ios/`, `android/`를 저장소에 포함하지 않는다.
+- `npm run init-native`로 로컬에서 네이티브 폴더를 생성한 뒤 실행한다.
 - 본 스캐폴딩은 foreground GPS uplink 기준.
 - Background 30분 안정성 목표(P3-3)는 네이티브 서비스/브리지 구현이 추가로 필요.
 - CarPlay/Android Auto는 P4 단계에서 네이티브 템플릿 구현이 필요.
