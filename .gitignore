@@ -36,3 +36,4 @@ mobile/ios/.xcode.env.local
 # VS Code integrated browser preview artifacts
 http:/
 http:
+_codeql_detected_source_root
