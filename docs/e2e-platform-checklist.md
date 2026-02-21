@@ -52,6 +52,7 @@
 ## iOS 백그라운드 30분 시나리오 점검
 
 > 전체 절차 및 보고서 양식: [`docs/reports/ios-bg-30min-template.md`](reports/ios-bg-30min-template.md)
+> 실행용 폼(현장 체크): [`docs/reports/ios-bg-30min-execution-form.md`](reports/ios-bg-30min-execution-form.md)
 
 ### 준비
 - [ ] iOS 기기에서 앱 설치 및 `always` 위치 권한 부여 확인

@@ -54,6 +54,12 @@ REQUIRED_FILES = {
         "## 4. 로그 추출 체크리스트",
         "## 5. 종합 판정",
     ],
+    "docs/reports/ios-bg-30min-execution-form.md": [
+        "# iOS 30-Min Background Run Form (Operator Sheet)",
+        "## 1) 사전 체크 (실행 전)",
+        "## 2) 타임라인 기록",
+        "## 8) 최종 반영 체크",
+    ],
 }
 
 

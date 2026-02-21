@@ -96,6 +96,14 @@
 - 결과 산출물:
   - `docs/reports/ios-preflight-smoke-2026-02-22.md`
 
+## Action 5 — iOS 30분 실측 실행용 폼 고정
+
+- 목표: 현장 실측 중 누락 없이 체크/기록할 수 있는 운영용 폼 제공
+- 상태: DONE (2026-02-22)
+- 결과 산출물:
+  - `docs/reports/ios-bg-30min-execution-form.md`
+  - `docs/e2e-platform-checklist.md` iOS 섹션 링크 반영
+
 ## 실기기 부재 모드 (현재 세션 적용)
 
 - 제약:
@@ -108,4 +116,5 @@
   1. `npm run init-native && npm run android:setup-bg` 실행
   2. Android 프로젝트에서 ReactPackage 등록 및 Manifest 병합
   3. 에뮬레이터 또는 실기기에서 30분 시나리오 실측 후 보고서 기입
-  4. iPhone 실기기 30분 시나리오 실측 후 `docs/reports/ios-bg-30min-template.md` 기입
+  4. iPhone 실기기 30분 시나리오 실측 후 `ios-bg-30min-execution-form` 작성
+  5. `docs/reports/ios-bg-30min-template.md` 최종 판정 반영
