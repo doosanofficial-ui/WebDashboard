@@ -10,6 +10,7 @@ const els = {
   connectBtn: document.getElementById("connectBtn"),
   disconnectBtn: document.getElementById("disconnectBtn"),
   startGpsBtn: document.getElementById("startGpsBtn"),
+  themeBtn: document.getElementById("themeBtn"),
   gpsMode: document.getElementById("gpsMode"),
   markBtn: document.getElementById("markBtn"),
   markNote: document.getElementById("markNote"),
@@ -95,17 +96,53 @@ let lastServerDrop = 0;
 let localDropCount = 0;
 let rttMs = null;
 let lastGpsView = null;
+let gpsStateOverride = null;
+let gpsNoFixTimer = null;
 const layoutState = {
   mainSplitPct: 58,
   mapSplitPct: 50,
 };
 const MOBILE_BREAKPOINT = 860;
 const FRAME_STALENESS_THRESHOLD_MS = 1500;
+const THEME_STORAGE_KEY = "telemetry-theme";
 
 els.serverUrl.value = `${window.location.protocol}//${window.location.host}`;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function readStoredTheme() {
+  try {
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    return stored === "day" ? "day" : "night";
+  } catch {
+    return "night";
+  }
+}
+
+function writeStoredTheme(theme) {
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch {
+    // ignore private mode/storage policy failures
+  }
+}
+
+function applyTheme(theme) {
+  const normalized = theme === "day" ? "day" : "night";
+  document.documentElement.setAttribute("data-theme", normalized);
+  writeStoredTheme(normalized);
+
+  if (els.themeBtn) {
+    els.themeBtn.textContent = normalized === "day" ? "Theme: Day" : "Theme: Night";
+  }
+
+  const themeColor = normalized === "day" ? "#e8eef5" : "#0f1720";
+  const meta = document.querySelector("meta[name='theme-color']");
+  if (meta) {
+    meta.setAttribute("content", themeColor);
+  }
 }
 
 function applySplitLayout() {
@@ -187,6 +224,16 @@ function fitViewportLayout() {
   applySplitLayout();
   naverMap.resize();
   roadview.resize();
+}
+
+let currentTheme = readStoredTheme();
+applyTheme(currentTheme);
+
+if (els.themeBtn) {
+  els.themeBtn.addEventListener("click", () => {
+    currentTheme = currentTheme === "day" ? "night" : "day";
+    applyTheme(currentTheme);
+  });
 }
 
 async function initPublicConfig() {
@@ -336,6 +383,40 @@ function disconnectSocket() {
   stopPing();
 }
 
+function setGpsOverride(text, className = "stale") {
+  gpsStateOverride = { text, className };
+}
+
+function clearGpsOverride() {
+  gpsStateOverride = null;
+}
+
+function applyGpsOverrideIfNeeded(gpsView) {
+  if (!gpsStateOverride) {
+    return;
+  }
+  if (gpsView?.fix) {
+    clearGpsOverride();
+    return;
+  }
+  els.gpsState.textContent = gpsStateOverride.text;
+  els.gpsState.className = `pill ${gpsStateOverride.className}`;
+}
+
+function describeGpsError(err) {
+  const code = Number(err?.code);
+  if (code === 1) {
+    return "gps-denied";
+  }
+  if (code === 2) {
+    return "gps-unavailable";
+  }
+  if (code === 3) {
+    return "gps-timeout";
+  }
+  return "gps-error";
+}
+
 function sendGpsUplink(fix) {
   if (!socket || !socket.isOpen()) {
     return;
@@ -377,20 +458,42 @@ els.markBtn.addEventListener("click", sendMark);
 els.gpsMode.addEventListener("change", () => gpsTracker.setMode(els.gpsMode.value));
 
 els.startGpsBtn.addEventListener("click", () => {
+  if (gpsNoFixTimer) {
+    clearTimeout(gpsNoFixTimer);
+    gpsNoFixTimer = null;
+  }
+
+  if (!window.isSecureContext) {
+    setGpsOverride("gps-no-fix(http)", "stale");
+  } else {
+    clearGpsOverride();
+  }
+
+  // If no fix is received soon after starting, show an explicit hint.
+  gpsNoFixTimer = setTimeout(() => {
+    if (!gpsTracker.lastFix) {
+      setGpsOverride(
+        window.isSecureContext ? "gps-no-fix" : "gps-no-fix(https권장)",
+        "stale"
+      );
+    }
+  }, 12000);
+
   try {
     gpsTracker.start(
       (fix) => {
+        clearGpsOverride();
         sendGpsUplink(fix);
       },
       (err) => {
         console.error("GPS error", err);
-        els.gpsState.textContent = `error(${err.code})`;
+        setGpsOverride(describeGpsError(err), "disconnected");
       }
     );
     els.startGpsBtn.disabled = true;
   } catch (err) {
     console.error(err);
-    els.gpsState.textContent = "not-supported";
+    setGpsOverride("gps-not-supported", "disconnected");
   }
 });
 
@@ -425,6 +528,7 @@ setInterval(() => {
   const gpsView = gpsTracker.tick(nowMs);
   lastGpsView = gpsView;
   updateGps(els, gpsView);
+  applyGpsOverrideIfNeeded(gpsView);
   naverMap.updateFromFix(gpsView.fix, gpsView.stale);
   roadview.updateFromFix(gpsView.fix, gpsView.stale);
 }, 100);

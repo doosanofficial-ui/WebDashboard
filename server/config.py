@@ -16,6 +16,7 @@ class Settings:
     simulate_drop_every: int
     can_source: str
     log_dir: Path
+    signals_config: Path
     ssl_certfile: str | None
     ssl_keyfile: str | None
     naver_maps_client_id: str | None
@@ -28,6 +29,12 @@ def _optional_env(name: str) -> str | None:
 
 
 def load_settings() -> Settings:
+    signals_config_raw = os.getenv("SIGNALS_CONFIG")
+    if signals_config_raw:
+        signals_config = Path(signals_config_raw).expanduser().resolve()
+    else:
+        signals_config = BASE_DIR / "signals.json"
+
     return Settings(
         # Conservative default: loopback only.
         # Expose to other devices only when HOST is explicitly set (e.g. 0.0.0.0 or LAN IP).
@@ -37,6 +44,7 @@ def load_settings() -> Settings:
         simulate_drop_every=int(os.getenv("SIM_DROP_EVERY", "0")),
         can_source=os.getenv("CAN_SOURCE", "dummy"),
         log_dir=BASE_DIR / "logs",
+        signals_config=signals_config,
         ssl_certfile=_optional_env("SSL_CERTFILE"),
         ssl_keyfile=_optional_env("SSL_KEYFILE"),
         naver_maps_client_id=_optional_env("NAVER_MAPS_CLIENT_ID"),

@@ -72,6 +72,50 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function parseRetryAfterSeconds(retryAfterHeader) {
+  if (!retryAfterHeader) {
+    return null;
+  }
+
+  const asNumber = Number(retryAfterHeader);
+  if (Number.isFinite(asNumber) && asNumber >= 0) {
+    return asNumber;
+  }
+
+  const asDate = Date.parse(retryAfterHeader);
+  if (!Number.isFinite(asDate)) {
+    return null;
+  }
+
+  const diffMs = asDate - Date.now();
+  if (diffMs <= 0) {
+    return 0;
+  }
+  return Math.round(diffMs / 1000);
+}
+
+function extractErrorDetail(payload) {
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+  if (typeof payload.detail === "string" && payload.detail.trim()) {
+    return payload.detail.trim();
+  }
+  if (payload.status && typeof payload.status === "object") {
+    const message = payload.status.message;
+    if (typeof message === "string" && message.trim()) {
+      return message.trim();
+    }
+  }
+  if (payload.error && typeof payload.error === "object") {
+    const message = payload.error.message;
+    if (typeof message === "string" && message.trim()) {
+      return message.trim();
+    }
+  }
+  return "";
+}
+
 export class NaverRoadview {
   constructor({ container, statusEl, addressEl, reverseGeocodeEndpoint = "/api/naver/reverse-geocode" }) {
     this.container = container;
@@ -85,6 +129,9 @@ export class NaverRoadview {
     this.lastGeocodeFix = null;
     this.lastGeocodeAtMs = 0;
     this.reverseGeocodeDisabled = false;
+    this.reverseGeocodeInFlight = false;
+    this.reverseGeocodeFailCount = 0;
+    this.reverseGeocodeCooldownUntilMs = 0;
   }
 
   async init(clientId) {
@@ -177,6 +224,12 @@ export class NaverRoadview {
     }
 
     const nowMs = performance.now();
+    if (this.reverseGeocodeInFlight) {
+      return;
+    }
+    if (nowMs < this.reverseGeocodeCooldownUntilMs) {
+      return;
+    }
     if (nowMs - this.lastGeocodeAtMs < 5000) {
       return;
     }
@@ -187,27 +240,59 @@ export class NaverRoadview {
 
     this.lastGeocodeAtMs = nowMs;
     this.lastGeocodeFix = { lat: fix.lat, lon: fix.lon };
+    this.reverseGeocodeInFlight = true;
+
+    const abortController = new AbortController();
+    const abortTimer = setTimeout(() => abortController.abort(), 4500);
 
     try {
       const qs = new URLSearchParams({
         lat: String(fix.lat),
         lon: String(fix.lon),
       });
-      const res = await fetch(`${this.reverseGeocodeEndpoint}?${qs.toString()}`);
+      const res = await fetch(`${this.reverseGeocodeEndpoint}?${qs.toString()}`, {
+        signal: abortController.signal,
+      });
+      const payload = await res.json().catch(() => null);
+
       if (!res.ok) {
         if (res.status === 401 || res.status === 403) {
           this.reverseGeocodeDisabled = true;
           this._setAddress("주소 API 인증 실패(키 설정 확인 필요)");
           return;
         }
-        throw new Error(`HTTP ${res.status}`);
+
+        if (res.status === 429) {
+          const retryAfterSec = parseRetryAfterSeconds(res.headers.get("Retry-After"));
+          const waitSec = Number.isFinite(retryAfterSec)
+            ? Math.max(5, retryAfterSec)
+            : Math.min(60, 5 * 2 ** Math.min(this.reverseGeocodeFailCount, 4));
+          this.reverseGeocodeFailCount += 1;
+          this.reverseGeocodeCooldownUntilMs = performance.now() + waitSec * 1000;
+          this._setAddress(`주소 API 제한(429): ${waitSec}s 후 재시도`);
+          return;
+        }
+
+        const detail = extractErrorDetail(payload);
+        throw new Error(detail ? `HTTP ${res.status}: ${detail}` : `HTTP ${res.status}`);
       }
 
-      const payload = await res.json();
       const address = payload?.address || "(주소 정보 없음)";
+      this.reverseGeocodeFailCount = 0;
+      this.reverseGeocodeCooldownUntilMs = 0;
       this._setAddress(address);
-    } catch {
-      this._setAddress("주소 조회 실패");
+    } catch (err) {
+      this.reverseGeocodeFailCount += 1;
+      const failIndex = Math.max(0, this.reverseGeocodeFailCount - 1);
+      const backoffSec = Math.min(60, 5 * 2 ** Math.min(failIndex, 4));
+      this.reverseGeocodeCooldownUntilMs = performance.now() + backoffSec * 1000;
+      this._setAddress(`주소 조회 실패 (${backoffSec}s 후 재시도)`);
+      if (err && err.name !== "AbortError") {
+        console.warn("reverse-geocode failed:", err);
+      }
+    } finally {
+      clearTimeout(abortTimer);
+      this.reverseGeocodeInFlight = false;
     }
   }
 

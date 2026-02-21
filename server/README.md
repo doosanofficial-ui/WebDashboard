@@ -27,6 +27,7 @@ python app.py
 - `CAN_HZ` (기본 `10`)
 - `SIM_DROP_EVERY` (기본 `0`, 예: `25`면 25프레임마다 1회 누락 시뮬레이션)
 - `CAN_SOURCE` (기본 `dummy`)
+- `SIGNALS_CONFIG` (기본 `./signals.json`, 신호 enable/scale/offset/clamp 설정)
 - `SSL_CERTFILE`, `SSL_KEYFILE` (선택, HTTPS 실행)
 - `NAVER_MAPS_CLIENT_ID` (선택, NAVER 로드뷰/지도 JS 로드)
 - `NAVER_MAPS_CLIENT_SECRET` (선택, 서버 reverse-geocode 호출용)
@@ -34,6 +35,12 @@ python app.py
 예시:
 ```powershell
 $env:SIM_DROP_EVERY = "20"
+python app.py
+```
+
+신호 매핑 파일 경로 변경 예시:
+```powershell
+$env:SIGNALS_CONFIG = "C:\telemetry\signals.json"
 python app.py
 ```
 
@@ -56,12 +63,15 @@ python app.py
 ```
 `Client Secret`은 서버에서만 사용되며 브라우저로 노출되지 않습니다.
 참고: 로드뷰 JS는 `Client ID`로 동작하지만, reverse-geocode는 NCP API 권한/상품 활성화가 별도로 필요할 수 있습니다(401 시 주소 조회만 비활성).
+참고: reverse-geocode 실패 시 서버가 401/403/429/5xx를 구분하여 반환하므로, 클라이언트는 인증 실패를 영구 비활성화하고 나머지는 자동 backoff로 재시도합니다.
 참고: NAVER Maps JS 스크립트는 최신 문서 기준 `ncpKeyId=<Client ID>` 파라미터를 사용해야 합니다.
 지도에 `Open API 설정 실패` 문구가 뜨면 아래를 확인하세요.
 - NCP 콘솔 `웹 서비스 URL` 허용 목록에 정확히 등록:
 - `http://127.0.0.1:8080`
 - `http://localhost:8080`
 - `http://<LAN_IP>:8080`
+- `https://127.0.0.1:18443` (HTTPS 사용 시)
+- `https://<LAN_IP>:18443` (HTTPS 사용 시)
 - URL 등록 후 브라우저 강력 새로고침
 - VS Code 내장 브라우저에서만 실패하면 Chrome/Safari에서 먼저 확인(웹뷰 리퍼러 차이로 인증 실패 가능)
 
@@ -70,12 +80,29 @@ Geolocation 권한이 HTTP에서 실패하면 HTTPS로 전환하세요.
 
 ```powershell
 cd security
-.\make_dev_cert.ps1
+.\make_dev_cert.ps1 -LanIp "<LAN_IP>"
 cd ..
 $env:SSL_CERTFILE = "./security/certs/dev-cert.pem"
 $env:SSL_KEYFILE  = "./security/certs/dev-key.pem"
+$env:HOST = "0.0.0.0"
+$env:PORT = "18443"
 python app.py
 ```
+
+macOS (zsh/bash):
+```bash
+cd security
+./make_dev_cert_mac.sh ./certs 192.168.x.x
+cd ..
+export SSL_CERTFILE="./security/certs/dev-cert.pem"
+export SSL_KEYFILE="./security/certs/dev-key.pem"
+export HOST="0.0.0.0"
+export PORT="18443"
+python app.py
+```
+
+iPhone/iPad에서 HTTPS 위치 권한이 필요하면, `make_dev_cert_mac.sh`가 생성한
+`dev-local-ca-cert.cer`를 기기에 설치하고 신뢰 설정까지 켜야 합니다.
 
 ## API
 - `GET /api/ping`
@@ -91,6 +118,9 @@ python app.py
 2. 노트북을 iPad SSID에 연결
 3. 노트북 IP 확인 (`ipconfig`)
 4. iPad Safari에서 `http://<노트북IP>:8080` 접속
+
+HTTPS 운영 시:
+4. iPad Safari에서 `https://<노트북IP>:18443` 접속
 
 일부 핫스팟은 기기 간 통신을 제한(AP isolation)할 수 있습니다. 연결 안 되면 다음을 확인:
 - 노트북 방화벽에서 8080 허용

@@ -34,6 +34,9 @@ This file defines always-on, repository-level instructions for AI agents in this
   - verification
 - Keep each sub-task output concise and merge results in main thread.
 - Do not run destructive commands in parallel.
+- Parallel execution in this repository does **not** require extra project config.
+  - Local agent parallelism is runtime/orchestrator capability.
+  - CI parallelism is already configured via matrix in `.github/workflows/smoke.yml`.
 
 ## 5) Pro plan-safe operating mode
 - If third-party *agent type* is unavailable, continue with built-in types (Local/Background/Cloud).
@@ -57,3 +60,9 @@ This file defines always-on, repository-level instructions for AI agents in this
 ## 8) Reporting format
 - Report with: what changed / why / verification / remaining risk.
 - If blocked by plan/policy/permission, provide exact unblock step.
+
+## 9) Canonical AGENTS.md (single source of truth)
+- Canonical instruction file is repository-root `AGENTS.md` only.
+- Do not create additional `AGENTS.md` files in subfolders.
+- VSCode workspace and Codex extension sessions must point to the same repository root so both read this single file.
+- If using multi-root workspace, include this same folder path (not a copied folder) to avoid instruction drift.

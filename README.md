@@ -19,6 +19,7 @@ GPS는 좌표 카드뿐 아니라 NAVER 지도 위에 현재 위치/궤적/MARK�
     logger.py
     security/
       make_dev_cert.ps1
+      make_dev_cert_mac.sh
       certs/
     requirements.txt
     README.md
@@ -77,7 +78,14 @@ python app.py
 ## GPS 권한 / HTTPS
 - 일부 iPadOS/Safari 환경에서 Geolocation은 HTTPS 보안 컨텍스트를 요구할 수 있습니다.
 - HTTP에서 GPS가 동작하지 않으면 `server/security/make_dev_cert.ps1`로 자체서명 인증서를 생성해 HTTPS로 실행하세요.
+- macOS는 `server/security/make_dev_cert_mac.sh`로 LAN IP SAN 포함 인증서를 생성할 수 있습니다.
+- iPhone/iPad는 `dev-local-ca-cert.cer`를 설치한 뒤, `설정 > 일반 > 정보 > 인증서 신뢰 설정`에서 신뢰를 켜야 HTTPS 위치가 정상 동작합니다.
 - NAVER 지도/로드뷰 스크립트 로드를 위해 외부 네트워크 연결이 필요합니다.
+
+## 신호 매핑(signals.json)
+- 기본 파일: `server/signals.json`
+- 각 신호별 `enabled`, `source`, `scale`, `offset`, `min/max`, `decimals`를 설정할 수 있습니다.
+- 경로를 바꾸려면 `SIGNALS_CONFIG` 환경변수를 사용합니다.
 
 ## NAVER 로드뷰 연동
 서버 실행 전에 환경 변수 설정:
@@ -90,11 +98,14 @@ python app.py
 - `Client Secret`: 서버의 reverse-geocode API 호출에만 사용(브라우저 비노출)
 - NAVER Maps JS 로더 파라미터는 최신 문서 기준 `ncpKeyId=<Client ID>`를 사용합니다.
 - reverse-geocode가 401이면 NAVER/NCP 콘솔에서 해당 API 권한 또는 상품 활성화 상태를 확인하세요(로드뷰 자체는 동작 가능).
+- reverse-geocode 5xx/네트워크 실패는 클라이언트에서 지수 backoff로 자동 재시도합니다.
 - 지도에 `Open API 설정 실패`가 보이면 대부분 `웹 서비스 URL` 미등록 문제입니다.
   - NCP 콘솔에 아래 URL을 모두 등록:
   - `http://127.0.0.1:8080`
   - `http://localhost:8080`
   - `http://<LAN_IP>:8080` (iPhone/iPad 접속용)
+  - `https://127.0.0.1:18443` (HTTPS 접속용)
+  - `https://<LAN_IP>:18443` (HTTPS 접속용)
   - 등록 후 서버/브라우저 새로고침
   - VS Code 내장 브라우저(Simple Browser)에서만 실패하면, 먼저 Chrome/Safari에서 같은 URL로 검증
 
@@ -109,6 +120,10 @@ python app.py
   - Safari 위치 권한 허용 확인
   - iPad 설정 > 개인정보 보호 > 위치 서비스 ON
   - HTTPS로 전환
+
+## UI 모드
+- 상단 `Theme` 버튼으로 Night/Day 모드를 즉시 전환할 수 있습니다.
+- 선택한 모드는 브라우저 localStorage에 저장되어 재접속 후 유지됩니다.
 
 ## 확장 포인트
 - 실차 연동: `server/can_source/base.py` 인터페이스 구현체 교체

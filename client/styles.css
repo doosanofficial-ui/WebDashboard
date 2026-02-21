@@ -12,6 +12,19 @@
   --splitter-size: 10px;
 }
 
+:root[data-theme="day"] {
+  --bg: #dce8f3;
+  --bg2: #f0f5fa;
+  --panel: #f8fbff;
+  --card: #eef4fb;
+  --line: #afc6db;
+  --text: #102132;
+  --muted: #4d667e;
+  --ok: #0c7f53;
+  --warn: #c76f00;
+  --bad: #c93f3f;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -33,6 +46,11 @@ body {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+:root[data-theme="day"] body {
+  background: radial-gradient(circle at 20% 10%, #ffffff 0%, #e7f0f8 45%),
+    linear-gradient(135deg, #eef3f8 0%, #dce6f0 100%);
+}
+
 body.resizing,
 body.resizing * {
   cursor: col-resize !important;
@@ -45,6 +63,10 @@ body.resizing * {
   background: rgba(10, 19, 28, 0.9);
   backdrop-filter: blur(6px);
   z-index: 20;
+}
+
+:root[data-theme="day"] .topbar {
+  background: rgba(240, 246, 252, 0.92);
 }
 
 .brand-block {
@@ -97,6 +119,14 @@ select {
   min-height: 32px;
 }
 
+:root[data-theme="day"] input,
+:root[data-theme="day"] button,
+:root[data-theme="day"] select {
+  background: #f8fbff;
+  border-color: #9eb8cd;
+  color: #0f2336;
+}
+
 .controls button,
 .controls select,
 .controls input:not(#serverUrl) {
@@ -146,6 +176,12 @@ button:disabled {
   color: #d3e4f2;
   font-size: 0.75rem;
   white-space: nowrap;
+}
+
+:root[data-theme="day"] .pill {
+  background: #edf4fb;
+  border-color: #9fb6cb;
+  color: #1b3349;
 }
 
 .pill.connected {
@@ -223,6 +259,10 @@ main {
   padding: 8px;
   min-height: 0;
   overflow: hidden;
+}
+
+:root[data-theme="day"] .panel {
+  background: linear-gradient(180deg, #fafdff, #edf4fb);
 }
 
 .charts-grid {
@@ -313,6 +353,10 @@ canvas {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   min-height: 0;
+}
+
+:root[data-theme="day"] .map-wrap {
+  background: #edf4fb;
 }
 
 #mapWrap {

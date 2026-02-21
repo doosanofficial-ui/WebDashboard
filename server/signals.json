@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "signals": {
+    "ws_fl": {
+      "source": "ws_fl",
+      "enabled": true,
+      "scale": 1.0,
+      "offset": 0.0,
+      "min": 0.0,
+      "max": 320.0,
+      "decimals": 1,
+      "unit": "km/h"
+    },
+    "ws_fr": {
+      "source": "ws_fr",
+      "enabled": true,
+      "scale": 1.0,
+      "offset": 0.0,
+      "min": 0.0,
+      "max": 320.0,
+      "decimals": 1,
+      "unit": "km/h"
+    },
+    "ws_rl": {
+      "source": "ws_rl",
+      "enabled": true,
+      "scale": 1.0,
+      "offset": 0.0,
+      "min": 0.0,
+      "max": 320.0,
+      "decimals": 1,
+      "unit": "km/h"
+    },
+    "ws_rr": {
+      "source": "ws_rr",
+      "enabled": true,
+      "scale": 1.0,
+      "offset": 0.0,
+      "min": 0.0,
+      "max": 320.0,
+      "decimals": 1,
+      "unit": "km/h"
+    },
+    "yaw": {
+      "source": "yaw",
+      "enabled": true,
+      "scale": 1.0,
+      "offset": 0.0,
+      "min": -200.0,
+      "max": 200.0,
+      "decimals": 2,
+      "unit": "deg/s"
+    },
+    "ax": {
+      "source": "ax",
+      "enabled": true,
+      "scale": 1.0,
+      "offset": 0.0,
+      "min": -20.0,
+      "max": 20.0,
+      "decimals": 3,
+      "unit": "m/s^2"
+    },
+    "ay": {
+      "source": "ay",
+      "enabled": true,
+      "scale": 1.0,
+      "offset": 0.0,
+      "min": -20.0,
+      "max": 20.0,
+      "decimals": 3,
+      "unit": "m/s^2"
+    }
+  }
+}

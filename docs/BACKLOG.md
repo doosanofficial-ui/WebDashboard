@@ -35,7 +35,7 @@
     - GPS 수신 시 `gps_<session>.csv` 기록
     - MARK 클릭 시 `events_<session>.csv` 기록
 
-- [ ] **P1-2 설정파일(signals.json) 기반 신호 선택/스케일링**
+- [x] **P1-2 설정파일(signals.json) 기반 신호 선택/스케일링**
   - 산출물: `server/signals.json`, signal mapper 모듈
   - 완료 기준:
     - enabled signal만 송출
@@ -48,7 +48,7 @@
     - 홈 화면 설치 가능
     - 정적 리소스 캐싱
 
-- [ ] **P2-2 야간/주간 모드 토글**
+- [x] **P2-2 야간/주간 모드 토글**
   - 산출물: theme toggle UI, CSS variables 확장
   - 완료 기준:
     - 주행 중 한 번의 탭으로 모드 전환
