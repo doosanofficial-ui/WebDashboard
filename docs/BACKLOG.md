@@ -57,3 +57,48 @@
   - 산출물: heading + recent breadcrumb 혹은 경량 지도 레이어
   - 완료 기준:
     - 최근 궤적/방향 확인 가능
+
+## P3 (Post-MVP)
+- [x] **P3-1 플랫폼 매트릭스/체크리스트 운영 문서화**
+  - 산출물: `docs/platform-matrix.md`, `docs/e2e-platform-checklist.md`, `scripts/validate_platform_docs.py`
+  - 완료 기준:
+    - iOS Safari / Android Chrome / Desktop 검증 항목과 결과가 문서로 관리됨
+    - 릴리스 전 점검 체크리스트로 사용 가능
+
+- [ ] **P3-2 Background Telemetry 아키텍처 결정(ADR)**
+  - 산출물: 런타임 선정 ADR(`docs/adr/` 예정), 기술 비교표
+  - 완료 기준:
+    - React Native/Flutter/Native 대안 비교(권한/배터리/유지보수/빌드체인)
+    - 팀 합의된 단일 경로와 제외 사유 기록
+
+- [ ] **P3-3 iOS/Android 백그라운드 위치 uplink 구현**
+  - 산출물: 모바일 앱 모듈(신규), 서버 수신 스키마 확장
+  - 완료 기준:
+    - 화면 OFF/백그라운드 30분 동안 GPS uplink가 기준 누락률 이하
+    - 네트워크 단절 후 복귀 시 store-and-forward 재전송 동작
+    - `gps_<session>.csv`에 foreground/background 상태 구분 기록
+
+- [ ] **P3-4 배터리/발열 계측 및 보호 로직**
+  - 산출물: 샘플링 정책(동적 주기), 운영 가이드
+  - 완료 기준:
+    - 1시간 주행 시 배터리 소모/발열 리포트 확보
+    - 저전력 모드 전환 기준과 경고 UI 정의
+
+## P4 (Projection)
+- [ ] **P4-1 CarPlay/Android Auto 정책/자격 요건 체크**
+  - 산출물: 요구사항 매트릭스(엔타이틀먼트/카테고리/심사 조건)
+  - 완료 기준:
+    - iOS/Android 투영 진입 요건을 문서화하고 블로커 식별
+    - 구현 가능 범위와 불가 범위를 팀 합의
+
+- [ ] **P4-2 투영 전용 UI 템플릿 설계 및 PoC**
+  - 산출물: 투영 UI 와이어/프로토타입, 데이터 바인딩 규격
+  - 완료 기준:
+    - 핵심 텔레메트리 카드 렌더링 검증(속도/yaw/경고/연결상태)
+    - 운전 중 가독성 및 조작 최소화 기준 충족
+
+- [ ] **P4-3 모바일 대시보드 <-> 투영 화면 폴백**
+  - 산출물: 상태머신 설계, 연결 단절 복구 로직
+  - 완료 기준:
+    - Projection 끊김 시 5초 내 모바일 화면 자동 복귀
+    - 복귀 시 데이터 연속성(시각화/로그) 유지

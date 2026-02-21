@@ -59,3 +59,7 @@ jobs:
           else
             echo "- Static client runtime entry files are validated."
           fi
+
+      - name: Platform docs smoke
+        run: |
+          python3 scripts/validate_platform_docs.py
