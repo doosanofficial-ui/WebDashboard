@@ -24,7 +24,7 @@ REQUIRED_FILES = {
     ],
     "docs/adr/0001-mobile-runtime-selection.md": [
         "# ADR-0001: Mobile Runtime Selection for Background Telemetry and Projection",
-        "- Status: Proposed",
+        "- Status: Accepted",
         "## Options",
         "## Recommendation",
     ],

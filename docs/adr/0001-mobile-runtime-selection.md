@@ -1,6 +1,6 @@
 # ADR-0001: Mobile Runtime Selection for Background Telemetry and Projection
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-02-21
 - Decision Drivers:
   - iOS/Android background GPS uplink 안정성
@@ -54,6 +54,15 @@
     - background 및 projection의 필수 네이티브 포인트를 안전하게 수용 가능
     - 초기 속도와 장기 확장성의 균형이 가장 좋다
 
+## Decision
+- 채택안: **Option A (React Native + Native Bridge)**
+- 결정일: 2026-02-21
+- 결정자: Product/Engineering
+- 근거:
+  - WebDashboard의 기존 JS 자산을 최대 재사용할 수 있음
+  - Background GPS 및 Projection 확장을 위한 네이티브 escape hatch 확보 가능
+  - 초기 납기와 장기 유지보수 균형이 가장 양호함
+
 ## Consequences
 - Positive:
   - WebDashboard 프로토콜/상태 관리 자산을 모바일로 이전하기 쉽다
@@ -69,8 +78,8 @@
 4. Projection PoC(핵심 카드만 렌더)
 
 ## Acceptance Criteria for This ADR
-- 팀이 Option A/B/C 중 1개를 공식 채택한다.
-- 채택/기각 사유와 재검토 트리거를 문서에 확정한다.
+- [x] 팀이 Option A/B/C 중 1개를 공식 채택한다.
+- [x] 채택/기각 사유와 재검토 트리거를 문서에 확정한다.
 
 ## Revisit Triggers
 - Projection 정책/엔타이틀먼트로 인해 브리지 접근이 과도하게 복잡해질 때

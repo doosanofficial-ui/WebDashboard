@@ -32,7 +32,7 @@
 - [ ] 플랫폼별 E2E 점검표 자동화(iOS Safari, Android Chrome, 데스크톱)
 
 ### B. Background Telemetry 전환 (중기)
-- [ ] 모바일 런타임 결정(React Native/Flutter/Native 중 1개) 및 ADR 작성
+- [x] 모바일 런타임 결정(React Native + Native Bridge) 및 ADR 작성
 - [ ] Background location 서비스 구현(iOS Significant-Change + Android FGS)
 - [ ] 앱 백그라운드 상태에서도 GPS uplink 지속(저주기 + 배터리 정책)
 - [ ] 네트워크 단절/복귀 시 store-and-forward 큐 적용

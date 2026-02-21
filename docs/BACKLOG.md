@@ -65,7 +65,7 @@
     - iOS Safari / Android Chrome / Desktop 검증 항목과 결과가 문서로 관리됨
     - 릴리스 전 점검 체크리스트로 사용 가능
 
-- [ ] **P3-2 Background Telemetry 아키텍처 결정(ADR)**
+- [x] **P3-2 Background Telemetry 아키텍처 결정(ADR)**
   - 산출물: 런타임 선정 ADR(`docs/adr/` 예정), 기술 비교표
   - 완료 기준:
     - React Native/Flutter/Native 대안 비교(권한/배터리/유지보수/빌드체인)
