@@ -1,6 +1,15 @@
 import Geolocation from "@react-native-community/geolocation";
-import { PermissionsAndroid, Platform } from "react-native";
-import { buildGpsOptions } from "../config";
+import {
+  NativeEventEmitter,
+  NativeModules,
+  PermissionsAndroid,
+  Platform,
+} from "react-native";
+import { buildGpsOptions, IOS_BG_BRIDGE_MODULE } from "../config";
+
+// Native bridge module – present only after `npm run ios:setup-bg` and Xcode
+// project linking.  Gracefully absent on Android and in bare JS environments.
+const _nativeBridge = NativeModules[IOS_BG_BRIDGE_MODULE] ?? null;
 
 export async function requestLocationPermission() {
   if (Platform.OS === "ios") {
@@ -25,10 +34,19 @@ export async function requestLocationPermission() {
 export class GpsClient {
   constructor() {
     this.watchId = null;
+    this._usingBridge = false;
+    this._bgSubscriptions = [];
   }
 
   start(onFix, onError, options = {}) {
-    if (this.watchId != null) {
+    if (this.watchId != null || this._usingBridge) {
+      return;
+    }
+
+    const { iosBackgroundMode = false } = options;
+
+    if (Platform.OS === "ios" && iosBackgroundMode && _nativeBridge) {
+      this._startViaBridge(onFix, onError, options);
       return;
     }
 
@@ -53,7 +71,44 @@ export class GpsClient {
     );
   }
 
+  /** @private */
+  _startViaBridge(onFix, onError, options = {}) {
+    const emitter = new NativeEventEmitter(_nativeBridge);
+    const useSignificantChanges =
+      options.useSignificantChanges ??
+      buildGpsOptions(options).useSignificantChanges ??
+      false;
+
+    const locationSub = emitter.addListener("locationUpdate", (data) => {
+      onFix?.({
+        lat: data.latitude,
+        lon: data.longitude,
+        spd: data.speed >= 0 ? data.speed : 0,
+        hdg: data.heading >= 0 ? data.heading : null,
+        acc: Number.isFinite(data.accuracy) ? data.accuracy : null,
+        alt: Number.isFinite(data.altitude) ? data.altitude : null,
+      });
+    });
+
+    const errorSub = emitter.addListener("locationError", (err) => {
+      onError?.(err);
+    });
+
+    this._bgSubscriptions = [locationSub, errorSub];
+    this._usingBridge = true;
+
+    _nativeBridge.startBackgroundLocation({ useSignificantChanges });
+  }
+
   stop() {
+    if (this._usingBridge) {
+      _nativeBridge?.stopBackgroundLocation();
+      this._bgSubscriptions.forEach((s) => s.remove());
+      this._bgSubscriptions = [];
+      this._usingBridge = false;
+      return;
+    }
+
     if (this.watchId != null) {
       Geolocation.clearWatch(this.watchId);
       this.watchId = null;
