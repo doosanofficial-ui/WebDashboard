@@ -54,7 +54,7 @@ HOST=0.0.0.0 python app.py
 
 ## iOS 네이티브 백그라운드 위치 브리지 (P3-3)
 
-`mobile/ios/RNIosLocationBridge.{h,m}`은 백그라운드 위치 수명 주기를 안정적으로
+`mobile/native-ios-bridge/RNIosLocationBridge.{h,m}`은 백그라운드 위치 수명 주기를 안정적으로
 관리하는 전용 네이티브 모듈입니다.
 
 ### 동작 원리
