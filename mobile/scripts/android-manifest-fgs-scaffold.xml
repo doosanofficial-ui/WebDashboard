@@ -1,0 +1,42 @@
+<!--
+  Android Background Location FGS — AndroidManifest.xml 최소 스캐폴드
+  실제 사용 시: android/app/src/main/AndroidManifest.xml 에 해당 블록을 병합한다.
+  npm run init-native 으로 android/ 폴더를 생성한 뒤 적용한다.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ── 위치 권한 ── -->
+    <!-- Foreground: GPS watchPosition 사용에 필수 -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- Background: Android 10(API 29)+ 에서 백그라운드 수집 시 별도 요청 필요 -->
+    <!-- PermissionsAndroid.request("android.permission.ACCESS_BACKGROUND_LOCATION") -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+    <!-- FGS 실행 권한 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Android 14(API 34)+ 에서 serviceType="location" 지정 시 필요 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
+    <!-- 알림 채널 표시 권한 (Android 13+ / API 33+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application>
+
+        <!--
+          Background Location Foreground Service 선언
+          ─────────────────────────────────────────
+          - android:exported="false"  : 외부 앱에서 직접 바인딩 불가
+          - android:foregroundServiceType="location"  : API 29+ 필수
+          - 이 서비스는 JS 계층의 NativeModule(RNAndroidLocationBridge)에서
+            startForegroundService() 호출로 시작된다.
+        -->
+        <service
+            android:name=".LocationForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
+    </application>
+
+</manifest>
