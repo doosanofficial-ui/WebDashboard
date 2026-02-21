@@ -29,13 +29,13 @@
 - [x] GPS event-driven 수신 + 10Hz tick 보간/스무딩
 - [x] stale/재연결 상태 표시
 - [x] HTTPS 개발 인증서 가이드 및 iOS 신뢰 절차 문서화
-- [ ] 플랫폼별 E2E 점검표 자동화(iOS Safari, Android Chrome, 데스크톱)
+- [x] 플랫폼별 E2E 점검표 자동화(iOS Safari, Android Chrome, 데스크톱)
 
 ### B. Background Telemetry 전환 (중기)
 - [x] 모바일 런타임 결정(React Native + Native Bridge) 및 ADR 작성
 - [x] Bare React Native 스캐폴딩 생성 및 foreground GPS uplink baseline 구현
 - [x] iOS 우선 파일럿(always 권한 + significant-change 옵션 + Info.plist 자동 설정 스크립트)
-- [ ] Background location 서비스 구현(iOS Significant-Change + Android FGS)
+- [ ] Background location 서비스 구현(iOS Significant-Change + Android FGS) — 검증 절차: [`docs/reports/ios-bg-30min-template.md`](reports/ios-bg-30min-template.md)
 - [ ] 앱 백그라운드 상태에서도 GPS uplink 지속(저주기 + 배터리 정책)
 - [x] 네트워크 단절/복귀 시 store-and-forward 큐 적용(모바일 baseline)
 - [ ] 배터리/발열 측정 기준 정의(예: 1시간 주행 기준 소모율)
@@ -54,7 +54,7 @@
   - iOS/Android에서 10분 주행 시 재연결 포함 데이터 표시 유지
   - GPS no-fix/denied/unavailable 상태가 오탐 없이 구분 표시
 - Gate B (Background):
-  - 화면 OFF/백그라운드 30분 동안 GPS uplink 누락률 기준 충족
+  - 화면 OFF/백그라운드 30분 동안 GPS uplink 누락률 기준 충족 — 보고서 양식: [`docs/reports/ios-bg-30min-template.md`](reports/ios-bg-30min-template.md)
   - 앱 복귀 시 데이터 타임라인 불연속 구간 표시 가능
 - Gate C (Projection):
   - CarPlay/Android Auto 양쪽에서 핵심 KPI 카드 렌더 및 경고 표시 확인
