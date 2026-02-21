@@ -78,7 +78,7 @@
 - [ ] `bg_state` 컬럼에 `background` 값이 존재하는지 확인
 - [ ] `source` 컬럼이 `ios-rn` (또는 해당 플랫폼 식별자)인지 확인
 - [ ] `os`, `app_ver`, `device` 컬럼 값 확인
-- [ ] 총 행 수 기록 → 섹션 3-1에 입력
+- [ ] 총 행 수 기록 -> 섹션 3-1에 입력
 - [ ] 단절 구간 확인 (타임스탬프 갭 > 30초인 구간 목록)
 
 ```python
@@ -115,3 +115,51 @@ print(gaps_seconds[gaps_seconds > 30])
 - [ ] 이슈 수정 후 재실행 예정 여부:
 - [ ] Android 동일 시나리오 실행 예정 여부:
 - [ ] 배터리/발열 계측(P3-4) 연계 여부:
+
+## 8. 분석 스크립트 실행 예시
+
+`scripts/analyze_ios_bg_session.py` 를 사용하면 GPS CSV를 즉시 분석할 수 있다.
+
+### 기본 실행 (GPS CSV 만)
+
+```bash
+python3 scripts/analyze_ios_bg_session.py \
+  --gps-csv server/logs/gps_20260221_143022.csv
+```
+
+### 이벤트 CSV 포함, 갭 임계값 60초로 지정
+
+```bash
+python3 scripts/analyze_ios_bg_session.py \
+  --gps-csv server/logs/gps_20260221_143022.csv \
+  --events-csv server/logs/events_20260221_143022.csv \
+  --gap-threshold-sec 60
+```
+
+### 출력 예시
+
+```
+=== GPS CSV Analysis: server/logs/gps_20260221_143022.csv ===
+Record count : 142
+bg_state distribution:
+  background: 130 (91.5%)
+  foreground: 12 (8.5%)
+
+Gaps > 30s: 2
+  1740141900 -> 1740141945  (45.0s)
+  1740142300 -> 1740142350  (50.0s)
+
+Freshness (now - last client_t): 87.3s
+
+=== Events CSV Analysis: server/logs/events_20260221_143022.csv ===
+Event record count: 8
+type distribution:
+  ws_reconnect: 5
+  app_background: 3
+```
+
+### 도움말
+
+```bash
+python3 scripts/analyze_ios_bg_session.py --help
+```
