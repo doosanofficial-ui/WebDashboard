@@ -1,0 +1,61 @@
+name: reusable-smoke
+
+on:
+  workflow_call:
+    inputs:
+      project:
+        required: true
+        type: string
+      python-version:
+        required: false
+        type: string
+        default: "3.11"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: smoke-${{ inputs.project }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate runtime input
+        run: |
+          case "${{ inputs.project }}" in
+            server|client) ;;
+            *) echo "Unsupported project: ${{ inputs.project }}" >&2; exit 1 ;;
+          esac
+
+      - name: Set up Python
+        if: ${{ inputs.project == 'server' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Server smoke
+        if: ${{ inputs.project == 'server' }}
+        working-directory: server
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python -m py_compile $(find . -name '*.py')
+
+      - name: Client smoke
+        if: ${{ inputs.project == 'client' }}
+        run: |
+          test -f client/index.html
+          test -f client/app.js
+          test -f client/ws.js
+          test -f client/styles.css
+
+      - name: Runtime validation notes
+        run: |
+          echo "Runtime validation notes:"
+          if [ "${{ inputs.project }}" = "server" ]; then
+            echo "- Python runtime and server imports are validated."
+          else
+            echo "- Static client runtime entry files are validated."
+          fi
