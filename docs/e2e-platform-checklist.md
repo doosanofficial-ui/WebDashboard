@@ -30,6 +30,7 @@
 - [ ] GPS fix 후 lat/lon/speed/heading/accuracy 표시
 - [ ] GPS stale/no-fix 상태 표기 정확
 - [ ] 10Hz 렌더 루프에서 값 떨림이 과도하지 않음
+- [ ] iOS 앱에서 always 권한 + background mode 설정 후 significant-change 수신 확인
 
 ## 지도/로드뷰 점검
 - [ ] 지도 렌더링 정상(허용 URL 설정 포함)
@@ -46,6 +47,7 @@
 - [ ] `gps_<session>.csv` 생성 및 타임스탬프 확인
 - [ ] `gps_<session>.csv`의 `meta(source/bg_state/os/app_ver/device)` 컬럼 기록 확인
 - [ ] `events_<session>.csv`에 MARK 기록 확인
+- [ ] WS 단절 후 재연결 시 queued GPS uplink가 순차 반영되는지 확인
 
 ## 결과 요약
 - Pass/Fail:

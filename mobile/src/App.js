@@ -13,6 +13,7 @@ import {
 import { APP_VERSION, inferOsName, normalizeBaseUrl, toWsUrl } from "./config";
 import { createGpsPayload, createMarkPayload } from "./telemetry/protocol";
 import { requestLocationPermission, GpsClient } from "./telemetry/gps-client";
+import { StoreForwardQueue } from "./telemetry/store-forward-queue";
 import { TelemetryWsClient } from "./telemetry/ws-client";
 
 function formatNumber(value, digits = 2) {
@@ -46,11 +47,18 @@ export default function App() {
   const [sig, setSig] = useState(null);
   const [gpsState, setGpsState] = useState("gps-idle");
   const [gpsFix, setGpsFix] = useState(null);
+  const [gpsRunning, setGpsRunning] = useState(false);
+  const [queueDepth, setQueueDepth] = useState(0);
+  const [bgState, setBgState] = useState(AppState.currentState || "active");
+  const [iosBgPilot, setIosBgPilot] = useState(Platform.OS === "ios");
   const [markNote, setMarkNote] = useState("");
 
   const lastFrameAtRef = useRef(null);
   const appStateRef = useRef(AppState.currentState || "active");
   const gpsClientRef = useRef(new GpsClient());
+  const queueRef = useRef(new StoreForwardQueue());
+  const flushingRef = useRef(false);
+
   const wsClientRef = useRef(
     new TelemetryWsClient({
       onState: (state) => setConnectionState(state),
@@ -71,9 +79,71 @@ export default function App() {
     return frameAgeMs > 1500;
   }, [frameAgeMs]);
 
+  const flushQueuedGps = async () => {
+    if (flushingRef.current || !wsClientRef.current.isOpen()) {
+      return;
+    }
+    flushingRef.current = true;
+    try {
+      const { remaining } = await queueRef.current.flush((payload) =>
+        wsClientRef.current.sendJson(payload)
+      );
+      setQueueDepth(remaining);
+    } finally {
+      flushingRef.current = false;
+    }
+  };
+
+  const buildMeta = () => ({
+    bgState: appStateRef.current === "active" ? "foreground" : "background",
+    os: inferOsName(),
+    appVersion: APP_VERSION,
+    device: Platform.constants?.Model || Platform.constants?.Brand || "unknown",
+  });
+
+  const sendGpsUplinkWithQueue = async (fix) => {
+    const payload = createGpsPayload(fix, buildMeta());
+    const sent = wsClientRef.current.sendJson(payload);
+    if (!sent) {
+      const depth = await queueRef.current.enqueue(payload);
+      setQueueDepth(depth);
+      return;
+    }
+    await flushQueuedGps();
+  };
+
+  const startGpsWatch = (useIosBackgroundMode) => {
+    gpsClientRef.current.start(
+      (fix) => {
+        setGpsFix(fix);
+        setGpsState("gps-ok");
+        void sendGpsUplinkWithQueue(fix);
+      },
+      (err) => {
+        setGpsState(describeGpsError(err));
+      },
+      { iosBackgroundMode: useIosBackgroundMode }
+    );
+    setGpsRunning(true);
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    void queueRef.current.init().then((depth) => {
+      if (mounted) {
+        setQueueDepth(depth);
+      }
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   useEffect(() => {
     const appStateSub = AppState.addEventListener("change", (nextState) => {
       appStateRef.current = nextState;
+      setBgState(nextState);
     });
 
     const timer = setInterval(() => {
@@ -93,6 +163,12 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (connectionState === "connected") {
+      void flushQueuedGps();
+    }
+  }, [connectionState]);
+
   const connect = () => {
     const wsUrl = toWsUrl(serverBaseUrl);
     wsClientRef.current.connect(wsUrl);
@@ -108,29 +184,22 @@ export default function App() {
       setGpsState("gps-denied");
       return;
     }
-
-    gpsClientRef.current.start(
-      (fix) => {
-        setGpsFix(fix);
-        setGpsState("gps-ok");
-        wsClientRef.current.sendJson(
-          createGpsPayload(fix, {
-            bgState: appStateRef.current === "active" ? "foreground" : "background",
-            os: inferOsName(),
-            appVersion: APP_VERSION,
-            device: Platform.constants?.Model || Platform.constants?.Brand || "unknown",
-          })
-        );
-      },
-      (err) => {
-        setGpsState(describeGpsError(err));
-      }
-    );
+    startGpsWatch(iosBgPilot);
   };
 
   const stopGps = () => {
     gpsClientRef.current.stop();
+    setGpsRunning(false);
     setGpsState("gps-stopped");
+  };
+
+  const toggleIosBgPilot = () => {
+    const next = !iosBgPilot;
+    setIosBgPilot(next);
+    if (gpsRunning) {
+      gpsClientRef.current.stop();
+      startGpsWatch(next);
+    }
   };
 
   const sendMark = () => {
@@ -141,7 +210,7 @@ export default function App() {
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.title}>Telemetry Mobile (Bare RN)</Text>
-        <Text style={styles.caption}>Server bridge + GPS uplink scaffold</Text>
+        <Text style={styles.caption}>iOS-first background telemetry pilot</Text>
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Connection</Text>
@@ -165,8 +234,11 @@ export default function App() {
           <Text style={styles.kv}>state: {connectionState}</Text>
           <Text style={styles.kv}>seq: {seq ?? "-"}</Text>
           <Text style={styles.kv}>drop: {drop}</Text>
-          <Text style={styles.kv}>frameAge: {Number.isFinite(frameAgeMs) ? `${Math.round(frameAgeMs)}ms` : "-"}</Text>
+          <Text style={styles.kv}>
+            frameAge: {Number.isFinite(frameAgeMs) ? `${Math.round(frameAgeMs)}ms` : "-"}
+          </Text>
           <Text style={styles.kv}>rtt: {Number.isFinite(rttMs) ? `${Math.round(rttMs)}ms` : "-"}</Text>
+          <Text style={styles.kv}>queuedGps: {queueDepth}</Text>
           <Text style={[styles.kv, staleCan ? styles.warn : null]}>
             can: {staleCan ? "stale" : "fresh"}
           </Text>
@@ -182,13 +254,23 @@ export default function App() {
               <Text style={styles.buttonText}>Stop GPS</Text>
             </Pressable>
           </View>
+          {Platform.OS === "ios" ? (
+            <View style={styles.row}>
+              <Pressable style={styles.buttonMuted} onPress={toggleIosBgPilot}>
+                <Text style={styles.buttonText}>
+                  iOS BG Pilot: {iosBgPilot ? "ON(significant)" : "OFF(continuous)"}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
           <Text style={styles.kv}>gpsState: {gpsState}</Text>
+          <Text style={styles.kv}>gpsRunning: {gpsRunning ? "yes" : "no"}</Text>
           <Text style={styles.kv}>lat: {formatNumber(gpsFix?.lat, 6)}</Text>
           <Text style={styles.kv}>lon: {formatNumber(gpsFix?.lon, 6)}</Text>
           <Text style={styles.kv}>spd(m/s): {formatNumber(gpsFix?.spd, 2)}</Text>
           <Text style={styles.kv}>hdg: {formatNumber(gpsFix?.hdg, 1)}</Text>
           <Text style={styles.kv}>acc(m): {formatNumber(gpsFix?.acc, 1)}</Text>
-          <Text style={styles.kv}>bgState: {appStateRef.current === "active" ? "foreground" : "background"}</Text>
+          <Text style={styles.kv}>bgState: {bgState === "active" ? "foreground" : "background"}</Text>
         </View>
 
         <View style={styles.card}>

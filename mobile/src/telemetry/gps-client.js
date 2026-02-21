@@ -1,8 +1,16 @@
 import Geolocation from "@react-native-community/geolocation";
 import { PermissionsAndroid, Platform } from "react-native";
-import { GPS_OPTIONS } from "../config";
+import { buildGpsOptions } from "../config";
 
 export async function requestLocationPermission() {
+  if (Platform.OS === "ios") {
+    if (typeof Geolocation.requestAuthorization === "function") {
+      const result = await Geolocation.requestAuthorization("always");
+      return result === "granted";
+    }
+    return true;
+  }
+
   if (Platform.OS !== "android") {
     return true;
   }
@@ -19,10 +27,12 @@ export class GpsClient {
     this.watchId = null;
   }
 
-  start(onFix, onError) {
+  start(onFix, onError, options = {}) {
     if (this.watchId != null) {
       return;
     }
+
+    const watchOptions = buildGpsOptions(options);
 
     this.watchId = Geolocation.watchPosition(
       (position) => {
@@ -39,7 +49,7 @@ export class GpsClient {
       (err) => {
         onError?.(err);
       },
-      GPS_OPTIONS
+      watchOptions
     );
   }
 

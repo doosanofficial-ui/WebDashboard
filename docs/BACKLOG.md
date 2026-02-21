@@ -76,6 +76,8 @@
   - 진행 현황:
     - [x] 서버 GPS 수신 스키마에 `meta(source/bg_state/os/app_ver/device)` 반영
     - [x] Bare React Native 모바일 스캐폴딩(`mobile/`) + foreground GPS uplink/WS/MARK 구현
+    - [x] iOS 우선 파일럿: always 권한 요청 + significant-change 옵션 + Info.plist 자동 설정 스크립트
+    - [x] WS 단절 구간 GPS store-and-forward 큐 baseline 구현
   - 완료 기준:
     - 화면 OFF/백그라운드 30분 동안 GPS uplink가 기준 누락률 이하
     - 네트워크 단절 후 복귀 시 store-and-forward 재전송 동작

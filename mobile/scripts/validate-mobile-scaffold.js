@@ -14,7 +14,9 @@ const requiredFiles = [
   "src/telemetry/protocol.js",
   "src/telemetry/ws-client.js",
   "src/telemetry/gps-client.js",
+  "src/telemetry/store-forward-queue.js",
   "scripts/init-native-project.sh",
+  "scripts/apply-ios-location-background.sh",
   "README.md",
 ];
 

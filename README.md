@@ -89,6 +89,7 @@ python app.py
 cd mobile
 npm install
 npm run init-native
+npm run ios:setup-bg
 npm run validate
 ```
 세부 실행은 `mobile/README.md`를 따른다.
