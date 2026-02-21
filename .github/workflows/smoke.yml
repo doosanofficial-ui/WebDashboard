@@ -1,0 +1,26 @@
+name: smoke
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: server
+            python-version: "3.11"
+          - project: client
+            python-version: "3.11"
+    uses: ./.github/workflows/reusable-smoke.yml
+    with:
+      project: ${{ matrix.project }}
+      python-version: ${{ matrix.python-version }}
