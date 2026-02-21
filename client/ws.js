@@ -110,6 +110,9 @@ export class TelemetrySocket {
     });
 
     ws.addEventListener("error", () => {
+      if (this.ws !== ws) {
+        return;
+      }
       // close handler triggers reconnect
     });
   }
