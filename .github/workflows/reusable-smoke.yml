@@ -11,6 +11,9 @@ on:
         type: string
         default: "3.11"
 
+permissions:
+  contents: read
+
 jobs:
   smoke:
     name: smoke-${{ inputs.project }}
@@ -38,7 +41,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          python -m py_compile app.py config.py gps_sink.py logger.py can_source/*.py
+          python -m py_compile $(find . -name '*.py')
 
       - name: Client smoke
         if: ${{ inputs.project == 'client' }}
