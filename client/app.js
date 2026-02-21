@@ -87,6 +87,7 @@ const roadview = new NaverRoadview({
 
 let socket = null;
 let pingTimer = null;
+let socketState = "disconnected";
 let lastCanFrame = null;
 let lastFrameRecvMs = null;
 let lastSeq = null;
@@ -99,6 +100,7 @@ const layoutState = {
   mapSplitPct: 50,
 };
 const MOBILE_BREAKPOINT = 860;
+const FRAME_STALENESS_THRESHOLD_MS = 1500;
 
 els.serverUrl.value = `${window.location.protocol}//${window.location.host}`;
 
@@ -286,6 +288,7 @@ function connectSocket() {
     url: wsUrl,
     codec: new JsonCodec(),
     onStatus: (status) => {
+      socketState = status.state;
       const connected = status.state === "connected";
       els.connectBtn.disabled = connected;
       els.disconnectBtn.disabled = !connected && status.state !== "reconnecting";
@@ -395,9 +398,13 @@ setInterval(() => {
   const nowMs = performance.now();
   const nowSec = Date.now() / 1000;
 
-  const connected = Boolean(socket && socket.isOpen());
+  const connectionVisible = Boolean(socket && socket.isOpen()) || socketState === "reconnecting";
   const frameAgeMs = Number.isFinite(lastFrameRecvMs) ? nowMs - lastFrameRecvMs : null;
-  const stale = !connected || !Number.isFinite(frameAgeMs) || frameAgeMs > 1500;
+  const stale =
+    !socket ||
+    !socket.isOpen() ||
+    !Number.isFinite(frameAgeMs) ||
+    frameAgeMs > FRAME_STALENESS_THRESHOLD_MS;
 
   if (lastCanFrame?.sig) {
     updateGauges(els.gauge, lastCanFrame.sig);
@@ -407,7 +414,7 @@ setInterval(() => {
 
   const serverDrop = Number.isFinite(lastCanFrame?.status?.drop) ? lastCanFrame.status.drop : 0;
   updateConnection(els, {
-    connected,
+    connected: connectionVisible,
     frameAgeMs,
     seq: lastCanFrame?.status?.seq,
     drop: serverDrop + localDropCount,
