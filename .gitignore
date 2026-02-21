@@ -20,3 +20,7 @@ server/security/certs/*.crt
 .DS_Store
 .vscode/
 .idea/
+
+# VS Code integrated browser preview artifacts
+http:/
+http:
