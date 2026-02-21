@@ -36,7 +36,20 @@ class SessionCsvLogger:
         )
         self._gps_file, self._gps_writer = self._open_writer(
             self.gps_path,
-            ["client_t", "lat", "lon", "spd", "hdg", "acc", "alt"],
+            [
+                "client_t",
+                "lat",
+                "lon",
+                "spd",
+                "hdg",
+                "acc",
+                "alt",
+                "source",
+                "bg_state",
+                "os",
+                "app_ver",
+                "device",
+            ],
         )
         self._events_file, self._events_writer = self._open_writer(
             self.events_path,
@@ -82,6 +95,11 @@ class SessionCsvLogger:
                     row.get("hdg"),
                     row.get("acc"),
                     row.get("alt"),
+                    row.get("source"),
+                    row.get("bg_state"),
+                    row.get("os"),
+                    row.get("app_ver"),
+                    row.get("device"),
                 ]
             )
             self._gps_file.flush()

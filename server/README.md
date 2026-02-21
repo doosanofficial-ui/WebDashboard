@@ -112,6 +112,23 @@ iPhone/iPad에서 HTTPS 위치 권한이 필요하면, `make_dev_cert_mac.sh`가
 - `POST /api/event`
 - `WS /ws`
 
+`POST /api/gps` / `WS /ws` GPS uplink 예시(선택 메타 포함):
+```json
+{
+  "v": 1,
+  "t": 1730000001.456,
+  "gps": { "lat": 37.123, "lon": 127.123, "spd": 8.2, "hdg": 92.4, "acc": 7.1, "alt": 35.5 },
+  "meta": {
+    "source": "web|mobile",
+    "bg_state": "foreground|background",
+    "os": "iOS|Android|...",
+    "app_ver": "string",
+    "device": "string"
+  }
+}
+```
+메타 필드는 선택이며, 전달 시 `gps_<session>.csv`에 함께 기록됩니다.
+
 ## 핫스팟 운영
 권장: iPad가 AP(핫스팟) 역할, 노트북이 해당 SSID에 접속
 1. iPad 핫스팟 ON

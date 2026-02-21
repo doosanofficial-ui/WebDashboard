@@ -73,6 +73,8 @@
 
 - [ ] **P3-3 iOS/Android 백그라운드 위치 uplink 구현**
   - 산출물: 모바일 앱 모듈(신규), 서버 수신 스키마 확장
+  - 진행 현황:
+    - [x] 서버 GPS 수신 스키마에 `meta(source/bg_state/os/app_ver/device)` 반영
   - 완료 기준:
     - 화면 OFF/백그라운드 30분 동안 GPS uplink가 기준 누락률 이하
     - 네트워크 단절 후 복귀 시 store-and-forward 재전송 동작

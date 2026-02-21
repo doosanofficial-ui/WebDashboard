@@ -417,6 +417,23 @@ function describeGpsError(err) {
   return "gps-error";
 }
 
+function detectClientOs() {
+  const ua = navigator.userAgent || "";
+  if (/iPad|iPhone|iPod/i.test(ua)) {
+    return "iOS";
+  }
+  if (/Android/i.test(ua)) {
+    return "Android";
+  }
+  if (/Mac OS X|Macintosh/i.test(ua)) {
+    return "macOS";
+  }
+  if (/Windows/i.test(ua)) {
+    return "Windows";
+  }
+  return "Unknown";
+}
+
 function sendGpsUplink(fix) {
   if (!socket || !socket.isOpen()) {
     return;
@@ -432,6 +449,13 @@ function sendGpsUplink(fix) {
       hdg: fix.hdg,
       acc: fix.acc,
       alt: fix.alt,
+    },
+    meta: {
+      source: "web",
+      bg_state: document.visibilityState === "visible" ? "foreground" : "background",
+      os: detectClientOs(),
+      app_ver: "web-mvp-v1",
+      device: navigator.platform || "unknown",
     },
   });
 }

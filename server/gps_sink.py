@@ -8,6 +8,8 @@ def extract_gps_row(payload: dict[str, Any]) -> dict[str, Any] | None:
     if not isinstance(gps, dict):
         return None
 
+    meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
+
     return {
         "t": payload.get("t"),
         "lat": gps.get("lat"),
@@ -16,6 +18,11 @@ def extract_gps_row(payload: dict[str, Any]) -> dict[str, Any] | None:
         "hdg": gps.get("hdg"),
         "acc": gps.get("acc"),
         "alt": gps.get("alt"),
+        "source": meta.get("source"),
+        "bg_state": meta.get("bg_state"),
+        "os": meta.get("os"),
+        "app_ver": meta.get("app_ver"),
+        "device": meta.get("device"),
     }
 
 

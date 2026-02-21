@@ -42,6 +42,7 @@
 ## 로그 점검
 - [ ] `can_<session>.csv` 생성 및 샘플 값 확인
 - [ ] `gps_<session>.csv` 생성 및 타임스탬프 확인
+- [ ] `gps_<session>.csv`의 `meta(source/bg_state/os/app_ver/device)` 컬럼 기록 확인
 - [ ] `events_<session>.csv`에 MARK 기록 확인
 
 ## 결과 요약

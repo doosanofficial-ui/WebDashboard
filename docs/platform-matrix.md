@@ -37,7 +37,7 @@
 - [ ] 앱 백그라운드 상태에서도 GPS uplink 지속(저주기 + 배터리 정책)
 - [ ] 네트워크 단절/복귀 시 store-and-forward 큐 적용
 - [ ] 배터리/발열 측정 기준 정의(예: 1시간 주행 기준 소모율)
-- [ ] 서버 수신 스키마 확장(`source`, `bg_state`, `os`, `app_ver`)
+- [x] 서버 수신 스키마 확장(`source`, `bg_state`, `os`, `app_ver`, `device`)
 
 ### C. CarPlay / Android Auto 전환 (중장기)
 - [ ] 차량 투영 플랫폼 요구사항 조사 및 승인(엔타이틀먼트/카테고리) 체크리스트

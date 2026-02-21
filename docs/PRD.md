@@ -83,6 +83,13 @@
     "hdg": 92.4,
     "acc": 7.1,
     "alt": 35.5
+  },
+  "meta": {
+    "source": "web|mobile",
+    "bg_state": "foreground|background",
+    "os": "iOS|Android|...",
+    "app_ver": "string",
+    "device": "string"
   }
 }
 ```
