@@ -89,14 +89,16 @@
         <div class="heading-wrap">
           <div id="headingArrow" class="heading-arrow"></div>
         </div>
-        <div class="map-wrap">
-          <div id="gpsMap" aria-label="GPS map"></div>
-          <p id="mapHint" class="map-hint">지도 초기화 중...</p>
-        </div>
-        <div class="map-wrap">
-          <div id="naverRoadview" aria-label="Naver roadview"></div>
-          <p id="naverRoadviewStatus" class="map-hint">NAVER 로드뷰 초기화 중...</p>
-          <p id="naverRoadviewAddress" class="map-hint">주소: -</p>
+        <div class="gps-views">
+          <div class="map-wrap">
+            <div id="gpsMap" aria-label="GPS map"></div>
+            <p id="mapHint" class="map-hint">지도 초기화 중...</p>
+          </div>
+          <div class="map-wrap roadview-wrap">
+            <div id="naverRoadview" aria-label="Naver roadview"></div>
+            <p id="naverRoadviewStatus" class="map-hint">NAVER 로드뷰 초기화 중...</p>
+            <p id="naverRoadviewAddress" class="map-hint">주소: -</p>
+          </div>
         </div>
       </section>
     </main>

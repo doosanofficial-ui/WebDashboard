@@ -227,4 +227,11 @@ export class NaverRoadview {
 
     this.addressEl.textContent = `주소: ${addressText}`;
   }
+
+  resize() {
+    if (!this.panorama || !window.naver?.maps?.Event) {
+      return;
+    }
+    window.naver.maps.Event.trigger(this.panorama, "resize");
+  }
 }

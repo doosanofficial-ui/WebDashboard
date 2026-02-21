@@ -94,6 +94,29 @@ let lastGpsView = null;
 
 els.serverUrl.value = `${window.location.protocol}//${window.location.host}`;
 
+function fitViewportLayout() {
+  const topbar = document.querySelector(".topbar");
+  const main = document.querySelector("main");
+  if (!topbar || !main) {
+    return;
+  }
+
+  if (window.innerWidth <= 860) {
+    main.style.height = "auto";
+    gpsMap.resize();
+    roadview.resize();
+    return;
+  }
+
+  const viewportH = window.innerHeight;
+  const topbarH = Math.ceil(topbar.getBoundingClientRect().height);
+  const mainHeight = Math.max(320, viewportH - topbarH);
+  main.style.height = `${mainHeight}px`;
+
+  gpsMap.resize();
+  roadview.resize();
+}
+
 async function initPublicConfig() {
   try {
     const res = await fetch("/api/public-config");
@@ -104,6 +127,7 @@ async function initPublicConfig() {
     const payload = await res.json();
     const naverClientId = payload?.naver?.clientId;
     await roadview.init(naverClientId);
+    fitViewportLayout();
   } catch (err) {
     els.naverRoadviewStatus.textContent = `로드뷰 설정 조회 실패: ${err.message}`;
     els.naverRoadviewStatus.classList.add("error");
@@ -111,6 +135,9 @@ async function initPublicConfig() {
 }
 
 initPublicConfig();
+fitViewportLayout();
+window.addEventListener("resize", fitViewportLayout);
+window.addEventListener("orientationchange", fitViewportLayout);
 
 function normalizeHttpBase(rawInput) {
   let raw = rawInput.trim();

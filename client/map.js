@@ -155,6 +155,13 @@ export class GpsMap {
     window.L.marker([fix.lat, fix.lon]).addTo(this.map).bindPopup(label);
   }
 
+  resize() {
+    if (!this.map) {
+      return;
+    }
+    this.map.invalidateSize();
+  }
+
   _pushTrail(latlng) {
     const [lat, lon] = latlng;
     if (this.lastTrailPoint) {
