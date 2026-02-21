@@ -3,6 +3,8 @@
 > **상태**: 스캐폴드 문서 (구현 진행 중, P3-3 Android 트랙)  
 > **관련 파일**:  
 > - 권한/서비스 선언 스캐폴드: [`mobile/scripts/android-manifest-fgs-scaffold.xml`](../mobile/scripts/android-manifest-fgs-scaffold.xml)  
+> - Android 적용 스크립트: [`mobile/scripts/apply-android-location-background.sh`](../mobile/scripts/apply-android-location-background.sh)  
+> - Android 네이티브 소스 스캐폴드: `mobile/native-android-bridge/{LocationForegroundService.kt,RNAndroidLocationBridge.kt}`  
 > - iOS 네이티브 브리지: `mobile/native-ios-bridge/RNIosLocationBridge.{h,m}`  
 > - GPS payload 계약: `mobile/src/telemetry/protocol.js`  
 > - 검증 보고서 양식: [`docs/reports/android-bg-30min-template.md`](reports/android-bg-30min-template.md)
@@ -21,7 +23,7 @@ FGS는 사용자에게 지속 알림(Notification)을 표시하며, OS의 앱 �
 | 권한 단계 | `whenInUse` → `always` | `FINE` → `BACKGROUND_LOCATION` (API 29+) |
 | 백그라운드 메커니즘 | `UIBackgroundModes: location` + Significant-Change | FGS + `foregroundServiceType="location"` |
 | 알림 필수 여부 | 상단 파란 바(자동) | 개발자가 Notification 채널 생성 필수 |
-| JS 브리지 | `RNIosLocationBridge.{h,m}` | `RNAndroidLocationBridge.{java,kt}` (예정) |
+| JS 브리지 | `RNIosLocationBridge.{h,m}` | `RNAndroidLocationBridge.kt` (소스 스캐폴드 제공) |
 | 최소 API 레벨 | iOS 14+ | API 26+(FGS), API 29+(Background 권한), API 34+(serviceType) |
 
 ---
@@ -29,6 +31,17 @@ FGS는 사용자에게 지속 알림(Notification)을 표시하며, OS의 앱 �
 ## 2. AndroidManifest.xml 선언
 
 스캐폴드 파일: [`mobile/scripts/android-manifest-fgs-scaffold.xml`](../mobile/scripts/android-manifest-fgs-scaffold.xml)
+
+### 적용 명령 (실기기 없어도 실행 가능)
+
+```bash
+cd mobile
+npm run init-native
+npm run android:setup-bg
+```
+
+`android:setup-bg`는 브리지/서비스 Kotlin 파일을 생성된 `android/` 프로젝트에 복사하고
+Manifest 체크리스트(누락 항목)를 출력한다.
 
 ### 필수 권한 목록
 
@@ -125,10 +138,10 @@ AppState 이벤트 수신 (App.js)
 | 단계 | 내용 | 상태 |
 |---|---|---|
 | 1 | `AndroidManifest.xml` 권한/서비스 선언 | ✅ 스캐폴드 완료 |
-| 2 | `LocationForegroundService.kt` — Notification 채널 + `startForeground()` | 🔲 예정 |
-| 3 | `RNAndroidLocationBridge.kt` — JS NativeModule, `startBackgroundLocation` / `stopBackgroundLocation` | 🔲 예정 |
-| 4 | `gps-client.js` Android 분기 — `Platform.OS === "android" && androidBackgroundMode` | 🔲 예정 |
-| 5 | `ACCESS_BACKGROUND_LOCATION` 런타임 요청 추가 (`requestLocationPermission`) | 🔲 예정 |
+| 2 | `LocationForegroundService.kt` — Notification 채널 + `startForeground()` | 🟡 소스 스캐폴드 추가 (프로젝트 연결 대기) |
+| 3 | `RNAndroidLocationBridge.kt` — JS NativeModule, `startBackgroundLocation` / `stopBackgroundLocation` | 🟡 소스 스캐폴드 추가 (ReactPackage 등록 대기) |
+| 4 | `gps-client.js` Android 분기 — `Platform.OS === "android" && androidBackgroundMode` | ✅ baseline 반영 |
+| 5 | `ACCESS_BACKGROUND_LOCATION` 런타임 요청 추가 (`requestLocationPermission`) | ✅ baseline 반영 |
 | 6 | Android 30분 백그라운드 검증 실행 (보고서 양식: android-bg-30min-template.md) | 🔲 예정 |
 
 ---

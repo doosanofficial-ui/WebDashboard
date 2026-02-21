@@ -86,6 +86,10 @@
 ### 준비
 - [ ] Android 기기에서 앱 설치 및 `ACCESS_FINE_LOCATION`/`ACCESS_BACKGROUND_LOCATION` 권한 부여 확인
 - [ ] FGS 선언/권한 반영 여부 확인 (`mobile/scripts/android-manifest-fgs-scaffold.xml`)
+- [ ] 기기 부재 시 preflight만 수행:
+  - `node mobile/scripts/validate-mobile-scaffold.js`
+  - `cd mobile && npm test -- --runInBand --silent`
+  - `cd mobile && npm run android:setup-bg` (android 폴더 생성 후)
 - [ ] 서버가 LAN으로 바인딩됐는지 확인 (`HOST=0.0.0.0 python app.py`)
 - [ ] 배터리 잔량 기록 (시작 전)
 

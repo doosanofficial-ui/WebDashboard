@@ -7,6 +7,7 @@
   "scripts": {
     "init-native": "bash ./scripts/init-native-project.sh",
     "ios:setup-bg": "bash ./scripts/apply-ios-location-background.sh",
+    "android:setup-bg": "bash ./scripts/apply-android-location-background.sh",
     "start": "react-native start",
     "ios": "react-native run-ios",
     "android": "react-native run-android",

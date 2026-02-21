@@ -5,11 +5,16 @@ import {
   PermissionsAndroid,
   Platform,
 } from "react-native";
-import { buildGpsOptions, IOS_BG_BRIDGE_MODULE } from "../config";
+import {
+  ANDROID_BG_BRIDGE_MODULE,
+  buildGpsOptions,
+  IOS_BG_BRIDGE_MODULE,
+} from "../config";
 
-// Native bridge module – present only after `npm run ios:setup-bg` and Xcode
-// project linking.  Gracefully absent on Android and in bare JS environments.
-const _nativeBridge = NativeModules[IOS_BG_BRIDGE_MODULE] ?? null;
+// Native bridge modules are optional and only present after native setup scripts
+// (`ios:setup-bg`, `android:setup-bg`) and project-level registration.
+const _iosNativeBridge = NativeModules[IOS_BG_BRIDGE_MODULE] ?? null;
+const _androidNativeBridge = NativeModules[ANDROID_BG_BRIDGE_MODULE] ?? null;
 
 export async function requestLocationPermission(options = {}) {
   const { androidBackgroundMode = false } = options;
@@ -54,6 +59,7 @@ export class GpsClient {
   constructor() {
     this.watchId = null;
     this._usingBridge = false;
+    this._bridgeType = null;
     this._bgSubscriptions = [];
   }
 
@@ -62,10 +68,15 @@ export class GpsClient {
       return;
     }
 
-    const { iosBackgroundMode = false } = options;
+    const { iosBackgroundMode = false, androidBackgroundMode = false } = options;
 
-    if (Platform.OS === "ios" && iosBackgroundMode && _nativeBridge) {
-      this._startViaBridge(onFix, onError, options);
+    if (Platform.OS === "ios" && iosBackgroundMode && _iosNativeBridge) {
+      this._startViaIosBridge(onFix, onError, options);
+      return;
+    }
+
+    if (Platform.OS === "android" && androidBackgroundMode && _androidNativeBridge) {
+      this._startViaAndroidBridge(onFix, onError, options);
       return;
     }
 
@@ -91,22 +102,18 @@ export class GpsClient {
   }
 
   /** @private */
-  _startViaBridge(onFix, onError, options = {}) {
-    const emitter = new NativeEventEmitter(_nativeBridge);
+  _startViaIosBridge(onFix, onError, options = {}) {
+    const emitter = new NativeEventEmitter(_iosNativeBridge);
     const useSignificantChanges =
       options.useSignificantChanges ??
       buildGpsOptions(options).useSignificantChanges ??
       false;
 
     const locationSub = emitter.addListener("locationUpdate", (data) => {
-      onFix?.({
-        lat: data.latitude,
-        lon: data.longitude,
-        spd: data.speed >= 0 ? data.speed : 0,
-        hdg: data.heading >= 0 ? data.heading : null,
-        acc: Number.isFinite(data.accuracy) ? data.accuracy : null,
-        alt: Number.isFinite(data.altitude) ? data.altitude : null,
-      });
+      const fix = this._normalizeBridgeFix(data);
+      if (fix) {
+        onFix?.(fix);
+      }
     });
 
     const errorSub = emitter.addListener("locationError", (err) => {
@@ -115,16 +122,68 @@ export class GpsClient {
 
     this._bgSubscriptions = [locationSub, errorSub];
     this._usingBridge = true;
+    this._bridgeType = "ios";
 
-    _nativeBridge.startBackgroundLocation({ useSignificantChanges });
+    _iosNativeBridge.startBackgroundLocation({ useSignificantChanges });
+  }
+
+  /** @private */
+  _startViaAndroidBridge(onFix, onError, options = {}) {
+    const emitter = new NativeEventEmitter(_androidNativeBridge);
+    const locationSub = emitter.addListener("locationUpdate", (data) => {
+      const fix = this._normalizeBridgeFix(data);
+      if (fix) {
+        onFix?.(fix);
+      }
+    });
+    const errorSub = emitter.addListener("locationError", (err) => {
+      onError?.(err);
+    });
+
+    this._bgSubscriptions = [locationSub, errorSub];
+    this._usingBridge = true;
+    this._bridgeType = "android";
+
+    _androidNativeBridge.startBackgroundLocation({
+      intervalMs: options.intervalMs ?? 1000,
+      distanceMeters: options.distanceMeters ?? 5,
+    });
+  }
+
+  /** @private */
+  _normalizeBridgeFix(data = {}) {
+    const latitude = Number(data.latitude);
+    const longitude = Number(data.longitude);
+    const speed = Number(data.speed);
+    const heading = Number(data.heading);
+    const accuracy = Number(data.accuracy);
+    const altitude = Number(data.altitude);
+
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return null;
+    }
+
+    return {
+      lat: latitude,
+      lon: longitude,
+      spd: Number.isFinite(speed) && speed >= 0 ? speed : 0,
+      hdg: Number.isFinite(heading) && heading >= 0 ? heading : null,
+      acc: Number.isFinite(accuracy) ? accuracy : null,
+      alt: Number.isFinite(altitude) ? altitude : null,
+    };
   }
 
   stop() {
     if (this._usingBridge) {
-      _nativeBridge?.stopBackgroundLocation();
+      if (this._bridgeType === "ios") {
+        _iosNativeBridge?.stopBackgroundLocation();
+      } else if (this._bridgeType === "android") {
+        _androidNativeBridge?.stopBackgroundLocation();
+      }
       this._bgSubscriptions.forEach((s) => s.remove());
       this._bgSubscriptions = [];
       this._usingBridge = false;
+      this._bridgeType = null;
       return;
     }
 

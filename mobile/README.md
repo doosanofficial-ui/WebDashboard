@@ -15,6 +15,7 @@ cd mobile
 npm install
 npm run init-native   # 최초 1회: ios/android 네이티브 프로젝트 생성
 npm run ios:setup-bg  # iOS Info.plist 위치 권한/백그라운드 키 자동 반영 + 브리지 파일 복사
+npm run android:setup-bg  # Android 브리지/서비스 소스 복사 + 매니페스트 체크리스트 출력
 npm run validate
 npm run start
 ```
@@ -60,17 +61,18 @@ Android 백그라운드 GPS 수집은 Foreground Service(FGS)를 통해 구현�
 권한 선언, 서비스 선언, `meta.bg_state` 흐름 전체 가이드:  
 → **[`docs/android-fgs-bg-location.md`](../docs/android-fgs-bg-location.md)**
 
-### JS 계층 흐름 (예정)
+### JS 계층 흐름
 ```
-GpsClient.start({ androidBackgroundMode: true })   ← 구현 예정
+GpsClient.start({ androidBackgroundMode: true })
   └─ Android + RNAndroidLocationBridge 사용 가능?
        ├─ YES → LocationForegroundService 시작 → GPS 수집
        │         └─ "locationUpdate" 이벤트 → onFix → meta.bg_state 포함 uplink
        └─ NO  → Geolocation.watchPosition() (기존 동작, 폴백)
 ```
 
-현재 baseline에서는 네이티브 FGS는 아직 미구현이며, 앱 UI의 `Android BG Pilot` 토글이
-`ACCESS_BACKGROUND_LOCATION` 권한 요청 분기를 활성화한다.
+현재 baseline에서는 Android 네이티브 소스 파일(`native-android-bridge`)과 복사 스크립트만 제공한다.
+실제 동작을 위해서는 생성된 `android/` 프로젝트에 파일 반영 + ReactPackage 등록이 필요하다.
+앱 UI의 `Android BG Pilot` 토글은 `ACCESS_BACKGROUND_LOCATION` 권한 요청 분기를 활성화한다.
 
 `meta.bg_state`는 React Native `AppState`("active" → `"foreground"`, 그 외 → `"background"`)  
 기준으로 설정되어 서버 수신 GPS 페이로드의 `meta.bg_state` 필드에 기록됩니다.  
@@ -94,7 +96,7 @@ GpsClient.start({ androidBackgroundMode: true })   ← 구현 예정
 ```
 GpsClient.start({ iosBackgroundMode: true })
   └─ iOS + RNIosLocationBridge 사용 가능?
-       ├─ YES → _startViaBridge() → RNIosLocationBridge.startBackgroundLocation()
+       ├─ YES → _startViaIosBridge() → RNIosLocationBridge.startBackgroundLocation()
        │         └─ "locationUpdate" 이벤트 → onFix callback → meta.bg_state 포함 uplink
        └─ NO  → Geolocation.watchPosition() (기존 동작, 폴백)
 ```

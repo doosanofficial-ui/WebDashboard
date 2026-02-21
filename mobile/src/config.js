@@ -2,6 +2,7 @@ import { Platform } from "react-native";
 
 export const APP_VERSION = "rn-bare-v0.1";
 export const IOS_BG_BRIDGE_MODULE = "RNIosLocationBridge";
+export const ANDROID_BG_BRIDGE_MODULE = "RNAndroidLocationBridge";
 export const DEFAULT_SERVER_BASE_URL = "http://127.0.0.1:8080";
 export const GPS_OPTIONS_BASE = {
   enableHighAccuracy: true,

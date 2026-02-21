@@ -38,7 +38,7 @@
   3. Android 네이티브 신규 파일(로컬 생성 대상)
      - `LocationForegroundService.kt`
      - `RNAndroidLocationBridge.kt`
-     - 상태: TODO (네이티브 프로젝트 생성 후 반영)
+     - 상태: IN_PROGRESS (소스 스캐폴드 추가 완료, 네이티브 프로젝트 연결 대기)
   4. `mobile/src/telemetry/protocol.js`
      - `meta.bg_state`의 foreground/background 기록 회귀 검증(코드 변경 없이 테스트 기준 고정)
      - 상태: DONE (검증 경로 잠금)
@@ -65,16 +65,33 @@
   - 상태: DONE
   - 결과:
     - `node mobile/scripts/validate-mobile-scaffold.js` 통과
-    - `cd mobile && npm test -- --runInBand --silent` 통과 (1 suite, 11 tests)
+    - `cd mobile && npm test -- --runInBand --silent` 통과 (2 suites, 15 tests)
 - Action 2:
   - 상태: IN_PROGRESS
   - 결과:
     - DONE: Android background location 권한 요청 분기 추가
       - `mobile/src/telemetry/gps-client.js`
       - `mobile/src/App.js`
-    - TODO: Android 네이티브 브리지/서비스 구현(`LocationForegroundService`, `RNAndroidLocationBridge`)
+    - IN_PROGRESS: Android 네이티브 브리지/서비스 소스 스캐폴드 추가
+      - `mobile/native-android-bridge/LocationForegroundService.kt`
+      - `mobile/native-android-bridge/RNAndroidLocationBridge.kt`
+      - `mobile/scripts/apply-android-location-background.sh`
+    - TODO: 생성된 `android/` 프로젝트에 반영 후 ReactPackage 등록 및 런타임 검증
 - Action 3:
   - 상태: DONE
   - 결과:
     - `docs/reports/android-bg-30min-template.md` 신규 추가
     - `docs/e2e-platform-checklist.md` Android 30분 시나리오 섹션 추가
+
+## 실기기 부재 모드 (현재 세션 적용)
+
+- 제약:
+  - Android 실기기 부재로 30분 실주행/백그라운드 실측은 수행하지 않음
+- 대신 완료한 항목:
+  - JS 권한 분기/상태 전달 baseline 구현
+  - Android 네이티브 브리지/서비스 소스 스캐폴드 및 적용 스크립트 추가
+  - 문서/체크리스트/리포트 템플릿 잠금
+- 잔여 항목:
+  1. `npm run init-native && npm run android:setup-bg` 실행
+  2. Android 프로젝트에서 ReactPackage 등록 및 Manifest 병합
+  3. 에뮬레이터 또는 실기기에서 30분 시나리오 실측 후 보고서 기입

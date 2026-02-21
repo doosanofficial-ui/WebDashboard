@@ -84,7 +84,8 @@
     - `gps_<session>.csv`에 foreground/background 상태 구분 기록
   - 즉시 실행 체크리스트:
     - [x] 오늘 실행 순서/명령/완료기준: `docs/reports/p3-3-next-actions-2026-02-21.md`
-    - [ ] Android 네이티브 구현 잔여 2개(`LocationForegroundService`, `RNAndroidLocationBridge`)
+    - [x] Android 네이티브 소스 스캐폴드 2개(`LocationForegroundService`, `RNAndroidLocationBridge`)
+    - [ ] 생성된 `android/` 프로젝트 반영 + ReactPackage 등록 + 30분 실측
 
 - [ ] **P3-4 배터리/발열 계측 및 보호 로직**
   - 산출물: 샘플링 정책(동적 주기), 운영 가이드

@@ -17,6 +17,11 @@ const requiredFiles = [
   "src/telemetry/store-forward-queue.js",
   "scripts/init-native-project.sh",
   "scripts/apply-ios-location-background.sh",
+  "scripts/apply-android-location-background.sh",
+  "native-ios-bridge/RNIosLocationBridge.h",
+  "native-ios-bridge/RNIosLocationBridge.m",
+  "native-android-bridge/LocationForegroundService.kt",
+  "native-android-bridge/RNAndroidLocationBridge.kt",
   "README.md",
 ];
 
