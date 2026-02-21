@@ -23,6 +23,8 @@ jobs:
             python-version: "3.11"
           - project: client
             python-version: "3.11"
+          - project: mobile
+            python-version: "3.11"
     uses: ./.github/workflows/reusable-smoke.yml
     with:
       project: ${{ matrix.project }}

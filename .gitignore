@@ -22,6 +22,17 @@ server/security/*.srl
 .vscode/
 .idea/
 
+# Node / React Native
+node_modules/
+mobile/node_modules/
+mobile/.gradle/
+mobile/android/.gradle/
+mobile/android/app/build/
+mobile/android/build/
+mobile/ios/build/
+mobile/ios/Pods/
+mobile/ios/.xcode.env.local
+
 # VS Code integrated browser preview artifacts
 http:/
 http:

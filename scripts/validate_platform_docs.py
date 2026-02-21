@@ -28,6 +28,11 @@ REQUIRED_FILES = {
         "## Options",
         "## Recommendation",
     ],
+    "mobile/README.md": [
+        "# Telemetry Mobile (Bare React Native Scaffold)",
+        "## 권한 설정 (필수)",
+        "## 현재 한계",
+    ],
 }
 
 

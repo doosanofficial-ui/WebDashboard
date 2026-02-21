@@ -15,6 +15,8 @@
 | macOS | Chrome |  |  |  |
 | iOS | Safari |  | iPhone/iPad |  |
 | Android | Chrome |  | Phone/Tablet |  |
+| iOS | Telemetry Mobile (RN) |  | iPhone/iPad |  |
+| Android | Telemetry Mobile (RN) |  | Phone/Tablet |  |
 
 ## 공통 기능 점검
 - [ ] `/api/ping` reachable

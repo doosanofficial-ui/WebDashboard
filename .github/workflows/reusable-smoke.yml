@@ -25,7 +25,7 @@ jobs:
       - name: Validate runtime input
         run: |
           case "${{ inputs.project }}" in
-            server|client) ;;
+            server|client|mobile) ;;
             *) echo "Unsupported project: ${{ inputs.project }}" >&2; exit 1 ;;
           esac
 
@@ -51,11 +51,23 @@ jobs:
           test -f client/ws.js
           test -f client/styles.css
 
+      - name: Mobile smoke
+        if: ${{ inputs.project == 'mobile' }}
+        run: |
+          test -f mobile/package.json
+          test -f mobile/index.js
+          test -f mobile/src/App.js
+          test -f mobile/src/telemetry/ws-client.js
+          test -f mobile/src/telemetry/gps-client.js
+          node mobile/scripts/validate-mobile-scaffold.js
+
       - name: Runtime validation notes
         run: |
           echo "Runtime validation notes:"
           if [ "${{ inputs.project }}" = "server" ]; then
             echo "- Python runtime and server imports are validated."
+          elif [ "${{ inputs.project }}" = "mobile" ]; then
+            echo "- React Native mobile scaffold files are validated."
           else
             echo "- Static client runtime entry files are validated."
           fi

@@ -121,7 +121,8 @@
 - GPS foreground, MARK, CSV 로깅
 
 ### Phase B: Background Telemetry
-- 모바일 런타임(React Native/Flutter/Native) 결정 및 ADR
+- 모바일 런타임(React Native + Native Bridge) 결정 및 ADR 완료
+- Bare React Native 스캐폴딩(`mobile/`) + foreground GPS uplink 구현
 - iOS/Android 백그라운드 위치 수집 서비스 구현
 - 단절 구간 store-and-forward 큐와 서버 스키마 확장
 
