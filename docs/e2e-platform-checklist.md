@@ -43,11 +43,40 @@
 - [ ] HTTPS 페이지에서 WSS 연결 정상
 
 ## 로그 점검
-- [ ] `can_<session>.csv` 생성 및 샘플 값 확인
-- [ ] `gps_<session>.csv` 생성 및 타임스탬프 확인
-- [ ] `gps_<session>.csv`의 `meta(source/bg_state/os/app_ver/device)` 컬럼 기록 확인
-- [ ] `events_<session>.csv`에 MARK 기록 확인
+- [ ] `server/logs/can_<session>.csv` 생성 및 샘플 값 확인
+- [ ] `server/logs/gps_<session>.csv` 생성 및 타임스탬프 확인
+- [ ] `server/logs/gps_<session>.csv`의 `meta(source/bg_state/os/app_ver/device)` 컬럼 기록 확인
+- [ ] `server/logs/events_<session>.csv`에 MARK 기록 확인
 - [ ] WS 단절 후 재연결 시 queued GPS uplink가 순차 반영되는지 확인
+
+## iOS 백그라운드 30분 시나리오 점검
+
+> 전체 절차 및 보고서 양식: [`docs/reports/ios-bg-30min-template.md`](reports/ios-bg-30min-template.md)
+
+### 준비
+- [ ] iOS 기기에서 앱 설치 및 `always` 위치 권한 부여 확인
+- [ ] `UIBackgroundModes: location` 활성화 확인 (`npm run ios:setup-bg` 실행 또는 Xcode Capabilities 확인)
+- [ ] 서버가 LAN으로 바인딩됐는지 확인 (`HOST=0.0.0.0 python app.py`)
+- [ ] 배터리 잔량 기록 (시작 전)
+
+### 실행
+- [ ] 앱 Connect 후 WS/GPS 정상 수신 확인 (최소 30초 foreground 유지)
+- [ ] 화면 잠금(홈 버튼 또는 전원 버튼으로 화면 OFF)
+- [ ] 30분 타이머 시작
+- [ ] (선택) 15분 경과 시 서버 재시작 또는 네트워크 토글로 단절 시뮬레이션
+
+### 로그 추출 및 측정
+- [ ] 30분 후 앱 foreground 복귀 및 WS 상태 확인
+- [ ] `server/logs/gps_<session>.csv` 추출 — 총 행 수, `bg_state` 컬럼, 타임스탬프 갭 확인
+- [ ] 타임스탬프 갭 > 30초인 구간 목록 작성
+- [ ] 큐 flush 완료 여부 확인 (단절 구간 이후 레코드 연속성)
+- [ ] 배터리 잔량 기록 (종료 후)
+
+### 핵심 지표 (보고서에 기재)
+- [ ] **GPS 누락률** ≤ 20% (기준 충족 여부)
+- [ ] **WS 재연결 성공률** 100%
+- [ ] **큐 flush 완료** (Y/N)
+- [ ] **GPS 신선도 지연** ≤ 300초
 
 ## 결과 요약
 - Pass/Fail:

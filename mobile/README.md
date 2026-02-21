@@ -99,6 +99,76 @@ stopBackgroundLocation
 isBackgroundActive
 ```
 
+## 30분 백그라운드 검증 실행 절차 (P3-3 Runbook)
+
+> 보고서 양식(지표 기재): [`docs/reports/ios-bg-30min-template.md`](../docs/reports/ios-bg-30min-template.md)
+> E2E 점검표: [`docs/e2e-platform-checklist.md`](../docs/e2e-platform-checklist.md)
+
+### 사전 준비
+1. 서버 LAN 바인딩 시작:
+   ```bash
+   cd server
+   HOST=0.0.0.0 python app.py
+   ```
+2. 앱 빌드 및 실기기 설치:
+   ```bash
+   cd mobile
+   npm run ios:setup-bg  # Info.plist 위치 권한/백그라운드 키 반영
+   npm run ios           # 실기기에 배포
+   ```
+3. iOS 설정 → 개인 정보 보호 → 위치 서비스 → 앱 → **항상** 선택 확인
+4. 배터리 잔량 기록.
+
+### 실행
+1. 앱 실행 → 서버 URL 입력 → **Connect** 탭.
+2. WS 상태 표시등이 녹색(연결됨)이고 GPS 값이 갱신되는지 확인 (최소 30초).
+3. 기기 화면 잠금(전원 버튼 또는 홈 버튼).
+4. 30분 타이머 시작.
+5. (선택) 15분 경과 시 서버를 재시작하거나 기기를 비행기 모드로 전환하여 단절 시뮬레이션 실시.
+6. 30분 후 화면 잠금 해제 → 앱 foreground 복귀 → 재연결 및 GPS 재수신 확인.
+
+### 로그 수집
+```bash
+# 서버 실행 디렉터리에서 세션 파일 확인
+ls server/logs/gps_*.csv server/logs/events_*.csv
+
+# 타임스탬프 갭 분석 (Python)
+python - <<'PY'
+import glob
+import pandas as pd
+import sys
+
+files = sorted(glob.glob("server/logs/gps_*.csv"))
+if not files:
+    print("No GPS CSV found")
+    sys.exit(1)
+
+# 필수 컬럼: client_t(epoch seconds), bg_state, source, lat, lon, app_ver, device
+# client_t를 UTC datetime으로 변환해 갭을 계산한다.
+df = pd.read_csv(files[-1])
+df = df.sort_values("client_t").reset_index(drop=True)
+ts = pd.to_datetime(df["client_t"], unit="s", utc=True)
+gaps_seconds = ts.diff().dt.total_seconds()
+print("총 레코드:", len(df))
+print("bg_state 분포:")
+print(df["bg_state"].value_counts(dropna=False))
+large_gaps_seconds = gaps_seconds[gaps_seconds > 30]
+print(f"30초 초과 갭 {len(large_gaps_seconds)}건:")
+print(large_gaps_seconds)
+PY
+```
+
+### 판정 기준 요약
+
+| 지표 | 합격 기준 |
+|---|---|
+| GPS 누락률 | ≤ 20% |
+| WS 재연결 성공률 | 100% |
+| 큐 flush 완료 | Y |
+| GPS 신선도 지연 | ≤ 300초 |
+
+결과를 `docs/reports/ios-bg-30min-template.md`에 기재하여 팀과 공유.
+
 ## 현재 한계
 - 기본 스캐폴딩은 경량 커밋을 위해 `ios/`, `android/`를 저장소에 포함하지 않는다.
 - `npm run init-native`로 로컬에서 네이티브 폴더를 생성한 뒤 실행한다.
