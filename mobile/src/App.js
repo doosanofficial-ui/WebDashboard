@@ -51,6 +51,7 @@ export default function App() {
   const [queueDepth, setQueueDepth] = useState(0);
   const [bgState, setBgState] = useState(AppState.currentState || "active");
   const [iosBgPilot, setIosBgPilot] = useState(Platform.OS === "ios");
+  const [androidBgPilot, setAndroidBgPilot] = useState(Platform.OS === "android");
   const [markNote, setMarkNote] = useState("");
 
   const lastFrameAtRef = useRef(null);
@@ -112,7 +113,7 @@ export default function App() {
     await flushQueuedGps();
   };
 
-  const startGpsWatch = (useIosBackgroundMode) => {
+  const startGpsWatch = (useIosBackgroundMode, useAndroidBackgroundMode) => {
     gpsClientRef.current.start(
       (fix) => {
         setGpsFix(fix);
@@ -122,7 +123,10 @@ export default function App() {
       (err) => {
         setGpsState(describeGpsError(err));
       },
-      { iosBackgroundMode: useIosBackgroundMode }
+      {
+        iosBackgroundMode: useIosBackgroundMode,
+        androidBackgroundMode: useAndroidBackgroundMode,
+      }
     );
     setGpsRunning(true);
   };
@@ -179,12 +183,14 @@ export default function App() {
   };
 
   const startGps = async () => {
-    const granted = await requestLocationPermission();
+    const granted = await requestLocationPermission({
+      androidBackgroundMode: androidBgPilot,
+    });
     if (!granted) {
       setGpsState("gps-denied");
       return;
     }
-    startGpsWatch(iosBgPilot);
+    startGpsWatch(iosBgPilot, androidBgPilot);
   };
 
   const stopGps = () => {
@@ -198,7 +204,16 @@ export default function App() {
     setIosBgPilot(next);
     if (gpsRunning) {
       gpsClientRef.current.stop();
-      startGpsWatch(next);
+      startGpsWatch(next, androidBgPilot);
+    }
+  };
+
+  const toggleAndroidBgPilot = () => {
+    const next = !androidBgPilot;
+    setAndroidBgPilot(next);
+    if (gpsRunning) {
+      gpsClientRef.current.stop();
+      startGpsWatch(iosBgPilot, next);
     }
   };
 
@@ -259,6 +274,15 @@ export default function App() {
               <Pressable style={styles.buttonMuted} onPress={toggleIosBgPilot}>
                 <Text style={styles.buttonText}>
                   iOS BG Pilot: {iosBgPilot ? "ON(significant)" : "OFF(continuous)"}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+          {Platform.OS === "android" ? (
+            <View style={styles.row}>
+              <Pressable style={styles.buttonMuted} onPress={toggleAndroidBgPilot}>
+                <Text style={styles.buttonText}>
+                  Android BG Pilot: {androidBgPilot ? "ON(request bg permission)" : "OFF"}
                 </Text>
               </Pressable>
             </View>

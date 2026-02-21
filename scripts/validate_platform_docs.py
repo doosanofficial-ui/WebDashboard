@@ -21,6 +21,7 @@ REQUIRED_FILES = {
         "## 공통 기능 점검",
         "## GPS Foreground 점검",
         "## HTTPS/보안 점검",
+        "## Android 백그라운드 30분 시나리오 점검",
     ],
     "docs/adr/0001-mobile-runtime-selection.md": [
         "# ADR-0001: Mobile Runtime Selection for Background Telemetry and Projection",
@@ -46,6 +47,12 @@ REQUIRED_FILES = {
         "## 병렬 트랙 생성",
         "## 진행 모니터링",
         "## 병합 순서 (권장)",
+    ],
+    "docs/reports/android-bg-30min-template.md": [
+        "# Android Background Telemetry — 30-Minute Validation Report",
+        "## 3. 핵심 지표",
+        "## 4. 로그 추출 체크리스트",
+        "## 5. 종합 판정",
     ],
 }
 

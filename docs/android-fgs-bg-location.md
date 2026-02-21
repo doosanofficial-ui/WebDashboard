@@ -5,7 +5,7 @@
 > - 권한/서비스 선언 스캐폴드: [`mobile/scripts/android-manifest-fgs-scaffold.xml`](../mobile/scripts/android-manifest-fgs-scaffold.xml)  
 > - iOS 네이티브 브리지: `mobile/native-ios-bridge/RNIosLocationBridge.{h,m}`  
 > - GPS payload 계약: `mobile/src/telemetry/protocol.js`  
-> - 검증 보고서 양식: [`docs/reports/ios-bg-30min-template.md`](reports/ios-bg-30min-template.md)
+> - 검증 보고서 양식: [`docs/reports/android-bg-30min-template.md`](reports/android-bg-30min-template.md)
 
 ---
 
@@ -116,7 +116,7 @@ AppState 이벤트 수신 (App.js)
 ```
 
 > `bg_state` 분포 분석은 서버 로그 CSV의 `bg_state` 컬럼을 기준으로  
-> [ios-bg-30min-template.md](reports/ios-bg-30min-template.md) 판정 기준을 준용한다.
+> [android-bg-30min-template.md](reports/android-bg-30min-template.md) 판정 기준을 사용한다.
 
 ---
 
@@ -129,7 +129,7 @@ AppState 이벤트 수신 (App.js)
 | 3 | `RNAndroidLocationBridge.kt` — JS NativeModule, `startBackgroundLocation` / `stopBackgroundLocation` | 🔲 예정 |
 | 4 | `gps-client.js` Android 분기 — `Platform.OS === "android" && androidBackgroundMode` | 🔲 예정 |
 | 5 | `ACCESS_BACKGROUND_LOCATION` 런타임 요청 추가 (`requestLocationPermission`) | 🔲 예정 |
-| 6 | Android 30분 백그라운드 검증 실행 (보고서 양식: ios-bg-30min-template.md 준용) | 🔲 예정 |
+| 6 | Android 30분 백그라운드 검증 실행 (보고서 양식: android-bg-30min-template.md) | 🔲 예정 |
 
 ---
 
@@ -154,5 +154,5 @@ Android 기기는 백그라운드 앱을 절전 모드(Doze/App Standby)로 전�
 - [플랫폼 매트릭스](platform-matrix.md) — Background Telemetry 체크리스트 (Gate B)  
 - [E2E 플랫폼 점검표](e2e-platform-checklist.md) — GPS 점검 항목  
 - [ADR-0001: 모바일 런타임 선택](adr/0001-mobile-runtime-selection.md)  
-- [iOS 30분 검증 보고서 양식](reports/ios-bg-30min-template.md) — Android에도 준용  
+- [Android 30분 검증 보고서 양식](reports/android-bg-30min-template.md)  
 - [Mobile README](../mobile/README.md) — 빠른 시작 및 iOS 브리지 참조

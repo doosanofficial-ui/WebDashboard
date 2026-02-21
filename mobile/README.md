@@ -69,6 +69,9 @@ GpsClient.start({ androidBackgroundMode: true })   ← 구현 예정
        └─ NO  → Geolocation.watchPosition() (기존 동작, 폴백)
 ```
 
+현재 baseline에서는 네이티브 FGS는 아직 미구현이며, 앱 UI의 `Android BG Pilot` 토글이
+`ACCESS_BACKGROUND_LOCATION` 권한 요청 분기를 활성화한다.
+
 `meta.bg_state`는 React Native `AppState`("active" → `"foreground"`, 그 외 → `"background"`)  
 기준으로 설정되어 서버 수신 GPS 페이로드의 `meta.bg_state` 필드에 기록됩니다.  
 → 흐름 상세: [`docs/android-fgs-bg-location.md#4-metabg_state-흐름`](../docs/android-fgs-bg-location.md)

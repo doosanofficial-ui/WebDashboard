@@ -55,7 +55,9 @@
   - iOS/Android에서 10분 주행 시 재연결 포함 데이터 표시 유지
   - GPS no-fix/denied/unavailable 상태가 오탐 없이 구분 표시
 - Gate B (Background):
-  - 화면 OFF/백그라운드 30분 동안 GPS uplink 누락률 기준 충족 — 보고서 양식: [`docs/reports/ios-bg-30min-template.md`](reports/ios-bg-30min-template.md)
+  - 화면 OFF/백그라운드 30분 동안 GPS uplink 누락률 기준 충족 — 보고서 양식:
+    - iOS: [`docs/reports/ios-bg-30min-template.md`](reports/ios-bg-30min-template.md)
+    - Android: [`docs/reports/android-bg-30min-template.md`](reports/android-bg-30min-template.md)
   - 앱 복귀 시 데이터 타임라인 불연속 구간 표시 가능
 - Gate C (Projection):
   - CarPlay/Android Auto 양쪽에서 핵심 KPI 카드 렌더 및 경고 표시 확인

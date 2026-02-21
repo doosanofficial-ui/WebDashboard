@@ -78,6 +78,38 @@
 - [ ] **큐 flush 완료** (Y/N)
 - [ ] **GPS 신선도 지연** ≤ 300초
 
+## Android 백그라운드 30분 시나리오 점검
+
+> 전체 절차 및 보고서 양식: [`docs/reports/android-bg-30min-template.md`](reports/android-bg-30min-template.md)
+> 구현 가이드: [`docs/android-fgs-bg-location.md`](android-fgs-bg-location.md)
+
+### 준비
+- [ ] Android 기기에서 앱 설치 및 `ACCESS_FINE_LOCATION`/`ACCESS_BACKGROUND_LOCATION` 권한 부여 확인
+- [ ] FGS 선언/권한 반영 여부 확인 (`mobile/scripts/android-manifest-fgs-scaffold.xml`)
+- [ ] 서버가 LAN으로 바인딩됐는지 확인 (`HOST=0.0.0.0 python app.py`)
+- [ ] 배터리 잔량 기록 (시작 전)
+
+### 실행
+- [ ] 앱 Connect 후 WS/GPS 정상 수신 확인 (최소 30초 foreground 유지)
+- [ ] Android BG Pilot ON 상태로 Start GPS 실행(배경 권한 요청 확인)
+- [ ] 홈 이동 또는 화면 OFF로 백그라운드 전환
+- [ ] 30분 타이머 시작
+- [ ] (선택) 15분 경과 시 서버 재시작 또는 네트워크 토글로 단절 시뮬레이션
+
+### 로그 추출 및 측정
+- [ ] 30분 후 앱 foreground 복귀 및 WS 상태 확인
+- [ ] `server/logs/gps_<session>.csv` 추출 — 총 행 수, `bg_state` 컬럼, 타임스탬프 갭 확인
+- [ ] `server/logs/events_<session>.csv` 추출 — reconnect/MARK 기록 확인
+- [ ] 타임스탬프 갭 > 30초인 구간 목록 작성
+- [ ] 큐 flush 완료 여부 확인 (단절 구간 이후 레코드 연속성)
+- [ ] 배터리 잔량 기록 (종료 후)
+
+### 핵심 지표 (보고서에 기재)
+- [ ] **GPS 누락률** ≤ 20% (기준 충족 여부)
+- [ ] **WS 재연결 성공률** 100%
+- [ ] **큐 flush 완료** (Y/N)
+- [ ] **GPS 신선도 지연** ≤ 300초
+
 ## 결과 요약
 - Pass/Fail:
 - 주요 이슈:

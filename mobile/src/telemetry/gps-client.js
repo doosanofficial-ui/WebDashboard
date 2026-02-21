@@ -11,7 +11,9 @@ import { buildGpsOptions, IOS_BG_BRIDGE_MODULE } from "../config";
 // project linking.  Gracefully absent on Android and in bare JS environments.
 const _nativeBridge = NativeModules[IOS_BG_BRIDGE_MODULE] ?? null;
 
-export async function requestLocationPermission() {
+export async function requestLocationPermission(options = {}) {
+  const { androidBackgroundMode = false } = options;
+
   if (Platform.OS === "ios") {
     if (typeof Geolocation.requestAuthorization === "function") {
       const result = await Geolocation.requestAuthorization("always");
@@ -28,7 +30,24 @@ export async function requestLocationPermission() {
     PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
   );
 
-  return fine === PermissionsAndroid.RESULTS.GRANTED;
+  if (fine !== PermissionsAndroid.RESULTS.GRANTED) {
+    return false;
+  }
+
+  const needsBackgroundPermission =
+    androidBackgroundMode &&
+    Number(Platform.Version) >= 29 &&
+    Boolean(PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION);
+
+  if (!needsBackgroundPermission) {
+    return true;
+  }
+
+  const background = await PermissionsAndroid.request(
+    PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION
+  );
+
+  return background === PermissionsAndroid.RESULTS.GRANTED;
 }
 
 export class GpsClient {
