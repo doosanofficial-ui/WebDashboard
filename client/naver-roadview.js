@@ -152,7 +152,7 @@ export class NaverRoadview {
     }
 
     const shouldUpdatePosition =
-      (!this.lastPanoFix || haversineMeters(this.lastPanoFix, fix) >= 8) && stale !== true;
+      (!this.lastPanoFix || haversineMeters(this.lastPanoFix, fix) >= 8) && !stale;
 
     if (shouldUpdatePosition) {
       const latlng = new window.naver.maps.LatLng(fix.lat, fix.lon);
