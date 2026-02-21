@@ -28,6 +28,14 @@ REQUIRED_FILES = {
         "## Options",
         "## Recommendation",
     ],
+    "docs/adr/0002-carplay-android-auto-transition.md": [
+        "# ADR-0002: CarPlay / Android Auto 전환 전략",
+        "- Status: Accepted",
+        "## Constraints",
+        "## Reuse Scope",
+        "## Native Transition Scope",
+        "## Phase-Gate 단계별 백로그",
+    ],
     "mobile/README.md": [
         "# Telemetry Mobile (Bare React Native Scaffold)",
         "## 권한 설정 (필수)",

@@ -42,6 +42,7 @@
 - [x] 서버 수신 스키마 확장(`source`, `bg_state`, `os`, `app_ver`, `device`)
 
 ### C. CarPlay / Android Auto 전환 (중장기)
+> 전환 전략 및 단계별 백로그: [`docs/adr/0002-carplay-android-auto-transition.md`](adr/0002-carplay-android-auto-transition.md)
 - [ ] 차량 투영 플랫폼 요구사항 조사 및 승인(엔타이틀먼트/카테고리) 체크리스트
 - [ ] 운전자 방해 최소화 HMI 규칙에 맞춘 화면 템플릿 설계
 - [ ] 텔레메트리 핵심 카드(속도, yaw, 경고, 연결상태) 우선 UI 재구성
