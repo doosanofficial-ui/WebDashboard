@@ -56,6 +56,7 @@
 ### 준비
 - [ ] iOS 기기에서 앱 설치 및 `always` 위치 권한 부여 확인
 - [ ] `UIBackgroundModes: location` 활성화 확인 (`npm run ios:setup-bg` 실행 또는 Xcode Capabilities 확인)
+- [ ] iOS 실기기 전 preflight smoke 수행 (`docs/reports/ios-preflight-smoke-2026-02-22.md`)
 - [ ] 서버가 LAN으로 바인딩됐는지 확인 (`HOST=0.0.0.0 python app.py`)
 - [ ] 배터리 잔량 기록 (시작 전)
 

@@ -84,8 +84,11 @@
     - `gps_<session>.csv`에 foreground/background 상태 구분 기록
   - 즉시 실행 체크리스트:
     - [x] 오늘 실행 순서/명령/완료기준: `docs/reports/p3-3-next-actions-2026-02-21.md`
+    - [x] iOS preflight smoke (`/api/ping` + WS + GPS/MARK uplink + CSV 기록) 수행
+      - 증빙: `docs/reports/ios-preflight-smoke-2026-02-22.md`
     - [x] Android 네이티브 소스 스캐폴드 2개(`LocationForegroundService`, `RNAndroidLocationBridge`)
     - [ ] 생성된 `android/` 프로젝트 반영 + ReactPackage 등록 + 30분 실측
+    - [ ] iPhone 30분 백그라운드 실측 + `docs/reports/ios-bg-30min-template.md` 결과 기입
 
 - [ ] **P3-4 배터리/발열 계측 및 보호 로직**
   - 산출물: 샘플링 정책(동적 주기), 운영 가이드

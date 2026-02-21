@@ -83,6 +83,19 @@
     - `docs/reports/android-bg-30min-template.md` 신규 추가
     - `docs/e2e-platform-checklist.md` Android 30분 시나리오 섹션 추가
 
+## Action 4 — iOS Preflight Smoke (실기기 전 서버 경로 검증)
+
+- 목표: iPhone 실기기 30분 검증 전에 서버/WS/GPS/MARK 파이프라인 정상 동작을 선확인
+- 실행 항목:
+  1. `GET /api/ping`
+  2. `WS /ws` 프레임 수신 + ping/pong
+  3. 샘플 GPS uplink(meta 포함) 전송
+  4. MARK 이벤트 전송
+  5. CSV 기록 확인 + 분석 스크립트 실행
+- 상태: DONE (2026-02-22)
+- 결과 산출물:
+  - `docs/reports/ios-preflight-smoke-2026-02-22.md`
+
 ## 실기기 부재 모드 (현재 세션 적용)
 
 - 제약:
@@ -95,3 +108,4 @@
   1. `npm run init-native && npm run android:setup-bg` 실행
   2. Android 프로젝트에서 ReactPackage 등록 및 Manifest 병합
   3. 에뮬레이터 또는 실기기에서 30분 시나리오 실측 후 보고서 기입
+  4. iPhone 실기기 30분 시나리오 실측 후 `docs/reports/ios-bg-30min-template.md` 기입
