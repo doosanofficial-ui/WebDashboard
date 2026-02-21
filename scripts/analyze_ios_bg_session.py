@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 
-def _load_csv(path: str, label: str) -> "list[dict[str, str]]":
+def _load_csv(path: str, label: str) -> list[dict[str, str]]:
     """Return rows as list-of-dicts; exit with a clear message on failure."""
     p = Path(path)
     if not p.exists():
@@ -22,12 +22,14 @@ def _load_csv(path: str, label: str) -> "list[dict[str, str]]":
     if p.stat().st_size == 0:
         print(f"[error] {label} file is empty: {path}", file=sys.stderr)
         sys.exit(1)
+
     import csv
+
     with p.open(newline="", encoding="utf-8") as fh:
         return list(csv.DictReader(fh))
 
 
-def _require_column(rows: "list[dict]", col: str, path: str) -> None:
+def _require_column(rows: list[dict[str, str]], col: str, path: str) -> None:
     if rows and col not in rows[0]:
         print(
             f"[error] required column '{col}' not found in {path}. "
@@ -37,10 +39,17 @@ def _require_column(rows: "list[dict]", col: str, path: str) -> None:
         sys.exit(1)
 
 
-def analyze_gps(rows: "list[dict]", gap_threshold_sec: float, csv_path: str) -> None:
+def analyze_gps(rows: list[dict[str, str]], gap_threshold_sec: float, csv_path: str) -> None:
     _require_column(rows, "client_t", csv_path)
 
-    # Parse and sort by client_t
+    if not rows:
+        print(f"\n=== GPS CSV Analysis: {csv_path} ===")
+        print("Record count : 0")
+        print("bg_state distribution: no rows")
+        print(f"\nGaps > {gap_threshold_sec}s: 0")
+        print("\nFreshness: no records")
+        return
+
     try:
         timestamps = sorted(float(r["client_t"]) for r in rows)
     except ValueError as exc:
@@ -51,9 +60,9 @@ def analyze_gps(rows: "list[dict]", gap_threshold_sec: float, csv_path: str) -> 
     print(f"\n=== GPS CSV Analysis: {csv_path} ===")
     print(f"Record count : {n}")
 
-    # bg_state distribution
     if "bg_state" in rows[0]:
         from collections import Counter
+
         dist = Counter(r.get("bg_state", "") for r in rows)
         print("bg_state distribution:")
         for state, count in sorted(dist.items(), key=lambda kv: -kv[1]):
@@ -62,8 +71,7 @@ def analyze_gps(rows: "list[dict]", gap_threshold_sec: float, csv_path: str) -> 
     else:
         print("bg_state distribution: column not present (skipped)")
 
-    # Gaps > threshold
-    gaps = []
+    gaps: list[tuple[float, float, float]] = []
     for i in range(1, len(timestamps)):
         delta = timestamps[i] - timestamps[i - 1]
         if delta > gap_threshold_sec:
@@ -71,46 +79,44 @@ def analyze_gps(rows: "list[dict]", gap_threshold_sec: float, csv_path: str) -> 
 
     print(f"\nGaps > {gap_threshold_sec}s: {len(gaps)}")
     for start, end, delta in gaps:
-        print(f"  {start:.0f} → {end:.0f}  ({delta:.1f}s)")
+        print(f"  {start:.0f} -> {end:.0f}  ({delta:.1f}s)")
 
-    # Freshness
-    if timestamps:
-        import time
-        now = time.time()
-        last_t = timestamps[-1]
-        freshness = now - last_t
-        print(f"\nFreshness (now − last client_t): {freshness:.1f}s")
-    else:
-        print("\nFreshness: no records")
+    import time
+
+    now = time.time()
+    last_t = timestamps[-1]
+    freshness = now - last_t
+    print(f"\nFreshness (now - last client_t): {freshness:.1f}s")
 
 
-def analyze_events(rows: "list[dict]", csv_path: str) -> None:
+def analyze_events(rows: list[dict[str, str]], csv_path: str) -> None:
     print(f"\n=== Events CSV Analysis: {csv_path} ===")
     print(f"Event record count: {len(rows)}")
-    if rows:
-        from collections import Counter
-        if "event_type" in rows[0]:
-            dist = Counter(r.get("event_type", "") for r in rows)
-            print("event_type distribution:")
-            for etype, count in sorted(dist.items(), key=lambda kv: -kv[1]):
-                print(f"  {etype or '(empty)'}: {count}")
+    if not rows:
+        return
+
+    from collections import Counter
+
+    event_key = "type" if "type" in rows[0] else "event_type" if "event_type" in rows[0] else None
+    if not event_key:
+        print("event distribution: 'type' column not present (skipped)")
+        return
+
+    dist = Counter(r.get(event_key, "") for r in rows)
+    print(f"{event_key} distribution:")
+    for event_type, count in sorted(dist.items(), key=lambda kv: -kv[1]):
+        print(f"  {event_type or '(empty)'}: {count}")
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Analyze an iOS 30-minute background GPS session CSV.",
-    )
+    parser = argparse.ArgumentParser(description="Analyze an iOS 30-minute background GPS session CSV.")
     parser.add_argument(
         "--gps-csv",
         required=True,
         metavar="PATH",
         help="Path to GPS CSV file. Required column: client_t (epoch seconds).",
     )
-    parser.add_argument(
-        "--events-csv",
-        metavar="PATH",
-        help="(Optional) Path to events CSV file.",
-    )
+    parser.add_argument("--events-csv", metavar="PATH", help="(Optional) Path to events CSV file.")
     parser.add_argument(
         "--gap-threshold-sec",
         type=float,

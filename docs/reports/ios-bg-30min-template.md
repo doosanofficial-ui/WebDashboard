@@ -78,7 +78,7 @@
 - [ ] `bg_state` 컬럼에 `background` 값이 존재하는지 확인
 - [ ] `source` 컬럼이 `ios-rn` (또는 해당 플랫폼 식별자)인지 확인
 - [ ] `os`, `app_ver`, `device` 컬럼 값 확인
-- [ ] 총 행 수 기록 → 섹션 3-1에 입력
+- [ ] 총 행 수 기록 -> 섹션 3-1에 입력
 - [ ] 단절 구간 확인 (타임스탬프 갭 > 30초인 구간 목록)
 
 ```python
@@ -146,14 +146,14 @@ bg_state distribution:
   foreground: 12 (8.5%)
 
 Gaps > 30s: 2
-  1740141900 → 1740141945  (45.0s)
-  1740142300 → 1740142350  (50.0s)
+  1740141900 -> 1740141945  (45.0s)
+  1740142300 -> 1740142350  (50.0s)
 
-Freshness (now − last client_t): 87.3s
+Freshness (now - last client_t): 87.3s
 
 === Events CSV Analysis: server/logs/events_20260221_143022.csv ===
 Event record count: 8
-event_type distribution:
+type distribution:
   ws_reconnect: 5
   app_background: 3
 ```
