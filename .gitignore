@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.venv/
+venv/
+
+# Logs and runtime
+*.log
+server/logs/*.csv
+
+# Certificates
+server/security/certs/*.pem
+server/security/certs/*.key
+server/security/certs/*.crt
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/

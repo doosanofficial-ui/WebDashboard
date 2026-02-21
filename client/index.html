@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f1720" />
+    <title>Telemetry Dashboard MVP</title>
+    <link rel="manifest" href="/manifest.json" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      crossorigin=""
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand-block">
+        <h1>Telemetry Dashboard</h1>
+        <p>10Hz CAN + Event-driven GPS (iPad Safari)</p>
+      </div>
+
+      <div class="controls">
+        <label>
+          Server URL
+          <input id="serverUrl" type="text" placeholder="http://192.168.x.x:8080" />
+        </label>
+        <button id="connectBtn" class="primary">Connect</button>
+        <button id="disconnectBtn">Disconnect</button>
+        <button id="startGpsBtn">Start GPS</button>
+        <select id="gpsMode">
+          <option value="hold">GPS: Hold + EMA</option>
+          <option value="lerp">GPS: Lerp + EMA</option>
+        </select>
+        <input id="markNote" type="text" placeholder="MARK note (optional)" />
+        <button id="markBtn" class="warn">MARK</button>
+      </div>
+
+      <div class="status-strip">
+        <span id="connState" class="pill disconnected">disconnected</span>
+        <span class="pill">Frame age <b id="frameAge">-</b> ms</span>
+        <span class="pill">SEQ <b id="seqValue">-</b></span>
+        <span class="pill">DROP <b id="dropValue">0</b></span>
+        <span class="pill">RTT <b id="rttValue">-</b> ms</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="gauge-grid" id="gaugeGrid">
+        <article class="gauge-card"><h3>WS FL</h3><p id="g_ws_fl">-</p><small>km/h</small></article>
+        <article class="gauge-card"><h3>WS FR</h3><p id="g_ws_fr">-</p><small>km/h</small></article>
+        <article class="gauge-card"><h3>WS RL</h3><p id="g_ws_rl">-</p><small>km/h</small></article>
+        <article class="gauge-card"><h3>WS RR</h3><p id="g_ws_rr">-</p><small>km/h</small></article>
+        <article class="gauge-card"><h3>Yaw</h3><p id="g_yaw">-</p><small>deg/s</small></article>
+        <article class="gauge-card"><h3>Ay</h3><p id="g_ay">-</p><small>m/s²</small></article>
+      </section>
+
+      <section class="charts-grid">
+        <article class="panel">
+          <div class="panel-head">
+            <h2>Wheel Speed (FL / FR)</h2>
+            <small>60s window</small>
+          </div>
+          <canvas id="speedChart"></canvas>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2>Dynamics (Yaw / Ay)</h2>
+            <small>60s window</small>
+          </div>
+          <canvas id="dynChart"></canvas>
+        </article>
+      </section>
+
+      <section class="gps-panel panel">
+        <div class="panel-head">
+          <h2>GPS</h2>
+          <span id="gpsState" class="pill neutral">idle</span>
+        </div>
+        <div class="gps-grid">
+          <div><label>Lat</label><p id="gpsLat">-</p></div>
+          <div><label>Lon</label><p id="gpsLon">-</p></div>
+          <div><label>Speed</label><p id="gpsSpd">-</p></div>
+          <div><label>Heading</label><p id="gpsHdg">-</p></div>
+          <div><label>Accuracy</label><p id="gpsAcc">-</p></div>
+          <div><label>Age</label><p id="gpsAge">-</p></div>
+        </div>
+        <div class="heading-wrap">
+          <div id="headingArrow" class="heading-arrow"></div>
+        </div>
+        <div class="map-wrap">
+          <div id="gpsMap" aria-label="GPS map"></div>
+          <p id="mapHint" class="map-hint">지도 초기화 중...</p>
+        </div>
+        <div class="map-wrap">
+          <div id="naverRoadview" aria-label="Naver roadview"></div>
+          <p id="naverRoadviewStatus" class="map-hint">NAVER 로드뷰 초기화 중...</p>
+          <p id="naverRoadviewAddress" class="map-hint">주소: -</p>
+        </div>
+      </section>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

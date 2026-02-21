@@ -1,0 +1,9 @@
+{
+  "name": "Telemetry Dashboard MVP",
+  "short_name": "Telemetry",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#08121a",
+  "theme_color": "#0f1720",
+  "icons": []
+}
