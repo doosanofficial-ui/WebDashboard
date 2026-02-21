@@ -248,7 +248,7 @@ export class NaverMap {
     if (this.trail.length < 3) {
       this.map.setCenter(center);
       this.map.setZoom(this.defaultZoom);
-    } else {
+    } else if (!stale) {
       this.map.panTo(center);
     }
 

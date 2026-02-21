@@ -61,6 +61,15 @@ function lerpFix(from, to, alpha) {
   };
 }
 
+function isValidLatLon(lat, lon) {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lon) &&
+    Math.abs(lat) <= 90 &&
+    Math.abs(lon) <= 180
+  );
+}
+
 export class GpsTracker {
   constructor({ mode = "hold", emaAlpha = 0.25, staleMs = 4000 } = {}) {
     this.mode = mode;
@@ -89,6 +98,9 @@ export class GpsTracker {
     this.watchId = navigator.geolocation.watchPosition(
       (position) => {
         const coords = position.coords;
+        if (!isValidLatLon(coords.latitude, coords.longitude)) {
+          return;
+        }
         const fix = {
           t: (position.timestamp || Date.now()) / 1000,
           recvMs: performance.now(),
