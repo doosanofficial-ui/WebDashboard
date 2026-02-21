@@ -112,7 +112,7 @@ function loadNaverScript(clientId) {
 
     const script = document.createElement("script");
     script.dataset.naverMaps = "1";
-    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${encodeURIComponent(
+    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(
       clientId
     )}&submodules=panorama`;
     script.async = true;

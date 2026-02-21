@@ -88,6 +88,7 @@ python app.py
 ```
 - `Client ID`: 브라우저에서 NAVER Maps JS 로드에 사용
 - `Client Secret`: 서버의 reverse-geocode API 호출에만 사용(브라우저 비노출)
+- NAVER Maps JS 로더 파라미터는 최신 문서 기준 `ncpKeyId=<Client ID>`를 사용합니다.
 - reverse-geocode가 401이면 NAVER/NCP 콘솔에서 해당 API 권한 또는 상품 활성화 상태를 확인하세요(로드뷰 자체는 동작 가능).
 - 지도에 `Open API 설정 실패`가 보이면 대부분 `웹 서비스 URL` 미등록 문제입니다.
   - NCP 콘솔에 아래 URL을 모두 등록:

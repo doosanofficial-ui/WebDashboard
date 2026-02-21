@@ -56,6 +56,7 @@ python app.py
 ```
 `Client Secret`은 서버에서만 사용되며 브라우저로 노출되지 않습니다.
 참고: 로드뷰 JS는 `Client ID`로 동작하지만, reverse-geocode는 NCP API 권한/상품 활성화가 별도로 필요할 수 있습니다(401 시 주소 조회만 비활성).
+참고: NAVER Maps JS 스크립트는 최신 문서 기준 `ncpKeyId=<Client ID>` 파라미터를 사용해야 합니다.
 지도에 `Open API 설정 실패` 문구가 뜨면 아래를 확인하세요.
 - NCP 콘솔 `웹 서비스 URL` 허용 목록에 정확히 등록:
 - `http://127.0.0.1:8080`
