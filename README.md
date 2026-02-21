@@ -1,7 +1,7 @@
 # telemetry-dashboard (MVP)
 
 Windows 노트북에서 10Hz CAN 계측값을 송출하고, iPad Safari/PWA에서 실시간 대시보드(게이지 + 그래프 + GPS)를 표시하는 최소 동작 레포입니다.
-GPS는 좌표 카드뿐 아니라 실제 지도(OpenStreetMap 타일) 위에 현재 위치/궤적/MARK를 표시합니다.
+GPS는 좌표 카드뿐 아니라 NAVER 지도 위에 현재 위치/궤적/MARK를 표시하고, NAVER 로드뷰를 함께 표시합니다.
 
 ## 구조
 
@@ -77,7 +77,7 @@ python app.py
 ## GPS 권한 / HTTPS
 - 일부 iPadOS/Safari 환경에서 Geolocation은 HTTPS 보안 컨텍스트를 요구할 수 있습니다.
 - HTTP에서 GPS가 동작하지 않으면 `server/security/make_dev_cert.ps1`로 자체서명 인증서를 생성해 HTTPS로 실행하세요.
-- 지도 타일은 OpenStreetMap CDN을 사용하므로, 지도 표시는 외부 네트워크 연결이 필요할 수 있습니다.
+- NAVER 지도/로드뷰 스크립트 로드를 위해 외부 네트워크 연결이 필요합니다.
 
 ## NAVER 로드뷰 연동
 서버 실행 전에 환경 변수 설정:

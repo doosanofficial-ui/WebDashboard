@@ -9,6 +9,7 @@
   --ok: #26d38c;
   --warn: #ffb347;
   --bad: #ff6b6b;
+  --splitter-size: 10px;
 }
 
 * {
@@ -30,6 +31,12 @@ body {
     linear-gradient(135deg, #09141d 0%, var(--bg2) 100%);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+}
+
+body.resizing,
+body.resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 .topbar {
@@ -166,15 +173,10 @@ main {
   display: grid;
   gap: 8px;
   min-height: 0;
-  grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
-  grid-template-areas:
-    "gauges gauges"
-    "charts gps";
 }
 
 .gauge-grid {
-  grid-area: gauges;
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
@@ -207,13 +209,11 @@ main {
   font-size: 0.72rem;
 }
 
-.charts-grid {
-  grid-area: charts;
-  display: grid;
-  grid-template-columns: 1fr;
-  grid-template-rows: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+.bottom-layout {
   min-height: 0;
+  display: grid;
+  grid-template-columns: 58% var(--splitter-size) 42%;
+  gap: 0;
 }
 
 .panel {
@@ -223,6 +223,15 @@ main {
   padding: 8px;
   min-height: 0;
   overflow: hidden;
+}
+
+.charts-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding-right: 6px;
 }
 
 .panel-head {
@@ -244,17 +253,17 @@ main {
 
 canvas {
   width: 100%;
-  height: clamp(110px, 18vh, 170px);
+  height: clamp(105px, 18vh, 168px);
   border-radius: 8px;
   border: 1px solid #284158;
 }
 
 .gps-panel {
-  grid-area: gps;
+  min-height: 0;
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 6px;
-  min-height: 0;
+  margin-left: 6px;
 }
 
 .gps-grid {
@@ -290,10 +299,10 @@ canvas {
 }
 
 .gps-views {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
   min-height: 0;
+  display: grid;
+  grid-template-columns: 50% var(--splitter-size) 50%;
+  gap: 0;
 }
 
 .map-wrap {
@@ -306,6 +315,14 @@ canvas {
   min-height: 0;
 }
 
+#mapWrap {
+  margin-right: 5px;
+}
+
+#roadviewWrap {
+  margin-left: 5px;
+}
+
 .roadview-wrap {
   grid-template-rows: minmax(0, 1fr) auto auto;
 }
@@ -314,7 +331,7 @@ canvas {
 #naverRoadview {
   width: 100%;
   height: 100%;
-  min-height: clamp(150px, 22vh, 230px);
+  min-height: clamp(130px, 21vh, 220px);
 }
 
 #naverRoadview {
@@ -339,14 +356,44 @@ canvas {
   color: #d9e6f2;
 }
 
+.splitter {
+  align-self: stretch;
+  width: var(--splitter-size);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #1a3549 0%, #284b63 50%, #1a3549 100%);
+  border: 1px solid #375a73;
+  cursor: col-resize;
+  position: relative;
+}
+
+.splitter::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 42%;
+  transform: translate(-50%, -50%);
+  border-radius: 3px;
+  background: rgba(216, 230, 244, 0.7);
+}
+
+.splitter:hover {
+  background: linear-gradient(180deg, #214762 0%, #2f6588 50%, #214762 100%);
+}
+
 @media (max-width: 1180px) {
+  .gauge-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   canvas {
     height: clamp(95px, 16vh, 145px);
   }
 
   #gpsMap,
   #naverRoadview {
-    min-height: clamp(120px, 18vh, 180px);
+    min-height: clamp(115px, 17vh, 170px);
   }
 }
 
@@ -370,21 +417,39 @@ canvas {
 
   main {
     display: grid;
-    grid-template-columns: 1fr;
     grid-template-rows: auto;
-    grid-template-areas: none;
+    height: auto !important;
   }
 
   .gauge-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .bottom-layout {
+    grid-template-columns: 1fr !important;
+    gap: 8px;
+  }
+
+  .splitter {
+    display: none;
+  }
+
   .charts-grid {
-    grid-template-rows: auto;
+    padding-right: 0;
+  }
+
+  .gps-panel {
+    margin-left: 0;
   }
 
   .gps-views {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
+    gap: 8px;
+  }
+
+  #mapWrap,
+  #roadviewWrap {
+    margin: 0;
   }
 
   #gpsMap,
