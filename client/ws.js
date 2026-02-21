@@ -34,6 +34,11 @@ export class TelemetrySocket {
 
   connect() {
     this.manualClose = false;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.reconnectAttempt = 0;
     this._open();
   }
 
@@ -67,14 +72,21 @@ export class TelemetrySocket {
     }
 
     this._emitStatus("connecting");
-    this.ws = new WebSocket(this.url);
+    const ws = new WebSocket(this.url);
+    this.ws = ws;
 
-    this.ws.addEventListener("open", () => {
+    ws.addEventListener("open", () => {
+      if (this.ws !== ws) {
+        return;
+      }
       this.reconnectAttempt = 0;
       this._emitStatus("connected");
     });
 
-    this.ws.addEventListener("message", (event) => {
+    ws.addEventListener("message", (event) => {
+      if (this.ws !== ws) {
+        return;
+      }
       try {
         const payload = this.codec.decode(event.data);
         this.onMessage(payload);
@@ -86,7 +98,10 @@ export class TelemetrySocket {
       }
     });
 
-    this.ws.addEventListener("close", () => {
+    ws.addEventListener("close", () => {
+      if (this.ws !== ws) {
+        return;
+      }
       this._emitStatus("disconnected");
       this.ws = null;
       if (!this.manualClose) {
@@ -94,7 +109,7 @@ export class TelemetrySocket {
       }
     });
 
-    this.ws.addEventListener("error", () => {
+    ws.addEventListener("error", () => {
       // close handler triggers reconnect
     });
   }

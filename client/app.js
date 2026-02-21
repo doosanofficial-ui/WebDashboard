@@ -87,6 +87,7 @@ const roadview = new NaverRoadview({
 
 let socket = null;
 let pingTimer = null;
+let socketState = "disconnected";
 let lastCanFrame = null;
 let lastFrameRecvMs = null;
 let lastSeq = null;
@@ -286,6 +287,7 @@ function connectSocket() {
     url: wsUrl,
     codec: new JsonCodec(),
     onStatus: (status) => {
+      socketState = status.state;
       const connected = status.state === "connected";
       els.connectBtn.disabled = connected;
       els.disconnectBtn.disabled = !connected && status.state !== "reconnecting";
@@ -395,9 +397,9 @@ setInterval(() => {
   const nowMs = performance.now();
   const nowSec = Date.now() / 1000;
 
-  const connected = Boolean(socket && socket.isOpen());
+  const connected = Boolean(socket && socket.isOpen()) || socketState === "reconnecting";
   const frameAgeMs = Number.isFinite(lastFrameRecvMs) ? nowMs - lastFrameRecvMs : null;
-  const stale = !connected || !Number.isFinite(frameAgeMs) || frameAgeMs > 1500;
+  const stale = !socket || !socket.isOpen() || !Number.isFinite(frameAgeMs) || frameAgeMs > 1500;
 
   if (lastCanFrame?.sig) {
     updateGauges(els.gauge, lastCanFrame.sig);
