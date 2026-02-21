@@ -33,6 +33,12 @@ REQUIRED_FILES = {
         "## 권한 설정 (필수)",
         "## 현재 한계",
     ],
+    "docs/copilot-parallel-runbook.md": [
+        "# Copilot Parallel Runbook (iOS-first P3-3)",
+        "## 병렬 트랙 생성",
+        "## 진행 모니터링",
+        "## 병합 순서 (권장)",
+    ],
 }
 
 

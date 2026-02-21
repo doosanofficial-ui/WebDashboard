@@ -57,6 +57,7 @@ GPS는 좌표 카드뿐 아니라 NAVER 지도 위에 현재 위치/궤적/MARK�
 - 플랫폼별 필수 구현 매트릭스/체크리스트: `docs/platform-matrix.md`
 - E2E 플랫폼 점검표: `docs/e2e-platform-checklist.md`
 - ADR(모바일 런타임 선택): `docs/adr/0001-mobile-runtime-selection.md`
+- Copilot 병렬 실행 런북: `docs/copilot-parallel-runbook.md`
 - Bare React Native 스캐폴딩: `mobile/README.md`
 
 ## 빠른 시작 (1분)
