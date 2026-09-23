@@ -28,11 +28,21 @@ python app.py
 `status.client_drop`은 해당 연결의 대기 프레임 병합 횟수이며,
 기존 `status.drop`(서버 누락 시뮬레이션)과 별도입니다. 클라이언트 seq gap과
 중복 합산하지 마세요. CSV는 실시간 뷰어 큐와 별도로 기록합니다.
+송출 누락 시뮬레이션을 켜도 원본 CAN CSV는 매 수집 샘플을 기록합니다.
+시작/종료 수명주기마다 새 세션과 seq=0을 사용하며 이전 CSV를 재사용하지 않습니다.
+
+`GET /api/ping`은 단순 HTTP 생존이 아니라 CAN 수집/기록 상태를 확인합니다.
+정상은 200, 수집/기록 작업 실패나 stale은 503이며 `error.code`로
+`source_failed`, `recording_failed`, `stream_unavailable`, `stream_stale`을 구분합니다.
+원본 예외 문자열이나 내부 경로는 반환하지 않습니다. 실패 후 자동으로 기록을
+건너뛰며 정상 표시하지 않고, 원인을 해결한 뒤 서버를 재시작해야 합니다.
+`stream.last_frame_age_ms`는 마지막 기록 성공 후 경과 시간입니다.
+현재 동기식 디스크 I/O의 장기 block까지 격리하는 기능은 아직 출시 과제입니다.
 
 ## 환경 변수
 - `HOST` (기본 `127.0.0.1`)
 - `PORT` (기본 `8080`)
-- `CAN_HZ` (기본 `10`)
+- `CAN_HZ` (기본 `10`, 유한한 양수만 허용)
 - `SIM_DROP_EVERY` (기본 `0`, 예: `25`면 25프레임마다 1회 누락 시뮬레이션)
 - `CAN_SOURCE` (기본 `dummy`)
 - `SIGNALS_CONFIG` (기본 `./signals.json`, 신호 enable/scale/offset/clamp 설정)

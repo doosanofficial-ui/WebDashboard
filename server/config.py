@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -22,6 +23,10 @@ class Settings:
     naver_maps_client_id: str | None
     naver_maps_client_secret: str | None
     ingest_token: str | None
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(self.can_hz) or self.can_hz <= 0:
+            raise ValueError("CAN_HZ must be a finite positive number")
 
 
 def _optional_env(name: str) -> str | None:

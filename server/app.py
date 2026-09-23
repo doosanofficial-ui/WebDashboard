@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import time
 from contextlib import asynccontextmanager, suppress
 from typing import Any
@@ -11,9 +12,11 @@ import httpx
 import uvicorn
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from can_source import create_can_source
+from can_source.base import CANSource
 from config import CLIENT_DIR, settings
 from gps_sink import extract_event_row, extract_gps_row
 from logger import SessionCsvLogger
@@ -25,15 +28,23 @@ from stream import StreamPeer
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(message)s")
 log = logging.getLogger("telemetry-server")
 
-can_source = create_can_source(settings.can_source)
-signal_mapper = SignalMapper(settings.signals_config)
-logger = SessionCsvLogger(settings.log_dir)
+can_source: CANSource | None = None
+signal_mapper: SignalMapper | None = None
+logger: SessionCsvLogger | None = None
 
 clients: set[StreamPeer] = set()
 
 broadcast_task: asyncio.Task[None] | None = None
 http_client: httpx.AsyncClient | None = None
-stream_state = {"seq": 0, "drop": 0}
+stream_state: dict[str, Any] = {"seq": 0, "drop": 0, "error": None, "last_frame": None}
+stream_ready: asyncio.Event | None = None
+
+
+def _fail_stream(code: str) -> None:
+    stream_state["error"] = code
+    if stream_ready:
+        stream_ready.set()
+    log.error("CAN capture stopped: %s", code)
 
 
 async def _sleep_until(target: float) -> None:
@@ -65,12 +76,21 @@ async def can_broadcast_loop() -> None:
 
         if should_sim_drop:
             stream_state["drop"] += 1
-            stream_state["seq"] += 1
-            await _sleep_until(next_tick)
-            continue
 
-        raw_sig = can_source.next_frame()
-        sig = signal_mapper.apply(raw_sig)
+        try:
+            raw_sig = can_source.next_frame()
+            # Validate before clamping: max(0, NaN) can otherwise become a fake zero.
+            if not isinstance(raw_sig, dict) or any(
+                type(value) not in (int, float) or not math.isfinite(value)
+                for value in raw_sig.values()
+            ):
+                raise ValueError("invalid_signal_snapshot")
+            sig = signal_mapper.apply(raw_sig)
+            if any(not math.isfinite(value) for value in sig.values()):
+                raise ValueError("nonfinite_signal")
+        except Exception:
+            _fail_stream("source_failed")
+            return
 
         frame = {
             "v": 1,
@@ -82,8 +102,16 @@ async def can_broadcast_loop() -> None:
             },
         }
 
-        logger.log_can(frame)
-        await _broadcast(frame)
+        try:
+            logger.log_can(frame)
+        except Exception:
+            _fail_stream("recording_failed")
+            return
+        stream_state["last_frame"] = time.perf_counter()
+        if stream_ready:
+            stream_ready.set()
+        if not should_sim_drop:
+            await _broadcast(frame)
 
         stream_state["seq"] += 1
         await _sleep_until(next_tick)
@@ -91,32 +119,47 @@ async def can_broadcast_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
-    global broadcast_task, http_client
+    global broadcast_task, http_client, logger, stream_ready, can_source, signal_mapper
 
     if not CLIENT_DIR.exists():
         raise RuntimeError(f"client directory not found: {CLIENT_DIR}")
 
-    application.state.ingest_token = settings.ingest_token
-    application.state.ingest_journal = (
-        await asyncio.to_thread(TelemetryJournal, settings.log_dir / "telemetry.sqlite3")
-        if settings.ingest_token else None
-    )
-
-    broadcast_task = asyncio.create_task(can_broadcast_loop())
-    http_client = httpx.AsyncClient(timeout=httpx.Timeout(4.0))
-    log.info("session=%s", logger.session_id)
-    log.info("logs: %s", settings.log_dir)
-    log.info("signals config: %s", settings.signals_config)
-    log.info("static client: %s", CLIENT_DIR)
-
     try:
+        can_source = create_can_source(settings.can_source)
+        signal_mapper = SignalMapper(settings.signals_config)
+        logger = SessionCsvLogger(settings.log_dir)
+        stream_state.update(seq=0, drop=0, error=None, last_frame=None)
+        stream_ready = asyncio.Event()
+        application.state.ingest_token = settings.ingest_token
+        application.state.ingest_journal = (
+            await asyncio.to_thread(TelemetryJournal, settings.log_dir / "telemetry.sqlite3")
+            if settings.ingest_token else None
+        )
+        http_client = httpx.AsyncClient(timeout=httpx.Timeout(4.0))
+        broadcast_task = asyncio.create_task(can_broadcast_loop())
+        readiness = asyncio.create_task(stream_ready.wait())
+        try:
+            await asyncio.wait((readiness, broadcast_task), return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            readiness.cancel()
+            with suppress(asyncio.CancelledError):
+                await readiness
+        log.info("session=%s", logger.session_id)
+        log.info("logs: %s", settings.log_dir)
+        log.info("signals config: %s", settings.signals_config)
+        log.info("static client: %s", CLIENT_DIR)
         yield
     finally:
         if broadcast_task:
             broadcast_task.cancel()
-            with suppress(asyncio.CancelledError):
+            try:
                 await broadcast_task
-            broadcast_task = None
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                _fail_stream("stream_unavailable")
+            finally:
+                broadcast_task = None
 
         if http_client:
             await http_client.aclose()
@@ -127,7 +170,16 @@ async def lifespan(application: FastAPI):
             peer.stop()
         if peers:
             await asyncio.gather(*(peer.finished.wait() for peer in peers))
-        logger.close()
+        if logger:
+            try:
+                logger.close()
+            except OSError:
+                log.error("CSV close failed: recording_failed")
+            finally:
+                logger = None
+        stream_ready = None
+        application.state.ingest_journal = None
+        application.state.ingest_token = None
 
 
 app = FastAPI(title="Telemetry Dashboard", version="0.1.0", lifespan=lifespan)
@@ -141,8 +193,25 @@ app.add_middleware(
 
 
 @app.get("/api/ping")
-async def api_ping() -> dict[str, Any]:
-    return {"ok": True, "t": time.time(), "session": logger.session_id}
+async def api_ping() -> JSONResponse:
+    last_frame = stream_state["last_frame"]
+    age = time.perf_counter() - last_frame if last_frame is not None else None
+    error = stream_state["error"]
+    if not error and (not logger or not broadcast_task or broadcast_task.done()):
+        error = "stream_unavailable"
+    if not error and (age is None or age > max(1.0, 5.0 / settings.can_hz)):
+        error = "stream_stale"
+    payload = {
+        "ok": error is None,
+        "t": time.time(),
+        "session": logger.session_id if logger else None,
+        "stream": {"seq": stream_state["seq"], "drop": stream_state["drop"],
+                   "last_frame_age_ms": round(age * 1000) if age is not None else None},
+    }
+    if error:
+        payload["error"] = {"code": error}
+    return JSONResponse(payload, status_code=503 if error else 200,
+                        headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/public-config")
