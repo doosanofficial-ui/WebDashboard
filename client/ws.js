@@ -98,9 +98,16 @@ export class TelemetrySocket {
       }
     });
 
-    ws.addEventListener("close", () => {
+    ws.addEventListener("close", (event) => {
       if (this.ws !== ws) {
         return;
+      }
+      if (event?.code === 1009) {
+        try {
+          this.onMessage({ v: 1, type: "error", error: { code: "payload_too_large" } });
+        } catch {
+          // A diagnostic consumer must not prevent reconnecting the data stream.
+        }
       }
       this._emitStatus("disconnected");
       this.ws = null;

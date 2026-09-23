@@ -1,4 +1,4 @@
-const CACHE_NAME = "telemetry-dashboard-v6";
+const CACHE_NAME = "telemetry-dashboard-v7";
 const STATIC_ASSETS = [
   "/", "/index.html", "/styles.css", "/app.js", "/naver-map.js", "/naver-roadview.js",
   "/ws.js", "/gps.js", "/ui.js", "/charts.js", "/manifest.json",

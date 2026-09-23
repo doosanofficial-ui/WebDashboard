@@ -144,6 +144,15 @@ class JournalTests(unittest.TestCase):
         self.assertEqual(rows[1]["note"], "'=1+1")
         self.assertEqual(rows[2]["state"], "background")
 
+    def test_csv_formula_neutralization_handles_leading_space_without_changing_journal(self):
+        marker = {"id": "5c6a7f61-24c4-4ed9-8216-5fd0ffde1002", "type": "MARK",
+                  "captured_t": 1700000001, "data": {"note": "  +1"}}
+        self.journal.ingest(batch(marker))
+        output = io.StringIO()
+        self.journal.export_csv(output)
+        self.assertEqual(list(csv.DictReader(io.StringIO(output.getvalue())))[0]["note"], "'  +1")
+        self.assertEqual(json.loads(self.rows()[0]["payload"])["data"]["note"], "  +1")
+
 
 if __name__ == "__main__":
     unittest.main()

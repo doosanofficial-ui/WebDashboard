@@ -2,7 +2,7 @@ import { ScrollingChart } from "./charts.js";
 import { GpsTracker } from "./gps.js";
 import { NaverMap } from "./naver-map.js";
 import { NaverRoadview } from "./naver-roadview.js";
-import { updateConnection, updateGauges, updateGps } from "./ui.js";
+import { clearUplinkError, showUplinkError, updateConnection, updateGauges, updateGps } from "./ui.js";
 import { JsonCodec, TelemetrySocket } from "./ws.js";
 
 const els = {
@@ -15,6 +15,7 @@ const els = {
   markBtn: document.getElementById("markBtn"),
   markNote: document.getElementById("markNote"),
   connState: document.getElementById("connState"),
+  uplinkState: document.getElementById("uplinkState"),
   frameAge: document.getElementById("frameAge"),
   seqValue: document.getElementById("seqValue"),
   dropValue: document.getElementById("dropValue"),
@@ -324,6 +325,7 @@ function stopPing() {
 }
 
 function connectSocket() {
+  clearUplinkError(els.uplinkState);
   const base = normalizeHttpBase(els.serverUrl.value);
   const wsUrl = httpToWs(base);
 
@@ -348,6 +350,7 @@ function connectSocket() {
       }
     },
     onMessage: (payload) => {
+      showUplinkError(els.uplinkState, payload);
       if (payload?.type === "pong" && Number.isFinite(payload.t)) {
         rttMs = Math.max(0, Date.now() - payload.t * 1000);
       }

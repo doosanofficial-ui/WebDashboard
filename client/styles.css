@@ -178,6 +178,10 @@ button:disabled {
   white-space: nowrap;
 }
 
+#uplinkState[hidden] {
+  display: none;
+}
+
 :root[data-theme="day"] .pill {
   background: #edf4fb;
   border-color: #9fb6cb;

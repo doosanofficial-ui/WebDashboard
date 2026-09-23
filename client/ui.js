@@ -2,6 +2,24 @@ function fmt(value, digits = 1, fallback = "-") {
   return Number.isFinite(value) ? value.toFixed(digits) : fallback;
 }
 
+export function showUplinkError(element, payload) {
+  if (!element || payload?.v !== 1 || payload?.type !== "error") return false;
+  const known = ["invalid_json", "invalid_payload", "unsupported_version", "payload_too_large",
+    "text_frame_required", "unsupported_media_type", "storage_unavailable"];
+  const code = known.includes(payload.error?.code) ? payload.error.code : "unknown_error";
+  const text = `Upload rejected: ${code}`;
+  if (element.textContent !== text) element.textContent = text;
+  element.className = "pill stale";
+  element.hidden = false;
+  return true;
+}
+
+export function clearUplinkError(element) {
+  if (!element) return;
+  element.textContent = "";
+  element.hidden = true;
+}
+
 export function updateConnection(elements, { connected, frameAgeMs, seq, drop, rttMs, stale }) {
   const { connState, frameAge, seqValue, dropValue, rttValue } = elements;
 

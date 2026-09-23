@@ -8,6 +8,8 @@ from threading import Lock
 from typing import Any
 from uuid import uuid4
 
+from csv_safety import csv_cell
+
 
 class SessionCsvLogger:
     def __init__(self, log_dir: Path, session_id: str | None = None) -> None:
@@ -105,18 +107,18 @@ class SessionCsvLogger:
                     row.get("hdg"),
                     row.get("acc"),
                     row.get("alt"),
-                    row.get("source"),
-                    row.get("bg_state"),
-                    row.get("os"),
-                    row.get("app_ver"),
-                    row.get("device"),
+                    csv_cell(row.get("source")),
+                    csv_cell(row.get("bg_state")),
+                    csv_cell(row.get("os")),
+                    csv_cell(row.get("app_ver")),
+                    csv_cell(row.get("device")),
                 ]
             )
             self._gps_file.flush()
 
     def log_event(self, row: dict[str, Any]) -> None:
         with self._lock:
-            self._events_writer.writerow([row.get("t"), row.get("type"), row.get("note", "")])
+            self._events_writer.writerow([row.get("t"), row.get("type"), csv_cell(row.get("note", ""))])
             self._events_file.flush()
 
     def close(self) -> None:

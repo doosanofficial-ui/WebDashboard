@@ -85,6 +85,77 @@ async function mobile({ bridge = false, backgroundRequested = bridge, os = 'ios'
 
 const valid = { latitude: 37, longitude: 127, speed: 12, heading: 90, accuracy: 5, altitude: 20 };
 
+test('a serialized WS upload rejection reaches the UI without reflecting server text', async () => {
+  const ui = await load('client/ui.js');
+  const handlers = {};
+  class Socket {
+    static OPEN = 1;
+    constructor() { this.readyState = 1; }
+    addEventListener(name, handler) { handlers[name] = handler; }
+  }
+  const ws = await load('client/ws.js', {}, { WebSocket: Socket });
+  const element = { hidden: true, textContent: '', className: '' };
+  Object.defineProperty(element, 'innerHTML', { set() { assert.fail('Must not inject HTML'); } });
+  new ws.TelemetrySocket({ url: 'ws://localhost/ws',
+    onMessage: payload => ui.showUplinkError(element, payload),
+  }).connect();
+  handlers.message({ data: JSON.stringify({ v: 1, type: 'error',
+    error: { code: 'storage_unavailable', message: '<img src=x>private-canary' },
+  }) });
+  assert.equal(element.hidden, false);
+  assert.match(element.textContent, /storage_unavailable/);
+  assert.ok(!element.textContent.includes('private-canary'));
+  assert.equal(element.className, 'pill stale');
+});
+
+test('upload error remains visible during CAN traffic and unknown codes are not reflected', async () => {
+  const ui = await load('client/ui.js');
+  const element = { hidden: true, textContent: '', className: '' };
+  ui.showUplinkError(element, { v: 1, type: 'error', error: { code: 'invalid_payload' } });
+  const errorText = element.textContent;
+  assert.equal(ui.showUplinkError(element, { v: 1, sig: { ws_fl: 10 }, status: { seq: 1 } }), false);
+  assert.equal(element.textContent, errorText);
+  for (const code of ['constructor', '__proto__', '<script>private-canary</script>']) {
+    ui.showUplinkError(element, { v: 1, type: 'error', error: { code } });
+    assert.match(element.textContent, /unknown_error/);
+    assert.ok(!element.textContent.includes(code));
+  }
+  ui.clearUplinkError(element);
+  assert.equal(element.hidden, true);
+  assert.equal(element.textContent, '');
+});
+
+test('transport close 1009 shows a safe size error and automatic reconnect still works', async () => {
+  const ui = await load('client/ui.js');
+  const sockets = [];
+  let retry;
+  class Socket {
+    static OPEN = 1;
+    constructor() { this.readyState = 1; this.handlers = {}; sockets.push(this); }
+    addEventListener(name, handler) { this.handlers[name] = handler; }
+  }
+  const ws = await load('client/ws.js', {}, {
+    WebSocket: Socket, setTimeout: fn => { retry = fn; return 1; }, clearTimeout() {},
+  });
+  const element = { hidden: true, textContent: '', className: '' };
+  const statuses = [];
+  const client = new ws.TelemetrySocket({ url: 'ws://localhost/ws',
+    onMessage: payload => ui.showUplinkError(element, payload),
+    onStatus: value => statuses.push(value.state),
+  });
+  client.connect();
+  sockets[0].handlers.close({ code: 1009, reason: '<script>private-canary</script>' });
+  assert.equal(element.hidden, false);
+  assert.match(element.textContent, /payload_too_large/);
+  assert.ok(!element.textContent.includes('private-canary'));
+  assert.equal(statuses.at(-1), 'reconnecting');
+  retry();
+  sockets[1].handlers.open();
+  assert.equal(statuses.at(-1), 'connected');
+  assert.equal(client.isOpen(), true);
+  assert.equal(element.hidden, false, 'Reconnection is not proof the rejected upload was stored');
+});
+
 for (const os of ['ios', 'android']) {
   test(`${os}: requesting background without a bridge fails explicitly`, async () => {
     const m = await mobile({ os, backgroundRequested: true });

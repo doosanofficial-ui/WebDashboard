@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Any, TextIO
 from uuid import UUID
 
+from csv_safety import csv_cell
+
 MAX_BATCH_EVENTS = 200
 MAX_BATCH_BYTES = 256 * 1024
 IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
@@ -177,9 +179,6 @@ class TelemetryJournal:
                 row = {"client_id": client, "event_id": event_id, "type": kind,
                        "client_t": captured, "received_t": received,
                        "bg_state": event["meta"].get("bg_state"), **event["data"]}
-                for key, value in row.items():
-                    if isinstance(value, str) and value.startswith(("=", "+", "-", "@", "\t", "\r", "\n")):
-                        row[key] = "'" + value
-                writer.writerow(row)
+                writer.writerow({key: csv_cell(value) for key, value in row.items()})
                 count += 1
         return count

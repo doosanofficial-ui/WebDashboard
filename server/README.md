@@ -138,6 +138,39 @@ iPhone/iPad에서 HTTPS 위치 권한이 필요하면, `make_dev_cert_mac.sh`가
 - `POST /api/event`
 - `WS /ws`
 
+### v1 업링크 입력 규칙
+
+`POST /api/gps`, `POST /api/event`는 `Content-Type: application/json`과 UTF-8
+JSON을 요구합니다. WebSocket은 text JSON 프레임을 사용합니다.
+메시지는 최대 16 KiB이며 중복 JSON 키, NaN/Infinity, 알 수 없는 필드는 거부합니다.
+GPS/MARK의 `v`는 정수 1, `t`는 유한한 양수 epoch seconds여야 합니다.
+기존 웹 호환을 위해 ping만 `v` 생략을 허용합니다.
+
+- GPS: lat [-90,90], lon [-180,180]. spd/acc는 0 이상 또는 null,
+  hdg는 [0,360) 또는 null, alt는 유한한 수 또는 null입니다.
+- 선택 metadata는 source/bg_state/os/app_ver/device만 허용하며 문자열 각각 128자 이내입니다.
+  bg_state는 foreground/background입니다. MARK note는 500자 이내이며 NUL/잘못된 Unicode는 거부합니다.
+- 이전 모바일의 선택 `queued_at`은 양수 시각으로 검증하되 원래 `t`를 바꾸지 않습니다.
+  기존 v1 CSV에는 queued_at 열을 새로 추가하지 않습니다.
+- HTTP 거부: 400 invalid_json, 413 payload_too_large, 415 unsupported_media_type,
+  422 invalid_payload/unsupported_version. CSV 실패는 503 storage_unavailable입니다.
+- WS의 앱 계층 거부는 `{"v":1,"type":"error","error":{"code":"invalid_payload","message":"..."}}`
+  형태입니다. 사용자 데이터나 원본 예외 문자열은 반환하지 않습니다.
+- wire 한도 초과는 JSON 처리 전에 해당 WS를 **1009**로 닫을 수 있습니다.
+  웹은 payload_too_large 경고를 표시하고 backoff 재연결합니다. 다른 구독자는 영향을 받지 않습니다.
+  정상 크기의 손상 메시지는 오류를 반환하고 같은 연결의 CAN/ping 처리를 계속합니다.
+
+`python app.py`는 WS 최대 메시지 16 KiB/수신 큐 8개를 설정합니다.
+다른 실행기를 쓰면 같은 한도를 별도로 적용하세요. 예:
+`uvicorn app:app --host 127.0.0.1 --port 8080 --ws websockets --ws-max-size 16384 --ws-max-queue 8`.
+
+CSV의 note/metadata 등 텍스트가 수식 시작 문자로 해석되지 않도록 앞에 `'`를 붙입니다.
+수치 좌표의 음수는 변경하지 않고, v2 journal 원문도 변경하지 않습니다.
+웹의 업링크 거부 경고는 정상 CAN 수신이나 자동 재연결로 지우지 않으며,
+사용자가 Connect를 다시 누를 때 초기화합니다. 이는 저장 성공 확인을 뜻하지 않습니다.
+**v1 WS에는 영속 ACK/중복 제거가 없습니다.** 신뢰성 있는 기록은 `/api/v2/ingest` 경로를 사용합니다.
+이 검증은 인증/Origin 제한/요청 빈도 제한을 대체하지 않습니다.
+
 `POST /api/gps` / `WS /ws` GPS uplink 예시(선택 메타 포함):
 ```json
 {

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import math
 import time
@@ -10,7 +9,7 @@ from typing import Any
 
 import httpx
 import uvicorn
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -18,12 +17,12 @@ from fastapi.staticfiles import StaticFiles
 from can_source import create_can_source
 from can_source.base import CANSource
 from config import CLIENT_DIR, settings
-from gps_sink import extract_event_row, extract_gps_row
 from logger import SessionCsvLogger
 from ingest import TelemetryJournal
 from reliable_api import router as reliable_router
 from signal_mapper import SignalMapper
 from stream import StreamPeer
+from uplink import MAX_UPLINK_BYTES, UplinkError, decode_uplink
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(message)s")
 log = logging.getLogger("telemetry-server")
@@ -402,22 +401,45 @@ async def api_naver_reverse_geocode(lat: float, lon: float) -> dict[str, Any]:
     raise HTTPException(status_code=502, detail=f"Naver reverse-geocode failed: {last_error}")
 
 
+def _record_uplink(kind: str, row: dict[str, Any]) -> None:
+    if logger is None:
+        raise UplinkError("storage_unavailable")
+    try:
+        if kind == "GPS":
+            logger.log_gps(row)
+        else:
+            logger.log_event(row)
+    except (OSError, ValueError):
+        raise UplinkError("storage_unavailable") from None
+
+
+async def _legacy_http(request: Request, expected: str) -> JSONResponse:
+    try:
+        if request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "application/json":
+            raise UplinkError("unsupported_media_type")
+        body = bytearray()
+        async for chunk in request.stream():
+            if len(body) + len(chunk) > MAX_UPLINK_BYTES:
+                raise UplinkError("payload_too_large")
+            body.extend(chunk)
+        kind, row = decode_uplink(body)
+        if kind != expected:
+            raise UplinkError("invalid_payload")
+        _record_uplink(kind, row)
+    except UplinkError as error:
+        return JSONResponse(error.payload(), status_code=error.status,
+                            headers={"Cache-Control": "no-store"})
+    return JSONResponse({"ok": True}, headers={"Cache-Control": "no-store"})
+
+
 @app.post("/api/gps")
-async def api_gps(payload: dict[str, Any]) -> dict[str, bool]:
-    row = extract_gps_row(payload)
-    if not row:
-        raise HTTPException(status_code=400, detail="Invalid GPS payload")
-    logger.log_gps(row)
-    return {"ok": True}
+async def api_gps(request: Request) -> JSONResponse:
+    return await _legacy_http(request, "GPS")
 
 
 @app.post("/api/event")
-async def api_event(payload: dict[str, Any]) -> dict[str, bool]:
-    row = extract_event_row(payload)
-    if not row:
-        raise HTTPException(status_code=400, detail="Invalid event payload")
-    logger.log_event(row)
-    return {"ok": True}
+async def api_event(request: Request) -> JSONResponse:
+    return await _legacy_http(request, "MARK")
 
 
 @app.websocket("/ws")
@@ -428,34 +450,20 @@ async def ws_endpoint(ws: WebSocket) -> None:
 
     async def receive() -> None:
         while True:
-            raw = await ws.receive_text()
-
+            message = await ws.receive()
+            if message["type"] == "websocket.disconnect":
+                return
             try:
-                payload = json.loads(raw)
-            except json.JSONDecodeError:
-                continue
-
-            msg_type = payload.get("type")
-
-            if msg_type == "ping":
-                peer.control(
-                    {
-                        "v": 1,
-                        "type": "pong",
-                        "t": payload.get("t"),
-                        "server_t": time.time(),
-                    }
-                )
-                continue
-
-            gps_row = extract_gps_row(payload)
-            if gps_row:
-                logger.log_gps(gps_row)
-                continue
-
-            event_row = extract_event_row(payload)
-            if event_row:
-                logger.log_event(event_row)
+                raw = message.get("text")
+                if raw is None:
+                    raise UplinkError("text_frame_required")
+                kind, row = decode_uplink(raw)
+                if kind == "ping":
+                    peer.control({"v": 1, "type": "pong", "t": row["t"], "server_t": time.time()})
+                else:
+                    _record_uplink(kind, row)
+            except UplinkError as error:
+                peer.control({"v": 1, "type": "error", **error.payload()})
 
     try:
         await peer.run(receive)
@@ -477,4 +485,6 @@ if __name__ == "__main__":
         reload=False,
         ssl_certfile=settings.ssl_certfile,
         ssl_keyfile=settings.ssl_keyfile,
+        ws_max_size=MAX_UPLINK_BYTES,
+        ws_max_queue=8,
     )
