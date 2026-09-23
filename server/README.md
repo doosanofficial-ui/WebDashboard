@@ -105,6 +105,14 @@ iPhone/iPad에서 HTTPS 위치 권한이 필요하면, `make_dev_cert_mac.sh`가
 `dev-local-ca-cert.cer`를 기기에 설치하고 신뢰 설정까지 켜야 합니다.
 
 ## API
+- `POST /api/v2/ingest`: 원본 측정시각을 보존하는 영속 GPS/MARK/STATE batch 수신.
+  `INGEST_TOKEN` 환경변수가 없으면 비활성(503)이며, 원격 요청은 HTTPS와
+  Bearer 인증이 필요합니다. 토큰을 소스/로그에 기록하지 마세요.
+  SQLite commit 후 ACK하며 같은 event ID의 동일 재전송은 중복 기록하지 않습니다.
+  다른 내용으로 ID를 재사용하면 batch 전체를 409로 거부합니다.
+  상세 계약: `docs/adr/0003-native-ios-reliable-ingest.md`.
+  저장 파일: `server/logs/telemetry.sqlite3`; CSV는 `TelemetryJournal.export_csv`로 추출합니다.
+  기존 v1 경로 전체의 페어링/인증 강화는 아직 별도 출시 과제입니다.
 - `GET /api/ping`
 - `GET /api/public-config`
 - `GET /api/naver/reverse-geocode?lat=<lat>&lon=<lon>`

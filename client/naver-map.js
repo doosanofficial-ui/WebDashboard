@@ -269,8 +269,12 @@ export class NaverMap {
     });
 
     if (note) {
+      const content = document.createElement("div");
+      content.style.padding = "6px 8px";
+      content.style.fontSize = "12px";
+      content.textContent = `MARK: ${note}`;
       const info = new window.naver.maps.InfoWindow({
-        content: `<div style=\"padding:6px 8px;font-size:12px;\">MARK: ${note}</div>`,
+        content,
         borderWidth: 0,
         disableAnchor: true,
       });

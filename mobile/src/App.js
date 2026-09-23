@@ -24,6 +24,9 @@ function formatNumber(value, digits = 2) {
 }
 
 function describeGpsError(err) {
+  if (err?.code === "background-unavailable") {
+    return "gps-bg-unavailable (native build required)";
+  }
   const code = Number(err?.code);
   if (code === 1) {
     return "gps-denied";
@@ -47,6 +50,7 @@ export default function App() {
   const [sig, setSig] = useState(null);
   const [gpsState, setGpsState] = useState("gps-idle");
   const [gpsFix, setGpsFix] = useState(null);
+  const [gpsAgeMs, setGpsAgeMs] = useState(null);
   const [gpsRunning, setGpsRunning] = useState(false);
   const [queueDepth, setQueueDepth] = useState(0);
   const [bgState, setBgState] = useState(AppState.currentState || "active");
@@ -55,6 +59,7 @@ export default function App() {
   const [markNote, setMarkNote] = useState("");
 
   const lastFrameAtRef = useRef(null);
+  const lastGpsAtRef = useRef(null);
   const appStateRef = useRef(AppState.currentState || "active");
   const gpsClientRef = useRef(new GpsClient());
   const queueRef = useRef(new StoreForwardQueue());
@@ -79,6 +84,13 @@ export default function App() {
     }
     return frameAgeMs > 1500;
   }, [frameAgeMs]);
+
+  const staleGps = useMemo(() => {
+    if (!Number.isFinite(gpsAgeMs)) {
+      return true;
+    }
+    return gpsAgeMs > 4000;
+  }, [gpsAgeMs]);
 
   const flushQueuedGps = async () => {
     if (flushingRef.current || !wsClientRef.current.isOpen()) {
@@ -114,10 +126,11 @@ export default function App() {
   };
 
   const startGpsWatch = (useIosBackgroundMode, useAndroidBackgroundMode) => {
-    gpsClientRef.current.start(
+    const started = gpsClientRef.current.start(
       (fix) => {
         setGpsFix(fix);
         setGpsState("gps-ok");
+        lastGpsAtRef.current = Date.now();
         void sendGpsUplinkWithQueue(fix);
       },
       (err) => {
@@ -128,7 +141,7 @@ export default function App() {
         androidBackgroundMode: useAndroidBackgroundMode,
       }
     );
-    setGpsRunning(true);
+    setGpsRunning(started);
   };
 
   useEffect(() => {
@@ -150,14 +163,21 @@ export default function App() {
       setBgState(nextState);
     });
 
-    const timer = setInterval(() => {
-      const last = lastFrameAtRef.current;
-      if (!last) {
-        setFrameAgeMs(null);
-        return;
-      }
-      setFrameAgeMs(Date.now() - last);
-    }, 100);
+      const timer = setInterval(() => {
+        const last = lastFrameAtRef.current;
+        if (!last) {
+          setFrameAgeMs(null);
+        } else {
+          setFrameAgeMs(Date.now() - last);
+        }
+
+        const lastGps = lastGpsAtRef.current;
+        if (!lastGps) {
+          setGpsAgeMs(null);
+        } else {
+          setGpsAgeMs(Date.now() - lastGps);
+        }
+      }, 100);
 
     return () => {
       clearInterval(timer);
@@ -195,6 +215,8 @@ export default function App() {
 
   const stopGps = () => {
     gpsClientRef.current.stop();
+    lastGpsAtRef.current = null;
+    setGpsAgeMs(null);
     setGpsRunning(false);
     setGpsState("gps-stopped");
   };
@@ -289,6 +311,12 @@ export default function App() {
           ) : null}
           <Text style={styles.kv}>gpsState: {gpsState}</Text>
           <Text style={styles.kv}>gpsRunning: {gpsRunning ? "yes" : "no"}</Text>
+          <Text style={[styles.kv, staleGps ? styles.warn : null]}>
+            gpsFreshness: {staleGps ? "stale" : "fresh"}
+          </Text>
+          <Text style={styles.kv}>
+            gpsAge: {Number.isFinite(gpsAgeMs) ? `${Math.round(gpsAgeMs)}ms` : "-"}
+          </Text>
           <Text style={styles.kv}>lat: {formatNumber(gpsFix?.lat, 6)}</Text>
           <Text style={styles.kv}>lon: {formatNumber(gpsFix?.lon, 6)}</Text>
           <Text style={styles.kv}>spd(m/s): {formatNumber(gpsFix?.spd, 2)}</Text>

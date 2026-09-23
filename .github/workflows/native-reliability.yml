@@ -1,0 +1,39 @@
+name: Native Reliability
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: native-reliability-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  contracts:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install -r server/requirements.txt
+      - run: python -m unittest discover -s server/tests -v
+      - run: node --experimental-vm-modules --test scripts/tests/gps-data-integrity.test.mjs
+      - run: node --test scripts/tests/service-worker.test.mjs
+      - run: npm ci --prefix mobile --ignore-scripts --no-audit --no-fund
+      - run: npm test --prefix mobile -- --runInBand --silent
+      - run: python scripts/validate_platform_docs.py
+  native-core:
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift test --package-path mobile-ios/TelemetryCore

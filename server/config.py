@@ -21,6 +21,7 @@ class Settings:
     ssl_keyfile: str | None
     naver_maps_client_id: str | None
     naver_maps_client_secret: str | None
+    ingest_token: str | None
 
 
 def _optional_env(name: str) -> str | None:
@@ -49,6 +50,7 @@ def load_settings() -> Settings:
         ssl_keyfile=_optional_env("SSL_KEYFILE"),
         naver_maps_client_id=_optional_env("NAVER_MAPS_CLIENT_ID"),
         naver_maps_client_secret=_optional_env("NAVER_MAPS_CLIENT_SECRET"),
+        ingest_token=_optional_env("INGEST_TOKEN"),
     )
 
 

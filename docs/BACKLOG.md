@@ -1,5 +1,9 @@
 # MVP Backlog (Epic/Story)
 
+2026-09-19 사내 배포 목표의 현재 기준은 [상용화 계획](production-plan.md)과
+[진단 보고서](reports/commercial-readiness-2026-09-19.md)를 따른다.
+아래 기존 MVP 체크는 과거 진행 이력이며 현재 빌드·실기기·배포 검증을 대체하지 않는다.
+
 ## P0
 - [x] **P0-1 Server WS 송출(더미 CAN 10Hz) + 정적 호스팅 + iPad 표시**
   - 산출물: `server/app.py`, `server/can_source/dummy.py`, `client/index.html`

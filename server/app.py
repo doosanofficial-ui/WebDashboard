@@ -17,6 +17,8 @@ from can_source import create_can_source
 from config import CLIENT_DIR, settings
 from gps_sink import extract_event_row, extract_gps_row
 from logger import SessionCsvLogger
+from ingest import TelemetryJournal
+from reliable_api import router as reliable_router
 from signal_mapper import SignalMapper
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(message)s")
@@ -103,11 +105,17 @@ async def can_broadcast_loop() -> None:
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(application: FastAPI):
     global broadcast_task, http_client
 
     if not CLIENT_DIR.exists():
         raise RuntimeError(f"client directory not found: {CLIENT_DIR}")
+
+    application.state.ingest_token = settings.ingest_token
+    application.state.ingest_journal = (
+        await asyncio.to_thread(TelemetryJournal, settings.log_dir / "telemetry.sqlite3")
+        if settings.ingest_token else None
+    )
 
     broadcast_task = asyncio.create_task(can_broadcast_loop())
     http_client = httpx.AsyncClient(timeout=httpx.Timeout(4.0))
@@ -398,6 +406,7 @@ async def ws_endpoint(ws: WebSocket) -> None:
             clients.discard(ws)
 
 
+app.include_router(reliable_router)
 app.mount("/", StaticFiles(directory=str(CLIENT_DIR), html=True), name="client")
 
 

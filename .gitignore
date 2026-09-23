@@ -10,6 +10,9 @@ venv/
 # Logs and runtime
 *.log
 server/logs/*.csv
+server/logs/*.sqlite3
+server/logs/*.sqlite3-wal
+server/logs/*.sqlite3-shm
 
 # Certificates
 server/security/certs/*.pem
@@ -32,6 +35,10 @@ mobile/android/build/
 mobile/ios/build/
 mobile/ios/Pods/
 mobile/ios/.xcode.env.local
+mobile-ios/*.xcodeproj/
+mobile-ios/TelemetryCore/.build/
+mobile-ios/TelemetryCore/.swiftpm/
+mobile-ios/**/xcuserdata/
 
 # VS Code integrated browser preview artifacts
 http:/

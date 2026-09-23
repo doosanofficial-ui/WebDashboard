@@ -38,6 +38,7 @@ export function updateGps(elements, { fix, stale, ageMs }) {
     gpsAcc.textContent = "-";
     gpsAge.textContent = "-";
     headingArrow.style.transform = "rotate(0deg)";
+    headingArrow.style.visibility = "hidden";
     return;
   }
 
@@ -51,6 +52,7 @@ export function updateGps(elements, { fix, stale, ageMs }) {
   gpsAcc.textContent = Number.isFinite(fix.acc) ? `${fix.acc.toFixed(1)} m` : "-";
   gpsAge.textContent = Number.isFinite(ageMs) ? `${Math.round(ageMs)} ms` : "-";
 
+  headingArrow.style.visibility = Number.isFinite(fix.hdg) ? "visible" : "hidden";
   if (Number.isFinite(fix.hdg)) {
     headingArrow.style.transform = `rotate(${fix.hdg}deg)`;
   }
