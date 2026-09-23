@@ -30,10 +30,10 @@ Naver map/roadview, real CAN integration, CarPlay and the platform release gates
 | Device architecture build | PASS | generic iOS ARM64, unsigned; **not installed on iPhone** |
 | App installation and launch | PASS on simulator | iPhone 17 simulator / iOS 26.2 |
 | HTTPS URL validation | Observed through UI | Entered http://example.invalid, Connect showed HTTPS requirement |
-| MARK persistence | Observed through UI and SQLite | Button press created one MARK; record survived app replacement/relaunch |
+| MARK persistence | Observed through UI and SQLite | Original record survived app replacement/relaunch; latest reviewed build's button press increased stored MARK count to 3 |
 | XCUITest automatic screen suite | NOT PASSED | Runner suspended before test execution; no test assertions completed |
 | Real iPhone 30-minute lock test | NOT RUN | Physical phone unavailable on 2026-09-23; valid development signing identities: 0 |
-| Hosted CI | NOT RUN YET | Native Reliability workflow added; do not confuse local results with hosted checks |
+| Hosted CI | PASS at bb66e7a | Windows/Linux contract jobs, macOS Core, and all three existing smoke jobs |
 
 The simulator screen check used macOS accessibility controls and captured only the
 simulator. Screenshot: [HTTPS refusal](evidence/native-2026-09-23/https-required.png).
@@ -102,6 +102,16 @@ ownership and checked protocol conformance.
 
 ## Git recovery
 
+Implementation commit: b15dc6eb3c7eaab58a3e7178aed534265f393fba.
+Cross-platform fixture correction: bb66e7a (SQLite inspection connections now close
+before temporary-file cleanup). The first Windows run failed with WinError 32 in
+test cleanup; the rerun passed without weakening assertions or skipping Windows.
+
+Draft review: https://github.com/doosanofficial-ui/WebDashboard/pull/23.
+Verified hosted run: https://github.com/doosanofficial-ui/WebDashboard/actions/runs/35858070621.
+Existing smoke: https://github.com/doosanofficial-ui/WebDashboard/actions/runs/35858070755.
+This is a source checkpoint; main has not been merged and no release has been published.
+
 Authenticated GitHub account: doosanofficial-ui. Verified target:
 https://github.com/doosanofficial-ui/WebDashboard (public, main).
 
@@ -129,7 +139,7 @@ in the recovery directory for later investigation.
 - Native map/roadview integration and CarPlay eligibility/templates.
 - Automatic pairing, v1 endpoint hardening, Windows installer and real Vector adapter.
 - End-to-end background upload recovery under app suspension/reboot/network loss.
-- CI execution, dependency remediation, performance/battery tests and release evidence.
+- Merge review, dependency remediation, performance/battery tests and release evidence.
 - Preserved cloud Git/CI history reconciliation.
 
 Version remains 0.1.0 while these release gates are incomplete. Simulator development

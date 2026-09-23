@@ -3,6 +3,11 @@
 Windows 노트북에서 10Hz CAN 계측값을 송출하고, iPad Safari/PWA에서 실시간 대시보드(게이지 + 그래프 + GPS)를 표시하는 최소 동작 레포입니다.
 GPS는 좌표 카드뿐 아니라 NAVER 지도 위에 현재 위치/궤적/MARK를 표시하고, NAVER 로드뷰를 함께 표시합니다.
 
+사내 배포용 제품으로 전환 중입니다. iOS의 현재 구현 경로는
+[Swift 네이티브 앱](mobile-ios/README.md)이며, React Native 폴더는 이전 스캐폴딩입니다.
+[최신 검증 상태](docs/reports/native-milestone-2026-09-23.md)와
+[전체 출시 계획](docs/production-plan.md)을 확인하세요. 실기기 백그라운드·CarPlay·실차 검증은 아직 미완료입니다.
+
 ## 구조
 
 ```text
@@ -85,15 +90,15 @@ python app.py
 - `Connect` 클릭
 - `Start GPS` 클릭 후 위치 권한 허용
 
-### 3) Mobile 앱 스캐폴딩 (Bare RN)
+### 3) iOS 네이티브 앱
 ```bash
-cd mobile
-npm install
-npm run init-native
-npm run ios:setup-bg
-npm run validate
+export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+./mobile-ios/scripts/verify.sh build
 ```
-세부 실행은 `mobile/README.md`를 따른다.
+전체 Xcode와 설정 리소스를 포함한 XcodeGen이 필요합니다. 위 명령은 Core 테스트와
+시뮬레이터 빌드를 수행하며 실기기 설치를 대신하지 않습니다.
+서명·iPhone 설치·HTTPS 연결은 [네이티브 실행 안내](mobile-ios/README.md)를 따릅니다.
+이전 React Native 경로는 `mobile/README.md`에 보존되어 있습니다.
 
 ## 핫스팟 운영 권장
 1. iPad 핫스팟 ON (AP 역할)
