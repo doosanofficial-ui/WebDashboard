@@ -5,6 +5,10 @@ Pelican's scanner/vehicle pages, and the actual LICENSE files. This is a targete
 comparison, not an exhaustive audit of all OBD projects or a physical vehicle test.
 No commercial subscription, adapter purchase or third-party ECU command was executed.
 
+Follow-up: [actual pinned-commit qualification](obd-candidate-qualification-2026-09-23.md)
+reproduced adoption-blocking failures in both iOS candidates. Their compile success
+does not override those acceptance failures; neither was integrated into the app.
+
 ## Conclusion
 
 Reuse credible protocol/transport knowledge and verified vehicle data, but do not
