@@ -15,6 +15,21 @@ validation and is not a released product. App Store/CarPlay approval is not impl
   relaunch, and serial preparation that finishes before releasing background callbacks.
 - Keychain credential storage, HTTPS validation, explicit Stop, and persisted MARK events.
 
+## OBD work in progress
+
+The user owns a NANICAR ELM327-BT4N (12V) and a Hyundai Santa Fe MX5 HEV.
+`TelemetryCore/ELM327.swift` provides a pure, hardware-independent prompt framer and
+headerless Mode 01 decoder for capabilities, RPM, speed and coolant temperature.
+It rejects ambiguous/malformed replies and keeps no-data separate from real zero.
+The parser's examples/tests are synthetic, not recordings from this scanner.
+
+**Bluetooth connection, live OBD display, background polling and OBD ingestion are
+not implemented yet.** The existing v2 upload accepts GPS/MARK/STATE, not OBD.
+Profile discovery must precede Core Bluetooth transport wiring; do not assume common
+ELM GATT UUIDs. Track requirements and real-device evidence in
+[ADR-0004](../docs/adr/0004-obd-bt4n-integration.md) and
+[the hardware run sheet](../docs/reports/obd-bt4n-compatibility.md).
+
 ## Build and verify
 
 Use a full Xcode installation selected by xcode-select or DEVELOPER_DIR and XcodeGen
@@ -37,6 +52,15 @@ This is a build snapshot, not a second editable checkout. Edit only this reposit
 Simulator signing uses the local ad-hoc identity; it does not provision a real iPhone.
 
 ## Real device
+
+The current user-reported target is iPhone 17 / iOS 27 (2026-09-23).
+Verify its exact OS build after reconnecting. Use Xcode 27 with the iOS 27 SDK
+for this validation; Apple's [requirements](https://developer.apple.com/xcode/system-requirements/)
+list macOS 26.6 or later. The checked host runs macOS 26.6.2 but still has Xcode 26.3,
+and devicectl currently reports the iPhone unavailable. Prior iOS 26.2 simulator
+results do not establish iOS 27 compatibility. Rebuild, sign, install and repeat
+the locked-screen/recovery test on the updated device. This target update does not
+raise the app's minimum deployment version or constitute a release.
 
 Generate/open Telemetry.xcodeproj with XcodeGen, select the verified Apple team,
 then build for the connected device. The initial native version remains 0.1.0 while

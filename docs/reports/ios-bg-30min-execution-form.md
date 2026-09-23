@@ -3,12 +3,17 @@
 이 문서는 **실측 실행 중 바로 체크/기록**하기 위한 운영용 폼이다.  
 최종 정리본은 `docs/reports/ios-bg-30min-template.md`에 반영한다.
 
+현재 예정 대상: iPhone 17 / iOS 27 (2026-09-23 사용자 확인).
+아래 실행 정보에는 실제 기기의 정확한 OS 버전/빌드와 사용한 Xcode/SDK를 기록한다.
+기존 iOS 26 시뮬레이터 결과를 이 실기기 시험의 통과 증거로 재사용하지 않는다.
+
 ## 0) 기본 정보
 
 - 실행 일시(UTC):
 - 테스터:
 - 디바이스(iPhone/iPad 모델):
-- iOS 버전:
+- iOS 버전/빌드 번호:
+- Xcode 버전/빌드 및 iOS SDK:
 - 앱 버전(`app_ver`):
 - Git SHA:
 - 서버 호스트/IP:
@@ -18,6 +23,7 @@
 ## 1) 사전 체크 (실행 전)
 
 - [ ] 현재 설치 빌드/커밋으로 preflight 재실행 (2월 보고서는 과거 참고 자료)
+- [ ] iOS 27 대상 Xcode 27/SDK 준비, 연결 기기 OS 및 서명·설치 결과 확인
 - [ ] Safari/PWA가 아닌 설치된 네이티브 위치 수집 경로 확인
 - [ ] `gps-bg-unavailable`이면 시작하지 않고 네이티브 빌드/연결부터 해결
 - [ ] iOS 위치 권한 `Always` 설정 확인
@@ -51,7 +57,7 @@
 ls -lah server/logs/gps_*.csv server/logs/events_*.csv server/logs/can_*.csv | tail -n 20
 ```
 
-- 세션 ID(`YYYYMMDD_HHMMSS`):
+- 세션 ID(신규 `YYYYMMDD_HHMMSS_<UUID>`, 과거 로그의 기존 ID는 유지):
 - GPS CSV:
 - Events CSV:
 - CAN CSV:

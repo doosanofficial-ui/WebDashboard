@@ -1,0 +1,78 @@
+{
+  "checked_utc": "2026-09-23",
+  "source": "GitHub REST repository API; license_api is not a substitute for the LICENSE file",
+  "repositories": [
+    {
+      "archived": false,
+      "default_branch": "master",
+      "license_api": "GPL-3.0",
+      "pushed_at": "2026-09-22T01:19:10Z",
+      "repository": "fr3ts0n/AndrOBD",
+      "stars": 2098,
+      "url": "https://github.com/fr3ts0n/AndrOBD"
+    },
+    {
+      "archived": false,
+      "default_branch": "master",
+      "license_api": "GPL-2.0",
+      "pushed_at": "2025-04-07T05:17:34Z",
+      "repository": "brendan-w/python-OBD",
+      "stars": 1313,
+      "url": "https://github.com/brendan-w/python-OBD"
+    },
+    {
+      "archived": false,
+      "default_branch": "master",
+      "license_api": "MIT",
+      "pushed_at": "2025-05-20T20:28:15Z",
+      "repository": "PowerBroker2/ELMduino",
+      "stars": 936,
+      "url": "https://github.com/PowerBroker2/ELMduino"
+    },
+    {
+      "archived": false,
+      "default_branch": "master",
+      "license_api": "NOASSERTION",
+      "pushed_at": "2026-09-17T11:08:47Z",
+      "repository": "Ircama/ELM327-emulator",
+      "stars": 677,
+      "url": "https://github.com/Ircama/ELM327-emulator"
+    },
+    {
+      "archived": false,
+      "default_branch": "master",
+      "license_api": "MIT",
+      "pushed_at": "2024-07-05T15:41:16Z",
+      "repository": "mickeyl/LTSupportAutomotive",
+      "stars": 254,
+      "url": "https://github.com/mickeyl/LTSupportAutomotive"
+    },
+    {
+      "archived": false,
+      "default_branch": "master",
+      "license_api": "MIT",
+      "pushed_at": "2019-07-17T23:38:19Z",
+      "repository": "lemberg/obd2-swift-lib",
+      "stars": 163,
+      "url": "https://github.com/lemberg/obd2-swift-lib"
+    },
+    {
+      "archived": false,
+      "default_branch": "main",
+      "license_api": "MIT",
+      "pushed_at": "2026-01-26T17:10:05Z",
+      "repository": "kkonteh97/SwiftOBD2",
+      "stars": 159,
+      "url": "https://github.com/kkonteh97/SwiftOBD2"
+    },
+    {
+      "archived": false,
+      "default_branch": "main",
+      "license_api": "CC-BY-SA-4.0",
+      "pushed_at": "2026-09-23T00:02:37Z",
+      "repository": "OBDb/Hyundai-Santa-Fe-Hybrid",
+      "stars": 3,
+      "url": "https://github.com/OBDb/Hyundai-Santa-Fe-Hybrid"
+    }
+  ]
+}

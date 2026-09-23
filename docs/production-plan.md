@@ -1,12 +1,21 @@
 # 사내 테스트 엔지니어용 배포 계획
 
 기준일: 2026-09-19. 근거: [현재 진단](reports/commercial-readiness-2026-09-19.md).
-사용자 확정: Windows 계측 서버 + iPhone/iPad, 우선 iPhone 17 / iOS 26.6.2.
+사용자 확정: Windows 계측 서버 + iPhone/iPad, 우선 iPhone 17 / iOS 27
+(2026-09-23 사용자 업데이트). 정확한 OS 빌드 번호는 다음 실기기 연결에서 확인한다.
 기존 PRD와 추가 요구인 백그라운드·CarPlay를 전체 목표로 유지한다.
+2026-09-23 추가 목표: 보유 NANICAR ELM327-BT4N OBD-II 스캐너를
+현대 싼타페 MX5 HEV(연식 미확인)에 연동한다. iPhone BLE 직접 연결 우선,
+Windows 브리지 대안이며 실물 호환은 아직 미검증이다.
 단계 하나의 통과를 전체 목표 달성으로 처리하지 않는다.
 
 최신 구현/검증 증거: [2026-09-23 네이티브 체크포인트](reports/native-milestone-2026-09-23.md).
 시뮬레이터/ARM64 빌드와 Core 검사는 통과했지만 실기기 및 전체 출시 판정은 미완료다.
+기존 Xcode 26.3 / iOS 26.2 시뮬레이터 결과는 iOS 27 호환성 증거가 아니다.
+현재 Mac은 macOS 26.6.2로 Xcode 27의 호스트 요구사항(26.6 이상)을 충족한다.
+다음 모바일 검증은 Xcode 27 / iOS 27 SDK 준비, 기기 연결·서명 확인,
+동일 소스 재빌드·설치, 30분 잠금 시험 순서로 진행한다.
+근거: [Apple SDK 및 시스템 요구사항](https://developer.apple.com/xcode/system-requirements/).
 
 ## 1. P0 빌드와 데이터 무결성
 
@@ -63,6 +72,32 @@
   완료: 지정된 사내 기기에 설치/업데이트/회수 가능. 비용·계정·서명/MFA는 대상 확정과 사용자 인증 필요.
 - [ ] **C18 릴리스 결합**: 기능 수정 commit/version/manifest/패키지 SHA-256/runtime/설치 UI/시험 보고서 일치.
   완료: 모든 필수 항목의 최신 증거 확인 후 전체 상용화 판정.
+
+## 5. 추가 필수 목표: 보유 OBD 스캐너 (2026-09-23)
+
+설계: [ADR-0004](adr/0004-obd-bt4n-integration.md).
+장비별 실행표: [BT4N / MX5 HEV](reports/obd-bt4n-compatibility.md).
+기존 C13 Vector 경로를 대체하지 않으며 C18 출시 판정에도 아래 항목을 포함한다.
+
+- [ ] **C19 P0 실물 프로파일 확인**: BLE GATT/serial 후보, 펌웨어, 12V 조건, 차종·연식·PID capability 기록.
+  완료: 선택한 BT4N의 실제 서비스/특성/응답과 MX5 HEV의 지원 PID 증거 확보. 포장만으로 PASS 금지.
+- [ ] **C20 P0 iOS OBD 수집**: Core Bluetooth transport, 명령 allowlist, prompt parser, 단일 질의·타임아웃·재연결.
+  진행: `TelemetryCore/ELM327.swift` 순수 파서/4개 PID 명령과 synthetic XCTest 8개 구현.
+  BLE 연결/실차 샘플/UI/업링크는 아직 연결하지 않았으며 이 단계만으로 완료 처리하지 않음.
+  완료: iOS 27 실기기에서 지원 PID 읽기, 권한 거부/분할 응답/단절/Stop 회귀 검사 통과.
+- [ ] **C21 P1 Windows OBD 브리지**: 확인된 BLE 또는 serial transport와 비차단 sample cache.
+  완료: Windows 실물 연결, 느린 OBD 응답에도 CAN 10Hz 지속, 웹/iPad 표시 확인.
+- [ ] **C22 P0 데이터 계약·영속 기록·UI**: source/PID/unit/quality/observed_t, 버전 있는 OBD uplink/ACK/CSV, 전용 게이지.
+  완료: 재전송 무손실·중복 제거, 실제 샘플률과 10Hz 렌더 구별, OBD 속도를 휠 4ch로 위장하지 않음.
+- [ ] **C23 P0 OBD 백그라운드 실측**: 잠금 30분, Bluetooth/네트워크/전원 단절과 복귀를 각각 검증.
+  완료: 원본 이벤트와 ACK 대조, GPS/OBD/업링크 별도 판정. 지속 polling 불가 시 Windows 수집 대안 실측.
+- [ ] **C24 P1 MX5 HEV 호환 승인**: 기준 진단기와 값/단위 대조, 엔진 정지 RPM 0·미지원·no-data 구별.
+  완료: 같은 앱/서버 빌드의 차종·연식·장비 프로파일과 실제 PID 목록 공개. 제조사 전용 HEV 값은 추측 금지.
+- [ ] **C25 P0 오픈소스 채택 검증**: 스타 수와 별도로 실제 사용 보고·미해결 결함·라이선스·대상 플랫폼 평가.
+  조사: [8개 후보 및 Pelican/OBDb 근거](reports/obd-oss-research-2026-09-23.md).
+  완료: 고정 commit 후보의 빌드/재연결/실물 재현과 재사용 조건 확인. 충분한 독립 성공 사례가 없으면
+  부족함을 명시하고 승인 완료로 처리하지 않음. 공개 저장소/별점/댓글 수를 실차 성공 건수로 계산하지 않음.
+  iOS는 LTSupportAutomotive/SwiftOBD2 비교 평가를 우선한다. 자체 전체 스캐너 스택 확장보다 이 평가가 선행한다.
 
 ## 검증 운영
 

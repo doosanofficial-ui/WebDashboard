@@ -4,6 +4,11 @@
 [진단 보고서](reports/commercial-readiness-2026-09-19.md)를 따른다.
 아래 기존 MVP 체크는 과거 진행 이력이며 현재 빌드·실기기·배포 검증을 대체하지 않는다.
 
+2026-09-23: iPhone 17 / iOS 27 및 NANICAR ELM327-BT4N + 싼타페 MX5 HEV
+호환 목표 추가. 현행 체크리스트는 [상용화 계획 C19-C25](production-plan.md)와
+[OBD 실측 실행표](reports/obd-bt4n-compatibility.md)에 단일 관리한다.
+이 장비의 연결/실차/백그라운드 시험은 아직 완료되지 않았다.
+
 ## P0
 - [x] **P0-1 Server WS 송출(더미 CAN 10Hz) + 정적 호스팅 + iPad 표시**
   - 산출물: `server/app.py`, `server/can_source/dummy.py`, `client/index.html`

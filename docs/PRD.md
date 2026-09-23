@@ -1,5 +1,16 @@
 # PRD: Wireless Telemetry Dashboard MVP
 
+## Current product extension (2026-09-23)
+
+사내 제품의 현재 목표/완료 기준은 [production-plan.md](production-plan.md)를 따른다.
+iPhone 17 / iOS 27 우선이며 보유 **NANICAR ELM327-BT4N (12V)**와
+**현대 싼타페 MX5 HEV**를 OBD 호환 대상으로 추가한다. 연식/실물 통신은 미확인이다.
+네이티브 BLE 직접 수집을 우선, Windows 브리지를 대안으로 구현한다.
+OBD 획득률은 실측하며 화면 10Hz와 분리한다. 표준 RPM/차량속도/냉각수부터 시작하고
+휠 4ch/yaw/HEV 전용 값을 추측하지 않는다. ECU 쓰기/고장코드 삭제는 범위 밖이다.
+[ADR-0004](adr/0004-obd-bt4n-integration.md)와 C19-C24가 설계·검증 기준이다.
+아래 원래 MVP의 Safari Bluetooth 제약은 네이티브 Core Bluetooth까지 금지하는 뜻이 아니다.
+
 ## 1. Product / Problem
 - Windows 노트북에 연결된 CAN 계측 데이터를 iPad Safari에서 저지연(목표 250ms 이내)로 모니터링한다.
 - iPad GPS(위치/속도/heading/accuracy)를 함께 표시한다.

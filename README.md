@@ -7,6 +7,10 @@ GPS는 좌표 카드뿐 아니라 NAVER 지도 위에 현재 위치/궤적/MARK�
 [Swift 네이티브 앱](mobile-ios/README.md)이며, React Native 폴더는 이전 스캐폴딩입니다.
 [최신 검증 상태](docs/reports/native-milestone-2026-09-23.md)와
 [전체 출시 계획](docs/production-plan.md)을 확인하세요. 실기기 백그라운드·CarPlay·실차 검증은 아직 미완료입니다.
+보유 NANICAR ELM327-BT4N과 현대 싼타페 MX5 HEV도
+[OBD 호환 목표](docs/adr/0004-obd-bt4n-integration.md)에 포함합니다.
+실물 연결은 아직 검증되지 않았으며 iPhone 17 / iOS 27에서 BLE 직접 수집을 우선합니다.
+라이브러리 채택 전 [오픈소스·Pelican 사용 근거 조사](docs/reports/obd-oss-research-2026-09-23.md)를 따릅니다.
 
 ## 구조
 

@@ -1,4 +1,4 @@
-# Adapter Extension Guide (Vector/CANape/CANoe/ATI/MATLAB)
+# Adapter Extension Guide (Vector/CANape/CANoe/ATI/MATLAB/OBD)
 
 MVP는 `DummyCANSource`만 포함합니다. 실차 신호 연동은 `CANSource` 구현체를 교체하는 방식으로 확장합니다.
 
@@ -24,8 +24,9 @@ MVP는 `DummyCANSource`만 포함합니다. 실차 신호 연동은 `CANSource` 
 
 ### C) MATLAB 2022b -> local push -> server
 - MATLAB에서 Vector/PEAK/로그를 읽어 신호 계산
-- MATLAB script가 `ws://localhost:8080/ws` 또는 `POST /api/gps` 같은 endpoint로 push
-- 서버는 수신값을 cache하고 프론트로 브로드캐스트
+- MATLAB에서 전용 CAN bridge 계약/수신기를 구현한 뒤 신호를 push
+- 현재 `/ws` uplink와 `/api/gps`는 CAN ingest endpoint가 아니므로 사용하지 않음
+- 새 adapter는 수신값을 cache하고 `next_frame()`에서 최신 snapshot을 반환
 - 장점: 신호 가공 알고리즘을 MATLAB에서 바로 유지 가능
 - 리스크: 실시간 처리 시 MATLAB 실행/IPC 지연 관리 필요
 
@@ -42,3 +43,16 @@ MVP는 `DummyCANSource`만 포함합니다. 실차 신호 연동은 `CANSource` 
 - 타임스탬프 기준(UTC epoch vs monotonic) 통일 여부
 - 단위/스케일(km/h, m/s, deg/s, m/s^2) 합의 여부
 - 10Hz 이상 송신 시 CPU/지연 측정 결과
+
+## E) NANICAR ELM327-BT4N -> native iOS / Windows bridge
+
+- 실제 보유 장비 라벨: ELM327-BT4N, 12V. 목표 차량: 현대 싼타페 MX5 HEV(연식 미확인).
+- iPhone 17 / iOS 27 Core Bluetooth가 우선. Windows는 확인된 BLE GATT 또는 serial로 수신.
+- GATT UUID/특성은 실물에서 발견·검증하며 유사 ELM 장비의 값을 복사해 확정하지 않음.
+- Mode 01 지원 PID부터 읽고, OBD vehicle speed를 `ws_fl/fr/rl/rr`로 복제하지 않음.
+- OBD 수집 작업은 `next_frame()`의 동기식 장비 질의가 아니라 별도 receiver/cache 경로.
+- 현재 float snapshot만으로는 PID별 sample age/quality를 보존할 수 없으므로,
+  source/time/quality 계약과 OBD 전용 로그/UI를 함께 구현한 뒤 연결한다.
+- 현재 v2 GPS/MARK/STATE ingest는 OBD를 지원하지 않음. 전용 버전 계약과 ACK 검증이 선행 조건.
+- 설계와 실물 완료 기준: [ADR-0004](../../docs/adr/0004-obd-bt4n-integration.md),
+  [호환 실행표](../../docs/reports/obd-bt4n-compatibility.md).
