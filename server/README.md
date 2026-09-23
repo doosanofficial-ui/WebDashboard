@@ -21,6 +21,14 @@ python app.py
 - 업링크 수신: GPS 프레임, MARK 이벤트 (WS 또는 HTTP)
 - CSV 세션 로그: `server/logs/`
 
+세션 ID는 `YYYYMMDD_HHMMSS_<UUID>`입니다. CSV는 exclusive create로 열어
+빠른 재시작이나 명시적 ID 충돌 시 기존 파일을 덮어쓰지 않습니다.
+뷰어별 CAN 전송은 최신 대기 프레임 1개만 유지하고, 전송이 1초 이상 막히면
+그 연결을 종료합니다. 느린 뷰어는 CAN 수집과 다른 뷰어를 막지 않습니다.
+`status.client_drop`은 해당 연결의 대기 프레임 병합 횟수이며,
+기존 `status.drop`(서버 누락 시뮬레이션)과 별도입니다. 클라이언트 seq gap과
+중복 합산하지 마세요. CSV는 실시간 뷰어 큐와 별도로 기록합니다.
+
 ## 환경 변수
 - `HOST` (기본 `127.0.0.1`)
 - `PORT` (기본 `8080`)

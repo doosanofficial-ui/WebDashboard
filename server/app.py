@@ -20,6 +20,7 @@ from logger import SessionCsvLogger
 from ingest import TelemetryJournal
 from reliable_api import router as reliable_router
 from signal_mapper import SignalMapper
+from stream import StreamPeer
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(message)s")
 log = logging.getLogger("telemetry-server")
@@ -28,8 +29,7 @@ can_source = create_can_source(settings.can_source)
 signal_mapper = SignalMapper(settings.signals_config)
 logger = SessionCsvLogger(settings.log_dir)
 
-clients: set[WebSocket] = set()
-clients_lock = asyncio.Lock()
+clients: set[StreamPeer] = set()
 
 broadcast_task: asyncio.Task[None] | None = None
 http_client: httpx.AsyncClient | None = None
@@ -45,23 +45,8 @@ async def _sleep_until(target: float) -> None:
 
 
 async def _broadcast(message: dict[str, Any]) -> None:
-    async with clients_lock:
-        sockets = list(clients)
-
-    if not sockets:
-        return
-
-    dead: list[WebSocket] = []
-    for ws in sockets:
-        try:
-            await ws.send_json(message)
-        except Exception:
-            dead.append(ws)
-
-    if dead:
-        async with clients_lock:
-            for ws in dead:
-                clients.discard(ws)
+    for peer in tuple(clients):
+        peer.publish(message)
 
 
 async def can_broadcast_loop() -> None:
@@ -137,6 +122,11 @@ async def lifespan(application: FastAPI):
             await http_client.aclose()
             http_client = None
 
+        peers = tuple(clients)
+        for peer in peers:
+            peer.stop()
+        if peers:
+            await asyncio.gather(*(peer.finished.wait() for peer in peers))
         logger.close()
 
 
@@ -364,11 +354,10 @@ async def api_event(payload: dict[str, Any]) -> dict[str, bool]:
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket) -> None:
     await ws.accept()
+    peer = StreamPeer(ws)
+    clients.add(peer)
 
-    async with clients_lock:
-        clients.add(ws)
-
-    try:
+    async def receive() -> None:
         while True:
             raw = await ws.receive_text()
 
@@ -380,7 +369,7 @@ async def ws_endpoint(ws: WebSocket) -> None:
             msg_type = payload.get("type")
 
             if msg_type == "ping":
-                await ws.send_json(
+                peer.control(
                     {
                         "v": 1,
                         "type": "pong",
@@ -399,11 +388,12 @@ async def ws_endpoint(ws: WebSocket) -> None:
             if event_row:
                 logger.log_event(event_row)
 
-    except WebSocketDisconnect:
+    try:
+        await peer.run(receive)
+    except (WebSocketDisconnect, TimeoutError, OSError, OverflowError):
         pass
     finally:
-        async with clients_lock:
-            clients.discard(ws)
+        clients.discard(peer)
 
 
 app.include_router(reliable_router)
