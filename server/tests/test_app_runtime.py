@@ -17,6 +17,7 @@ import sqlite3
 import tempfile
 import time
 from dataclasses import replace
+from contextlib import closing
 from pathlib import Path
 from fastapi.testclient import TestClient
 import config
@@ -54,7 +55,7 @@ with tempfile.TemporaryDirectory() as directory:
         assert first.status_code == replay.status_code == 200
         assert first.json()["acked"] == [event["id"]]
         assert client.post("/api/v2/ingest", json=payload).status_code == 401
-    with sqlite3.connect(Path(directory) / "telemetry.sqlite3") as db:
+    with closing(sqlite3.connect(Path(directory) / "telemetry.sqlite3")) as db, db:
         assert db.execute("SELECT count(*) FROM events").fetchone()[0] == 1
     with next(Path(directory).glob("events_*.csv")).open() as stream:
         assert list(csv.DictReader(stream))[0]["note"] == "smoke"

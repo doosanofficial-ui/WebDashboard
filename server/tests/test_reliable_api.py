@@ -4,6 +4,7 @@ import secrets
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -38,7 +39,7 @@ class IngestApiTests(unittest.TestCase):
         self.assertEqual(response.json(), {"v": 2, "client_id": "device-1", "acked": [event["id"]]})
         self.assertEqual(response.headers["cache-control"], "no-store")
         self.assertEqual(self.post(batch(event)).json(), response.json())
-        with sqlite3.connect(self.db_path) as db:
+        with closing(sqlite3.connect(self.db_path)) as db, db:
             self.assertEqual(db.execute("SELECT count(*) FROM events").fetchone()[0], 1)
 
     def test_unpaired_request_is_rejected(self):
@@ -78,7 +79,7 @@ class IngestApiTests(unittest.TestCase):
         self.assertEqual(response.json()["error"]["code"], "event_conflict")
 
     def test_database_failure_returns_no_ack_or_internal_error(self):
-        with sqlite3.connect(self.db_path) as db:
+        with closing(sqlite3.connect(self.db_path)) as db, db:
             db.execute("CREATE TRIGGER fail_write BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'private-database-path'); END")
         response = self.post(batch(gps()))
         self.assertEqual(response.status_code, 503)

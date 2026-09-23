@@ -8,6 +8,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -34,7 +35,7 @@ class JournalTests(unittest.TestCase):
         self.journal = TelemetryJournal(self.path)
 
     def rows(self):
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             db.row_factory = sqlite3.Row
             return [dict(row) for row in db.execute("SELECT * FROM events ORDER BY event_id")]
 
@@ -77,7 +78,7 @@ class JournalTests(unittest.TestCase):
         self.assertEqual(self.rows(), [])
 
     def test_broken_database_write_never_returns_success(self):
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             db.execute("CREATE TRIGGER deny_insert BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'test disk write failure'); END")
         with self.assertRaises(sqlite3.DatabaseError):
             self.journal.ingest(batch(gps()))
