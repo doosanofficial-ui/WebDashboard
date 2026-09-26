@@ -15,7 +15,7 @@ public enum DashboardOrientation: String, Codable, Equatable, Sendable {
     case landscape
 }
 
-public enum DashboardWidgetType: String, Codable, Equatable, Sendable {
+public enum DashboardWidgetType: String, Codable, Equatable, Hashable, CaseIterable, Sendable {
     case numericGauge
     case circularGauge
     case semiCircularGauge

@@ -56,6 +56,14 @@ struct DashboardEditorView: View {
             HStack {
                 Button("Add page", action: model.addDashboardPage)
                     .accessibilityIdentifier("add-dashboard-page")
+                Menu("Add widget", systemImage: "plus.square") {
+                    ForEach(DashboardWidgetType.allCases, id: \.self) { type in
+                        Button(widgetLabel(type)) {
+                            model.addDashboardWidget(pageID: page.id, type: type)
+                        }
+                    }
+                }
+                .accessibilityIdentifier("add-dashboard-widget")
                 Menu("Orientation") {
                     Button("Portrait") {
                         model.setDashboardOrientation(pageID: page.id, orientation: .portrait)
@@ -78,6 +86,23 @@ struct DashboardEditorView: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.horizontal)
+    }
+
+    private func widgetLabel(_ type: DashboardWidgetType) -> String {
+        switch type {
+        case .numericGauge: return "Numeric Gauge"
+        case .circularGauge: return "Circular Gauge"
+        case .semiCircularGauge: return "Semi Gauge"
+        case .horizontalBar: return "Horizontal Bar"
+        case .verticalBar: return "Vertical Bar"
+        case .led: return "LED Indicator"
+        case .statusIcon: return "Status"
+        case .rawCANHex: return "Raw CAN"
+        case .bitView: return "Bit View"
+        case .timeSeries: return "Time Series"
+        case .gps: return "GPS Info"
+        case .map: return "Route Track"
+        }
     }
 
     private func selectionControls(page: DashboardPage) -> some View {

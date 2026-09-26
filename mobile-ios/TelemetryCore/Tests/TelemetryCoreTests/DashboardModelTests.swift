@@ -54,6 +54,27 @@ final class DashboardModelTests: XCTestCase {
         XCTAssertEqual(page.widgets.map(\.id), ["speed-copy"])
     }
 
+    func testProfileCanAddEverySupportedWidgetType() throws {
+        var profile = try profile()
+        for type in DashboardWidgetType.allCases {
+            try profile.addWidget(
+                DashboardWidgetDefinition(
+                    id: "added-\(type.rawValue)",
+                    type: type,
+                    signalID: nil,
+                    rect: DashboardRect(x: 0, y: 0, width: 1, height: 1),
+                    zIndex: 10,
+                    configuration: DashboardWidgetConfiguration(
+                        label: type.rawValue, unit: "", decimals: 1,
+                        minimum: nil, maximum: nil, warningThreshold: nil, criticalThreshold: nil
+                    )
+                ),
+                toPage: "main"
+            )
+        }
+        XCTAssertEqual(profile.pages[0].widgets.count, 1 + DashboardWidgetType.allCases.count)
+    }
+
     func testSnapToGridRoundsPositionAndSizeWithoutDroppingMinimums() throws {
         var page = DashboardPage(id: "main", name: "Main", orientation: .landscape, widgets: [widget()])
         page.snapToGrid(8)

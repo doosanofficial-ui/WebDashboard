@@ -512,6 +512,41 @@ final class TelemetryModel: NSObject {
         persistDashboardProfile()
     }
 
+    func addDashboardWidget(pageID: String, type: DashboardWidgetType) {
+        guard var profile = dashboardProfile,
+              let page = profile.pages.first(where: { $0.id == pageID }) else { return }
+        let id = "widget-\(type.rawValue)-\(UUID().uuidString.prefix(8).lowercased())"
+        let maxRow = page.widgets.map { $0.rect.y + $0.rect.height }.max() ?? 0
+        let dimensions: (width: Int, height: Int) = type == .map
+            ? (6, 3)
+            : (type == .timeSeries ? (3, 2) : (2, 1))
+        let signalID: String? = [
+            .numericGauge, .circularGauge, .semiCircularGauge,
+            .horizontalBar, .verticalBar, .led, .timeSeries
+        ].contains(type) ? "ws_fl" : nil
+        let unit = signalID == nil ? "" : "km/h"
+        let configuration = DashboardWidgetConfiguration(
+            label: Self.widgetLabel(type),
+            unit: unit,
+            decimals: 1,
+            minimum: signalID == nil ? nil : 0,
+            maximum: signalID == nil ? nil : 240,
+            warningThreshold: nil,
+            criticalThreshold: nil
+        )
+        let widget = DashboardWidgetDefinition(
+            id: id,
+            type: type,
+            signalID: signalID,
+            rect: DashboardRect(x: 0, y: maxRow, width: dimensions.width, height: dimensions.height),
+            zIndex: (page.widgets.map(\.zIndex).max() ?? 0) + 1,
+            configuration: configuration
+        )
+        guard (try? profile.addWidget(widget, toPage: pageID)) != nil else { return }
+        dashboardProfile = profile
+        persistDashboardProfile()
+    }
+
     func snapDashboard(pageID: String, grid: Int = 8) {
         guard var profile = dashboardProfile else { return }
         profile.snapToGrid(pageID: pageID, grid: grid)
@@ -608,6 +643,23 @@ final class TelemetryModel: NSObject {
                 ]
             )]
         )
+    }
+
+    private static func widgetLabel(_ type: DashboardWidgetType) -> String {
+        switch type {
+        case .numericGauge: return "Numeric Gauge"
+        case .circularGauge: return "Circular Gauge"
+        case .semiCircularGauge: return "Semi Gauge"
+        case .horizontalBar: return "Horizontal Bar"
+        case .verticalBar: return "Vertical Bar"
+        case .led: return "LED Indicator"
+        case .statusIcon: return "Status"
+        case .rawCANHex: return "Raw CAN"
+        case .bitView: return "Bit View"
+        case .timeSeries: return "Time Series"
+        case .gps: return "GPS Info"
+        case .map: return "Route Track"
+        }
     }
 
     func mark() {
