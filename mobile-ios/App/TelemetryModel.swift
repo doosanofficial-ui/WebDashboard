@@ -18,13 +18,15 @@ struct CanPoint: Identifiable {
 }
 
 @MainActor @Observable
-final class TelemetryModel: NSObject, @preconcurrency CLLocationManagerDelegate {
+final class TelemetryModel: NSObject {
     static let shared = TelemetryModel()
     var serverText = UserDefaults.standard.string(forKey: "serverURL") ?? ""
     var connection = "Disconnected"
+    var serverRecording: ServerRecordingStatus?
     var locationStatus = "Not collecting"
     var uploadStatus = "Not paired"
     var storageStatus: String?
+    var localRecordingStatus = "Local recorder unavailable"
     var frame: CanFrame?
     var lastFrameAt: Date?
     var lastLocation: TelemetryEvent?
@@ -35,28 +37,28 @@ final class TelemetryModel: NSObject, @preconcurrency CLLocationManagerDelegate 
     var clientDrops = 0
     var lastMarkAt: Date?
     // Core Location delivers delegate events on this manager's main run loop.
-    @ObservationIgnored private let locationManager = CLLocationManager()
+    @ObservationIgnored private let locationService: LocationService
     @ObservationIgnored private var outbox: DurableOutbox?
+    @ObservationIgnored private var localRecorder: MeasurementRecorder?
     @ObservationIgnored var uploader: BackgroundUploader?
     @ObservationIgnored private var socket: URLSessionWebSocketTask?
     @ObservationIgnored private var socketLoop: Task<Void, Never>?
-    @ObservationIgnored private var wantsLocations = false
-    @ObservationIgnored private var requestedAlways = false
     @ObservationIgnored private var connectionGeneration = UUID()
     @ObservationIgnored private let clientID: String
 
     private override init() {
         let existing = UserDefaults.standard.string(forKey: "clientID")
         clientID = existing ?? UUID().uuidString.lowercased()
+        locationService = LocationService()
         super.init()
         UserDefaults.standard.set(clientID, forKey: "clientID")
-        locationManager.delegate = self
-        locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
-        locationManager.distanceFilter = kCLDistanceFilterNone
-        locationManager.activityType = .automotiveNavigation
-        locationManager.pausesLocationUpdatesAutomatically = false
-        locationManager.allowsBackgroundLocationUpdates = true
-        locationManager.showsBackgroundLocationIndicator = true
+        locationService.onStatus = { [weak self] status in self?.locationStatus = status }
+        locationService.onCollectingChanged = { [weak self] collecting in
+            self?.collecting = collecting
+        }
+        locationService.onLocations = { [weak self] locations in
+            self?.handleLocations(locations)
+        }
         do {
             let root = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
                 appropriateFor: nil, create: true).appendingPathComponent("Telemetry")
@@ -64,6 +66,13 @@ final class TelemetryModel: NSObject, @preconcurrency CLLocationManagerDelegate 
                 attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
             let box = try DurableOutbox(path: root.appendingPathComponent("outbox.sqlite3"))
             outbox = box
+            let sessionID = "ios-\(Int(Date().timeIntervalSince1970))-\(clientID)"
+            localRecorder = try MeasurementRecorder(
+                path: root.appendingPathComponent("measurements.sqlite3"),
+                sessionID: sessionID,
+                startedAt: Date().timeIntervalSince1970
+            )
+            localRecordingStatus = "Local recorder ready"
             uploader = try BackgroundUploader(outbox: box, clientID: clientID,
                 directory: root.appendingPathComponent("uploads"))
             uploader?.onStatus = { [weak self] message in
@@ -122,6 +131,10 @@ final class TelemetryModel: NSObject, @preconcurrency CLLocationManagerDelegate 
                             case .string(let value): data = Data(value.utf8)
                             @unknown default: continue
                             }
+                            if let update = RecordingStatusUpdate.decode(data) {
+                                self.serverRecording = update.status
+                                if update.isControl { continue }
+                            }
                             guard data.count <= 256 * 1024,
                                   let frame = try? JSONDecoder().decode(CanFrame.self, from: data), frame.v == 1 else { continue }
                             if let previousSequence, frame.status.seq > previousSequence + 1 {
@@ -139,6 +152,7 @@ final class TelemetryModel: NSObject, @preconcurrency CLLocationManagerDelegate 
                     } catch {
                         guard !Task.isCancelled && self.connectionGeneration == generation else { return }
                         self.connection = "Reconnecting"
+                        self.serverRecording = nil
                         task.cancel(with: .goingAway, reason: nil)
                         try? await Task.sleep(nanoseconds: backoff * 1_000_000_000)
                         backoff = min(15, backoff * 2)
@@ -154,42 +168,26 @@ final class TelemetryModel: NSObject, @preconcurrency CLLocationManagerDelegate 
         socketLoop?.cancel(); socketLoop = nil
         socket?.cancel(with: .normalClosure, reason: nil); socket = nil
         connection = "Disconnected"
+        serverRecording = nil
     }
 
     func startLocation() {
         guard outbox != nil, storageStatus == nil else { return }
-        wantsLocations = true
-        switch locationManager.authorizationStatus {
-        case .notDetermined:
-            locationStatus = "Location permission required"
-            locationManager.requestWhenInUseAuthorization()
-        case .authorizedWhenInUse:
-            locationStatus = "Allow Always in Settings for locked-screen collection"
-            if !requestedAlways { requestedAlways = true; locationManager.requestAlwaysAuthorization() }
-        case .authorizedAlways:
-            locationManager.startUpdatingLocation()
-            collecting = true
-            locationStatus = "Waiting for location"
-        case .denied, .restricted:
-            collecting = false
-            locationStatus = "Location permission denied"
-        @unknown default:
-            locationStatus = "Location authorization unavailable"
-        }
+        locationService.start()
+        record(.system(name: "gps_started", timestamp: Date().timeIntervalSince1970,
+                       monotonicNanos: DispatchTime.now().uptimeNanoseconds))
     }
 
     func stopLocation() {
-        wantsLocations = false
-        locationManager.stopUpdatingLocation()
-        collecting = false; locationStatus = "Stopped"
+        locationService.stop()
+        collecting = false
+        locationStatus = "Stopped"
+        record(.system(name: "gps_stopped", timestamp: Date().timeIntervalSince1970,
+                       monotonicNanos: DispatchTime.now().uptimeNanoseconds))
         if let event = try? TelemetryEvent.state("stopped", capturedAt: Date().timeIntervalSince1970) { store(event) }
     }
 
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        if wantsLocations { startLocation() }
-    }
-
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    private func handleLocations(_ locations: [CLLocation]) {
         guard collecting else { return }
         let background = UIApplication.shared.applicationState != .active
         for location in locations where location.horizontalAccuracy >= 0 {
@@ -200,12 +198,20 @@ final class TelemetryModel: NSObject, @preconcurrency CLLocationManagerDelegate 
                 lastLocation = event
                 locationStatus = "Collecting"
                 store(event)
+                record(.location(LocationSample(
+                    originalTimestamp: location.timestamp.timeIntervalSince1970,
+                    receivedAtEpoch: Date().timeIntervalSince1970,
+                    receivedAtMonotonicNanos: DispatchTime.now().uptimeNanoseconds,
+                    latitude: location.coordinate.latitude,
+                    longitude: location.coordinate.longitude,
+                    altitude: location.verticalAccuracy >= 0 ? location.altitude : nil,
+                    speed: location.speed >= 0 ? location.speed : nil,
+                    course: location.course >= 0 ? location.course : nil,
+                    horizontalAccuracy: location.horizontalAccuracy >= 0 ? location.horizontalAccuracy : nil,
+                    verticalAccuracy: location.verticalAccuracy >= 0 ? location.verticalAccuracy : nil
+                )))
             }
         }
-    }
-
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        locationStatus = "Location unavailable; last fix retained"
     }
 
     private func store(_ event: TelemetryEvent) {
@@ -217,9 +223,26 @@ final class TelemetryModel: NSObject, @preconcurrency CLLocationManagerDelegate 
                 await refreshQueueDepth()
                 await flush()
             } catch {
-                locationManager.stopUpdatingLocation()
+                locationService.stop()
                 collecting = false
                 storageStatus = "Recording stopped: durable storage failed or queue is full. Existing records retained."
+            }
+        }
+    }
+
+    private func record(_ event: MeasurementEvent) {
+        guard let localRecorder else {
+            localRecordingStatus = "Local recorder unavailable"
+            return
+        }
+        localRecordingStatus = "Writing local measurements"
+        Task {
+            do {
+                try await localRecorder.append(event)
+                localRecordingStatus = "Local recorder active"
+            } catch {
+                localRecordingStatus = "Local recorder failed"
+                storageStatus = "Local measurement recording failed; server/GPS queue remains separate."
             }
         }
     }
@@ -228,12 +251,19 @@ final class TelemetryModel: NSObject, @preconcurrency CLLocationManagerDelegate 
         if let event = try? TelemetryEvent.mark(note: "", capturedAt: Date().timeIntervalSince1970,
             background: UIApplication.shared.applicationState != .active) {
             store(event)
+            record(.system(name: "MARK", timestamp: event.capturedAt,
+                           monotonicNanos: DispatchTime.now().uptimeNanoseconds))
         }
     }
 
     func sceneChanged(background: Bool) {
         if collecting, let event = try? TelemetryEvent.state(background ? "background" : "foreground",
-            capturedAt: Date().timeIntervalSince1970) { store(event) }
+            capturedAt: Date().timeIntervalSince1970) {
+            store(event)
+            record(.system(name: background ? "background" : "foreground",
+                           timestamp: event.capturedAt,
+                           monotonicNanos: DispatchTime.now().uptimeNanoseconds))
+        }
         if !background { Task { await flush(); await refreshQueueDepth() } }
     }
 

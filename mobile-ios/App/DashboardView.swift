@@ -53,6 +53,13 @@ struct DashboardView: View {
             VStack(alignment: .leading) {
                 Text(model.connection).font(.headline)
                 Text(stale ? "CAN stale" : "CAN live").font(.caption).foregroundStyle(.secondary)
+                Text(model.serverRecording?.text ?? "Server CSV status unknown")
+                    .font(.caption)
+                    .foregroundStyle(model.serverRecording?.isWarning == true ? Color.orange : Color.secondary)
+                Text(model.localRecordingStatus)
+                    .font(.caption)
+                    .foregroundStyle(model.localRecordingStatus.contains("failed") ? Color.red : Color.secondary)
+                    .accessibilityIdentifier("local-recording-status")
             }
             Spacer()
             VStack(alignment: .trailing) {

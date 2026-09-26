@@ -30,6 +30,7 @@ targets:
         NSLocationWhenInUseUsageDescription: Record location alongside CAN measurements during an operator session.
         NSLocationAlwaysAndWhenInUseUsageDescription: Continue the explicitly started measurement session while the screen is locked.
         NSLocalNetworkUsageDescription: Connect to the operator's telemetry server on the local network.
+        NSBluetoothAlwaysUsageDescription: Connect to a user-selected CAN adapter after its transport profile is verified.
         UIBackgroundModes: [location]
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         ITSAppUsesNonExemptEncryption: false

@@ -26,4 +26,11 @@ final class TelemetryUITests: XCTestCase {
         attachment.lifetime = .keepAlways
         add(attachment)
     }
+
+    func testDashboardShowsLocalMeasurementRecorderState() {
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["local-recording-status"].waitForExistence(timeout: 5))
+    }
 }
