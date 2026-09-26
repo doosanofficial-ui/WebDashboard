@@ -23,6 +23,7 @@ class Settings:
     naver_maps_client_id: str | None
     naver_maps_client_secret: str | None
     ingest_token: str | None
+    allowed_origins: tuple[str, ...]
 
     def __post_init__(self) -> None:
         if not math.isfinite(self.can_hz) or self.can_hz <= 0:
@@ -40,6 +41,11 @@ def load_settings() -> Settings:
         signals_config = Path(signals_config_raw).expanduser().resolve()
     else:
         signals_config = BASE_DIR / "signals.json"
+    allowed_origins = tuple(
+        origin.strip()
+        for origin in os.getenv("ALLOWED_ORIGINS", "").split(",")
+        if origin.strip()
+    )
 
     return Settings(
         # Conservative default: loopback only.
@@ -56,6 +62,7 @@ def load_settings() -> Settings:
         naver_maps_client_id=_optional_env("NAVER_MAPS_CLIENT_ID"),
         naver_maps_client_secret=_optional_env("NAVER_MAPS_CLIENT_SECRET"),
         ingest_token=_optional_env("INGEST_TOKEN"),
+        allowed_origins=allowed_origins,
     )
 
 

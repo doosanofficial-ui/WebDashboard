@@ -92,6 +92,7 @@ OS/커널 전체 고착이나 실제 저장장치 장애의 모든 복구를 검
 - `SSL_CERTFILE`, `SSL_KEYFILE` (선택, HTTPS 실행)
 - `NAVER_MAPS_CLIENT_ID` (선택, NAVER 로드뷰/지도 JS 로드)
 - `NAVER_MAPS_CLIENT_SECRET` (선택, 서버 reverse-geocode 호출용)
+- `ALLOWED_ORIGINS` (선택, 쉼표로 구분한 명시적 CORS origin; 기본값은 CORS 비활성)
 
 예시:
 ```powershell
