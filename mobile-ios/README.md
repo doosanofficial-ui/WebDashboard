@@ -90,6 +90,18 @@ Git integration and release verification are incomplete. Use the original source
 path only if it has no NBSP; otherwise use the verification snapshot for a trial build
 and make edits back in the canonical source.
 
+After a signed device build exists, use the bounded install/launch check:
+
+```bash
+DEVICE_ID="2C0892EB-662D-5D9A-A908-96EA723DEEB4" \
+APP_PATH="/path/to/Telemetry.app" \
+./mobile-ios/scripts/verify_device.sh
+```
+
+The script records device, install, launch, and process evidence. A trust error
+returns exit code 10 and prints the exact iPhone Settings path; it never handles
+passwords, MFA, payment, or device passcodes.
+
 In the app, enter the trusted HTTPS server origin in Connection. Store the ingest
 credential in Keychain. The server needs INGEST_TOKEN configured; without it the
 v2 endpoint rejects requests. Never put credentials in source files or reports.
