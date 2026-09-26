@@ -29,7 +29,7 @@ struct DashboardView: View {
                                     .pickerStyle(.menu)
                                     .accessibilityIdentifier("live-page-picker")
                                 }
-                                dashboardCanvas(page)
+                                dashboardCanvas(page, now: timeline.date)
                                 Button("Edit Dashboard") { editorPresented = true }
                                     .buttonStyle(.bordered)
                                     .accessibilityIdentifier("edit-dashboard")
@@ -137,24 +137,37 @@ struct DashboardView: View {
             .background(.background, in: RoundedRectangle(cornerRadius: 16))
     }
 
-    private func dashboardWidget(_ widget: DashboardWidgetDefinition) -> some View {
+    @ViewBuilder
+    private func dashboardWidget(_ widget: DashboardWidgetDefinition, now: Date) -> some View {
         let value = widget.signalID.flatMap { model.frame?.sig[$0] }
-        let decimals = widget.configuration.decimals
-        return VStack(alignment: .leading, spacing: 5) {
-            Text(widget.configuration.label).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
-            Text(value.map { String(format: "%.*f", decimals, $0) } ?? "-")
-                .font(.system(size: 34, weight: .semibold, design: .rounded)).monospacedDigit()
-                .contentTransition(.numericText())
-                .animation(.linear(duration: 0.1), value: value)
-            Text(widget.configuration.unit).font(.caption).foregroundStyle(.secondary)
+        let fresh = canDataIsFresh(at: now)
+        switch widget.type {
+        case .numericGauge:
+            numericWidget(widget, value: value, fresh: fresh)
+        case .circularGauge:
+            circularWidget(widget, value: value, fresh: fresh, semi: false)
+        case .semiCircularGauge:
+            circularWidget(widget, value: value, fresh: fresh, semi: true)
+        case .horizontalBar:
+            barWidget(widget, value: value, fresh: fresh, vertical: false)
+        case .verticalBar:
+            barWidget(widget, value: value, fresh: fresh, vertical: true)
+        case .led:
+            ledWidget(widget, value: value, fresh: fresh)
+        case .statusIcon:
+            statusWidget(widget, fresh: fresh)
+        case .rawCANHex:
+            textWidget(widget, value: model.rawCANText, status: model.adapterStatus)
+        case .bitView:
+            textWidget(widget, value: bitText, status: model.adapterStatus)
+        case .timeSeries:
+            timeSeriesWidget(widget)
+        case .gps, .map:
+            gpsWidget(widget, map: widget.type == .map)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background(.background, in: RoundedRectangle(cornerRadius: 16))
-        .accessibilityIdentifier("profile-widget-\(widget.id)")
     }
 
-    private func dashboardCanvas(_ page: DashboardPage) -> some View {
+    private func dashboardCanvas(_ page: DashboardPage, now: Date) -> some View {
         let columns = page.orientation == .portrait ? 4 : 6
         let maxRow = max(4, (page.widgets.map { $0.rect.y + $0.rect.height }.max() ?? 4) + 1)
         return GeometryReader { proxy in
@@ -163,7 +176,7 @@ struct DashboardView: View {
                 RoundedRectangle(cornerRadius: 18)
                     .fill(Color(.secondarySystemGroupedBackground))
                 ForEach(page.widgets.sorted { $0.zIndex < $1.zIndex }) { widget in
-                    dashboardWidget(widget)
+                    dashboardWidget(widget, now: now)
                         .frame(width: max(36, cell * CGFloat(widget.rect.width) - 8),
                                height: max(36, cell * CGFloat(widget.rect.height) - 8),
                                alignment: .topLeading)
@@ -178,6 +191,202 @@ struct DashboardView: View {
         .frame(minHeight: page.orientation == .portrait ? 420 : 300,
                maxHeight: page.orientation == .portrait ? 660 : 500)
         .accessibilityIdentifier("dashboard-canvas-\(page.id)")
+    }
+
+    private func canDataIsFresh(at now: Date) -> Bool {
+        guard model.connection == "Connected", let lastFrameAt = model.lastFrameAt else { return false }
+        return now.timeIntervalSince(lastFrameAt) <= 1.5
+    }
+
+    private func numericWidget(_ widget: DashboardWidgetDefinition,
+                               value: Double?, fresh: Bool) -> some View {
+        let color = valueColor(value, configuration: widget.configuration, fresh: fresh)
+        return VStack(alignment: .leading, spacing: 5) {
+            widgetHeader(widget, fresh: fresh)
+            Text(format(value, decimals: widget.configuration.decimals))
+                .font(.system(size: 34, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(color)
+                .contentTransition(.numericText())
+                .animation(.linear(duration: 0.1), value: value)
+            Text(widget.configuration.unit).font(.caption).foregroundStyle(.secondary)
+        }
+        .cardStyle()
+        .accessibilityIdentifier("profile-widget-\(widget.id)")
+    }
+
+    private func circularWidget(_ widget: DashboardWidgetDefinition,
+                                value: Double?, fresh: Bool, semi: Bool) -> some View {
+        let progress = normalized(value, configuration: widget.configuration)
+        let color = valueColor(value, configuration: widget.configuration, fresh: fresh)
+        return VStack(alignment: .leading, spacing: 4) {
+            widgetHeader(widget, fresh: fresh)
+            ZStack {
+                Circle()
+                    .trim(from: semi ? 0.5 : 0, to: semi ? 1 : 1)
+                    .stroke(.quaternary, style: StrokeStyle(lineWidth: 12, lineCap: .round))
+                    .rotationEffect(.degrees(semi ? 0 : -90))
+                Circle()
+                    .trim(from: semi ? 0.5 : 0, to: semi ? 0.5 + 0.5 * progress : progress)
+                    .stroke(color, style: StrokeStyle(lineWidth: 12, lineCap: .round))
+                    .rotationEffect(.degrees(semi ? 0 : -90))
+                Text(format(value, decimals: widget.configuration.decimals))
+                    .font(.system(size: 25, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+            }
+            .frame(maxWidth: .infinity)
+            .aspectRatio(semi ? 1.7 : 1, contentMode: .fit)
+            Text(widget.configuration.unit).font(.caption).foregroundStyle(.secondary)
+        }
+        .cardStyle()
+        .accessibilityIdentifier("profile-widget-\(widget.id)")
+    }
+
+    private func barWidget(_ widget: DashboardWidgetDefinition,
+                           value: Double?, fresh: Bool, vertical: Bool) -> some View {
+        let progress = normalized(value, configuration: widget.configuration)
+        let color = valueColor(value, configuration: widget.configuration, fresh: fresh)
+        return VStack(alignment: .leading, spacing: 6) {
+            widgetHeader(widget, fresh: fresh)
+            if vertical {
+                GeometryReader { proxy in
+                    VStack {
+                        Spacer(minLength: 0)
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(color)
+                            .frame(height: max(2, proxy.size.height * progress))
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            } else {
+                ProgressView(value: progress)
+                    .tint(color)
+                Text(format(value, decimals: widget.configuration.decimals))
+                    .font(.system(size: 25, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+            }
+            Text(widget.configuration.unit).font(.caption).foregroundStyle(.secondary)
+        }
+        .cardStyle()
+        .accessibilityIdentifier("profile-widget-\(widget.id)")
+    }
+
+    private func ledWidget(_ widget: DashboardWidgetDefinition,
+                           value: Double?, fresh: Bool) -> some View {
+        let color = valueColor(value, configuration: widget.configuration, fresh: fresh)
+        return HStack(spacing: 10) {
+            Circle().fill(fresh ? color : .gray).frame(width: 24, height: 24)
+            VStack(alignment: .leading) {
+                Text(widget.configuration.label).font(.subheadline.weight(.semibold))
+                Text(fresh ? format(value, decimals: widget.configuration.decimals) : "STALE")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .cardStyle()
+        .accessibilityIdentifier("profile-widget-\(widget.id)")
+    }
+
+    private func statusWidget(_ widget: DashboardWidgetDefinition, fresh: Bool) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: fresh ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .foregroundStyle(fresh ? .green : .orange)
+                .font(.title2)
+            VStack(alignment: .leading) {
+                Text(widget.configuration.label).font(.subheadline.weight(.semibold))
+                Text(fresh ? "VALID" : "STALE / DISCONNECTED")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .cardStyle()
+        .accessibilityIdentifier("profile-widget-\(widget.id)")
+    }
+
+    private func textWidget(_ widget: DashboardWidgetDefinition,
+                            value: String, status: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(widget.configuration.label).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(.body, design: .monospaced))
+                .textSelection(.enabled)
+                .lineLimit(3)
+            Text(status).font(.caption).foregroundStyle(.secondary)
+        }
+        .cardStyle()
+        .accessibilityIdentifier("profile-widget-\(widget.id)")
+    }
+
+    private func timeSeriesWidget(_ widget: DashboardWidgetDefinition) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(widget.configuration.label).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+            Chart(model.points) { point in
+                if let signalID = widget.signalID, let value = point.signals[signalID] {
+                    LineMark(x: .value("Time", point.time), y: .value("Value", value))
+                        .foregroundStyle(.cyan)
+                }
+            }
+            .chartXAxis(.hidden)
+            .frame(height: 90)
+        }
+        .cardStyle()
+        .accessibilityIdentifier("profile-widget-\(widget.id)")
+    }
+
+    private func gpsWidget(_ widget: DashboardWidgetDefinition, map: Bool) -> some View {
+        let fix = model.lastLocation
+        return VStack(alignment: .leading, spacing: 5) {
+            Label(widget.configuration.label, systemImage: map ? "map" : "location.fill")
+                .font(.subheadline.weight(.semibold))
+            Text("\(number(fix?.data.lat, digits: 6)), \(number(fix?.data.lon, digits: 6))")
+                .font(.system(.caption, design: .monospaced))
+            Text("Speed \(number(fix?.data.spd.map { $0 * 3.6 })) km/h · ±\(number(fix?.data.acc)) m")
+                .font(.caption).foregroundStyle(.secondary)
+            Text(fix == nil ? "NO FIX" : "GPS FIX")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(fix == nil ? .orange : .green)
+        }
+        .cardStyle()
+        .accessibilityIdentifier("profile-widget-\(widget.id)")
+    }
+
+    private func widgetHeader(_ widget: DashboardWidgetDefinition, fresh: Bool) -> some View {
+        HStack {
+            Text(widget.configuration.label)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text(fresh ? "VALID" : "STALE")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(fresh ? .green : .orange)
+        }
+    }
+
+    private func normalized(_ value: Double?, configuration: DashboardWidgetConfiguration) -> Double {
+        guard let value, value.isFinite else { return 0 }
+        guard let minimum = configuration.minimum, let maximum = configuration.maximum,
+              maximum > minimum else { return 0 }
+        return min(1, max(0, (value - minimum) / (maximum - minimum)))
+    }
+
+    private func valueColor(_ value: Double?, configuration: DashboardWidgetConfiguration,
+                            fresh: Bool) -> Color {
+        guard fresh, let value, value.isFinite else { return .secondary }
+        if let critical = configuration.criticalThreshold, value >= critical { return .red }
+        if let warning = configuration.warningThreshold, value >= warning { return .orange }
+        return .primary
+    }
+
+    private var bitText: String {
+        guard let payload = model.rawCANText.split(separator: "  ").last else { return "-" }
+        return payload.split(separator: " ").compactMap { UInt8($0, radix: 16) }
+            .map { String($0, radix: 2).leftPadded(to: 8) }
+            .joined(separator: " ")
+    }
+
+    private func format(_ value: Double?, decimals: Int) -> String {
+        guard let value, value.isFinite else { return "-" }
+        return String(format: "%.*f", decimals, value)
     }
 
     private func locationCard(at now: Date) -> some View {
@@ -307,5 +516,20 @@ private struct SettingsView: View {
                     model.importAdapterProfile(data)
                 }
         }
+    }
+}
+
+private extension View {
+    func cardStyle() -> some View {
+        self
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
+            .background(.background, in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+private extension String {
+    func leftPadded(to length: Int, with character: Character = "0") -> String {
+        String(repeating: String(character), count: max(0, length - count)) + self
     }
 }

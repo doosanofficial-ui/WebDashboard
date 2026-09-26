@@ -31,6 +31,9 @@ This is an evidence checkpoint, not a release approval.
   loading, legacy default-grid migration, page lifecycle, rect/z-order editing,
   drag/resize grid canvas, page selection, duplicate/delete/snap operations, and a
   SwiftUI editor view.
+- Dashboard widget rendering now distinguishes numeric/circular/semi-circular gauges,
+  horizontal/vertical bars, LED/status, raw CAN/bit text, time-series, GPS and map
+  information cards, including stale state and configured warning/critical colors.
 - Windows `start.ps1`/`start.cmd` bootstrap path with requirements hash tracking,
   and default-deny CORS with explicit `ALLOWED_ORIGINS` opt-in.
 - Simulator software vertical slice: `MockCANTransport -> ELM327Session ->
@@ -75,9 +78,9 @@ This is an evidence checkpoint, not a release approval.
 - Resolve the simulator UI runner issue and obtain a readable assertion result.
 - Finish Windows clean-machine packaging, rollback, and real Vector/CANoe bridge
   acceptance.
-- Complete the configurable widget-type rendering and full production editor acceptance
-  scope; the current editor now persists pages, orientation, rect drag/resize, z-order,
-  duplicate/delete and grid snap, while advanced LED/bit/map widget rendering remains.
+- Complete full production editor acceptance and real MapKit/track rendering; the
+  current widget types render their safe local representations, while map provider,
+  track history and advanced widget configuration UI remain.
 
 ## Evidence boundary
 

@@ -10,6 +10,9 @@ validation and is not a released product. App Store/CarPlay approval is not impl
 - Versioned dashboard pages with persisted portrait/landscape orientation, grid-based
   rect layout, page selection, drag/resize editor controls, z-order and legacy-profile
   migration.
+- Widget rendering covers numeric/circular/bar/LED/status/raw/bit/time-series/GPS
+  representations with stale-state handling; map track/provider integration remains
+  a separate gate.
 - Original GPS capture timestamps; unknown speed/course stays unknown.
 - Core Location continuous updates after explicit Start and Always authorization.
 - Durable SQLite outbox: records survive process restart and remain until server ACK.

@@ -71,6 +71,8 @@ Windows 브리지 대안이며 실물 호환은 아직 미검증이다.
 - [ ] **C12 UI/PWA/지도**: 더미/실차 모드 명시, 가독성/분할 조절, 정적 캐시 업데이트, 네이버 동기화.
   진행: native dashboard profile에 legacy grid migration, page/orientation lifecycle,
   rect drag/resize, z-order, duplicate/delete/snap과 live page selection을 연결했다.
+  numeric/circular/bar/LED/status/raw/bit/time-series/GPS widget의 stale/threshold
+  표시도 연결했으며, 실제 MapKit track/provider와 전체 편집기 acceptance는 남아 있다.
   완료: 데스크톱/iPhone/iPad UI 및 오프라인/업데이트 실측. 맵 실패가 텔레메트리를 중단시키지 않음.
 - [ ] **C13 실차 adapter**: CANoe 브리지 우선 후보, CANape/MATLAB SDK·라이선스 확인.
   완료: VN1640A 신호 7ch의 단위·스케일·시각을 원본 도구와 대조.
