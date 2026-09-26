@@ -17,31 +17,33 @@ final class DemoAdapterController {
         self.transport = transport
         self.session = session
         onState?("Demo adapter starting")
+        guard let definition = try? SignalDefinition(
+            id: "demo.signal",
+            name: "Demo Signal",
+            canID: 0x123,
+            isExtended: false,
+            startBit: 0,
+            bitLength: 16,
+            byteOrder: .intel,
+            isSigned: false,
+            factor: 0.1,
+            offset: 0,
+            minimum: 0,
+            maximum: 6553.5,
+            unit: "demo",
+            timeout: 0.5
+        ), let pipeline = try? CANSignalPipeline(definitions: [definition]) else {
+            onState?("Demo adapter profile invalid")
+            return
+        }
 
         task = Task { [weak self] in
             guard let self else { return }
             let stream = await session.frames()
             let reader = Task { [weak self] in
                 for await frame in stream {
-                    guard let self,
-                          let definition = try? SignalDefinition(
-                            id: "demo.signal",
-                            name: "Demo Signal",
-                            canID: 0x123,
-                            isExtended: false,
-                            startBit: 0,
-                            bitLength: 16,
-                            byteOrder: .intel,
-                            isSigned: false,
-                            factor: 0.1,
-                            offset: 0,
-                            minimum: 0,
-                            maximum: 6553.5,
-                            unit: "demo",
-                            timeout: 0.5
-                          ),
-                          let decoded = try? SignalDecoder.decode(frame, definition: definition) else { continue }
-                    self.onFrame?(frame, decoded)
+                    guard let self, let item = pipeline.decode(frame).first else { continue }
+                    self.onFrame?(frame, item.decoded)
                 }
             }
             do {

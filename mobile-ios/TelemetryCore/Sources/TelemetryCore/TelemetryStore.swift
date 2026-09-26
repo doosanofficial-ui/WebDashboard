@@ -117,7 +117,7 @@ public enum MeasurementEvent: Equatable, Sendable {
 }
 
 public actor TelemetryStore {
-    private let signalTimeouts: [String: Double]
+    private var signalTimeouts: [String: Double]
     private var signals: [String: LatestSignalState] = [:]
     private var lastFrame: CANFrame?
     private var lastLocation: LocationSample?
@@ -125,6 +125,10 @@ public actor TelemetryStore {
 
     public init(signalTimeouts: [String: Double] = [:]) {
         self.signalTimeouts = signalTimeouts
+    }
+
+    public func configureSignalTimeouts(_ timeouts: [String: Double]) {
+        signalTimeouts = timeouts.filter { $0.value.isFinite && $0.value > 0 }
     }
 
     public func ingest(frame: CANFrame) {

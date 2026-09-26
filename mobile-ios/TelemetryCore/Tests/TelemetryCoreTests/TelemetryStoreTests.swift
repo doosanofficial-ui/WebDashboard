@@ -81,4 +81,15 @@ final class TelemetryStoreTests: XCTestCase {
         let latestLocation = await store.latestLocation()
         XCTAssertEqual(latestLocation, location)
     }
+
+    func testSignalTimeoutsCanBeConfiguredAfterProfileLoad() async {
+        let store = TelemetryStore()
+        await store.configureSignalTimeouts(["vehicle.speed": 0.25, "invalid": -1])
+        await store.ingest(signal: sample(timestamp: 100))
+
+        let stale = await store.signalState(for: "vehicle.speed", now: 100.3)
+        XCTAssertEqual(stale?.quality, .stale)
+        let invalid = await store.signalState(for: "invalid", now: 100.3)
+        XCTAssertNil(invalid)
+    }
 }

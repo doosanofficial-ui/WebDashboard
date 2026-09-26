@@ -46,6 +46,7 @@ final class TelemetryModel: NSObject {
     @ObservationIgnored private let demoAdapter: DemoAdapterController
     @ObservationIgnored private let liveAdapter: LiveAdapterController
     @ObservationIgnored private let bleDiscovery: BLEDiscoveryController
+    @ObservationIgnored private let telemetryStore: TelemetryStore
     @ObservationIgnored private var outbox: DurableOutbox?
     @ObservationIgnored private var localRecorder: MeasurementRecorder?
     @ObservationIgnored private var dashboardURL: URL?
@@ -64,6 +65,7 @@ final class TelemetryModel: NSObject {
         demoAdapter = DemoAdapterController()
         liveAdapter = LiveAdapterController()
         bleDiscovery = BLEDiscoveryController()
+        telemetryStore = TelemetryStore()
         super.init()
         UserDefaults.standard.set(clientID, forKey: "clientID")
         locationService.onStatus = { [weak self] status in self?.locationStatus = status }
@@ -232,6 +234,7 @@ final class TelemetryModel: NSObject {
 
     func stopDemoAdapter() {
         demoAdapter.stop()
+        Task { await telemetryStore.disconnect() }
         adapterSignalValue = nil
         canSource = "None"
         rawCANText = "-"
@@ -244,11 +247,17 @@ final class TelemetryModel: NSObject {
             adapterStatus = "Live adapter not configured"
             return
         }
+        Task {
+            await telemetryStore.configureSignalTimeouts(
+                Dictionary(uniqueKeysWithValues: adapterProfile.signals.map { ($0.id, $0.timeout) })
+            )
+        }
         liveAdapter.start(profile: adapterProfile)
     }
 
     func stopLiveAdapter() {
         liveAdapter.stop()
+        Task { await telemetryStore.disconnect() }
         adapterSignalValue = nil
         canSource = "None"
         rawCANText = "-"
@@ -274,6 +283,11 @@ final class TelemetryModel: NSObject {
             let profile = try JSONDecoder().decode(AdapterProfile.self, from: data)
             adapterProfile = profile
             adapterProfileStatus = "Profile loaded: \(profile.name)"
+            Task {
+                await telemetryStore.configureSignalTimeouts(
+                    Dictionary(uniqueKeysWithValues: profile.signals.map { ($0.id, $0.timeout) })
+                )
+            }
             if let adapterProfileURL {
                 try data.write(to: adapterProfileURL, options: .atomic)
             }
@@ -288,9 +302,7 @@ final class TelemetryModel: NSObject {
         adapterSignalValue = decoded.value
         rawCANText = String(format: "0x%03X  %@", frame.canID,
                             frame.payload.map { String(format: "%02X", $0) }.joined(separator: " "))
-        applyLocalSignals(frame, values: ["demo.signal": decoded.value], source: "Demo")
-        record(.can(frame: frame))
-        record(.signal(DecodedSignalSample(
+        let sample = DecodedSignalSample(
             signalID: "demo.signal",
             value: decoded.value,
             rawValue: decoded.rawValue,
@@ -299,7 +311,11 @@ final class TelemetryModel: NSObject {
             frameSequence: frame.sequence,
             receivedAtEpoch: frame.receivedAtEpoch,
             receivedAtMonotonicNanos: frame.receivedAtMonotonicNanos
-        )))
+        )
+        ingestLocal(frame: frame, samples: [sample])
+        applyLocalSignals(frame, values: ["demo.signal": decoded.value], source: "Demo")
+        record(.can(frame: frame))
+        record(.signal(sample))
         publishCarPlayProjection()
     }
 
@@ -314,6 +330,7 @@ final class TelemetryModel: NSObject {
             values: Dictionary(uniqueKeysWithValues: decoded.map { ($0.definition.id, $0.decoded.value) }),
             source: "Adapter"
         )
+        ingestLocal(frame: frame, samples: decoded.map(\.sample))
         // Raw frames remain valuable even when the current signal catalog does
         // not contain a matching definition. Never drop the source measurement
         // solely because signal decoding is unavailable.
@@ -322,6 +339,13 @@ final class TelemetryModel: NSObject {
             record(.signal(item.sample))
         }
         publishCarPlayProjection()
+    }
+
+    private func ingestLocal(frame: CANFrame, samples: [DecodedSignalSample]) {
+        Task {
+            await telemetryStore.ingest(frame: frame)
+            for sample in samples { await telemetryStore.ingest(signal: sample) }
+        }
     }
 
     private func applyLocalSignals(_ frame: CANFrame, values: [String: Double], source: String) {
@@ -397,7 +421,7 @@ final class TelemetryModel: NSObject {
                     locationTrack = Array(locationTrack.suffix(1_000))
                 }
                 store(event)
-                record(.location(LocationSample(
+                let sample = LocationSample(
                     originalTimestamp: location.timestamp.timeIntervalSince1970,
                     receivedAtEpoch: Date().timeIntervalSince1970,
                     receivedAtMonotonicNanos: DispatchTime.now().uptimeNanoseconds,
@@ -408,7 +432,9 @@ final class TelemetryModel: NSObject {
                     course: location.course >= 0 ? location.course : nil,
                     horizontalAccuracy: location.horizontalAccuracy >= 0 ? location.horizontalAccuracy : nil,
                     verticalAccuracy: location.verticalAccuracy >= 0 ? location.verticalAccuracy : nil
-                )))
+                )
+                Task { await telemetryStore.ingest(location: sample) }
+                record(.location(sample))
             }
         }
     }

@@ -86,6 +86,14 @@ The versioned `0.2.0` feature build was then installed and launched again:
 - Result: **physical launch PASS**
 - Process observed: `Telemetry.app/Telemetry`, PID `20668`
 
+After the native `TelemetryStore` integration, the current v0.2.0 build was
+rebuilt and rerun:
+
+- Build artifact: `/tmp/telemetry-ios-device-store.eLLYmn`
+- Install/launch artifacts: `/tmp/telemetry-ios-device-run.AMtycz/`
+- Result: **physical launch PASS**
+- Process observed: `Telemetry.app/Telemetry`, PID `20670`
+
 ## Limitations
 
 - This build uses the installed iOS 26.2 SDK against an iOS 27 device. It is
