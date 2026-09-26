@@ -71,6 +71,9 @@ Current native development version: `0.1.1` (build `1`).
 | UI runtime smoke | PASS | Direct install/launch on the iPhone 17 Pro **simulator** with iOS 26.2 showed non-overlapping migrated Speed/FR/RL/RR/Yaw/Ay grid widgets, local recorder, and Dashboard Editor controls; this is not the target physical iPhone 17/iOS 27 result, and XCTest runner remains unreliable |
 | SwiftUI cockpit visual smoke | PASS | Direct install/launch on the iPhone 17 Pro iOS 26.2 simulator; screenshot evidence is stored under docs/reports/evidence/ |
 | iOS 27 build | NOT RUN | Host has Xcode 26.3 / iOS 26.2 SDK |
+| iPhone 17 physical build | PASS (SDK boundary) | Personal Team signed device build with Xcode 26.3/iOS 26.2 SDK; not an iOS 27 SDK result |
+| iPhone 17 physical install | PASS | devicectl installed Telemetry 0.1.1 build 1 |
+| iPhone 17 physical launch | BLOCKED BY DEVICE TRUST | SpringBoard denied launch until the Personal Team developer is explicitly trusted/verified on the phone |
 | Software ELM vertical slice | PASS | Direct simulator demo adapter start/monitor/stop; not a BT4N or vehicle result |
 | CarPlay external display host | PASS (display only) | Simulator `I/O > External Displays > CarPlay` opened the default CarPlay home screen; app rendering was not claimed |
 | BT4N live profile | NOT RUN | No observed GATT/serial profile or firmware capture |
@@ -79,7 +82,8 @@ Current native development version: `0.1.1` (build `1`).
 
 ## Release blockers
 
-- Install Xcode 27 and verify the exact iPhone 17 iOS 27 build on hardware.
+- Install Xcode 27 and verify the exact iPhone 17 iOS 27 build on hardware; the current Personal Team build only proves signing/install with the 26.2 SDK.
+- Complete device-side trust/verification, then repeat physical launch and first-run runtime evidence.
 - Discover and record the NANICAR ELM327-BT4N transport, services, characteristics,
   framing, protocol, and supported commands without storing secrets or VIN data.
 - Verify one stationary CAN ID and one signal against a trusted reference on the
