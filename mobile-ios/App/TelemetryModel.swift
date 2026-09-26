@@ -176,9 +176,16 @@ final class TelemetryModel: NSObject {
                 guard let self else { return }
                 var backoff: UInt64 = 1
                 while !Task.isCancelled && self.connectionGeneration == generation {
-                    var components = URLComponents(url: base, resolvingAgainstBaseURL: false)!
+                    guard var components = URLComponents(url: base, resolvingAgainstBaseURL: false) else {
+                        self.connection = "Invalid server URL"
+                        return
+                    }
                     components.scheme = "wss"; components.path = "/ws"
-                    let task = URLSession.shared.webSocketTask(with: components.url!)
+                    guard let socketURL = components.url else {
+                        self.connection = "Invalid server URL"
+                        return
+                    }
+                    let task = URLSession.shared.webSocketTask(with: socketURL)
                     self.socket = task
                     self.connection = "Connecting"
                     task.resume()
