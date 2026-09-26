@@ -14,7 +14,7 @@ compatibility or release approval.
 - Xcode account: Personal Team, Team ID 548HKZYKDP
 - Previous app version: 0.1.1, build 1
 - Previous feature build: 0.2.0, build 1
-- Current feature build: 0.3.0, build 1
+- Current feature build: 0.3.1, build 1
 
 ## Evidence
 
@@ -117,6 +117,14 @@ The v0.3.0 session-envelope/CSV export build was then installed and launched:
 - Bundle version: `0.3.0` build `1`
 - Result: **physical launch PASS**
 - Process observed: `Telemetry.app/Telemetry`, PID `20683`
+
+The v0.3.1 adapter-runtime-event build was then installed and launched:
+
+- Build artifact: `/tmp/telemetry-ios-device-events.PC74N4`
+- Install/launch artifacts: `/tmp/telemetry-ios-device-run.yWyfHb/`
+- Bundle version: `0.3.1` build `1`
+- Result: **physical launch PASS**
+- Process observed: `Telemetry.app/Telemetry`, PID `20685`
 
 ## Limitations
 

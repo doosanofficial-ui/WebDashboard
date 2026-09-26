@@ -78,15 +78,13 @@ final class TelemetryModel: NSObject {
             self?.handleLocations(locations)
         }
         demoAdapter.onState = { [weak self] state in
-            self?.adapterStatus = state
-            self?.publishCarPlayProjection()
+            self?.handleAdapterState(state)
         }
         demoAdapter.onFrame = { [weak self] frame, decoded in
             self?.handleDemoFrame(frame, decoded: decoded)
         }
         liveAdapter.onState = { [weak self] state in
-            self?.adapterStatus = state
-            self?.publishCarPlayProjection()
+            self?.handleAdapterState(state)
         }
         liveAdapter.onFrame = { [weak self] frame, decoded in
             self?.handleLiveFrame(frame, decoded: decoded)
@@ -312,6 +310,14 @@ final class TelemetryModel: NSObject {
         applyLocalSignals(frame, values: ["demo.signal": decoded.value], source: "Demo")
         record(.can(frame: frame))
         record(.signal(sample))
+        publishCarPlayProjection()
+    }
+
+    private func handleAdapterState(_ state: String) {
+        adapterStatus = state
+        let event = AdapterRuntimeEvent(state: state).rawValue
+        record(.system(name: event, timestamp: Date().timeIntervalSince1970,
+                       monotonicNanos: DispatchTime.now().uptimeNanoseconds))
         publishCarPlayProjection()
     }
 
