@@ -37,6 +37,7 @@ final class BLEDiscoveryController: NSObject, @preconcurrency CBCentralManagerDe
 
     func start() {
         if central == nil {
+            scanning = true
             central = CBCentralManager(delegate: self, queue: nil, options: [
                 CBCentralManagerOptionShowPowerAlertKey: true
             ])

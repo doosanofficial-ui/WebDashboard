@@ -2,7 +2,7 @@
 
 Checked: 2026-09-26; engineering follow-up: 2026-09-27. Branch: `codex/native-telemetry-productization`.
 This is an evidence checkpoint, not a release approval.
-Current native development version: `0.6.0` (build `1`).
+Current native development version: `0.6.1` (build `1`).
 
 ## Implemented in this checkpoint
 
@@ -92,6 +92,8 @@ Current native development version: `0.6.0` (build `1`).
   MapKit track, raw CAN, bit view, gauges, bars, LED, status, and time-series widgets.
 - Dashboard Editor includes a widget inspector for signal binding, label/unit,
   decimal precision, range, warning, and critical thresholds.
+- BLE permission discovery now starts scanning automatically after the first user
+  tap completes Bluetooth manager initialization.
 - Recording can be explicitly stopped and restarted from the cockpit; a completed
   session remains exportable while a new recording session gets a new session ID.
 - Windows/server CSV recording isolation, bounded queues, write receipts, fault
@@ -101,12 +103,12 @@ Current native development version: `0.6.0` (build `1`).
 
 | Area | Result | Evidence |
 | --- | --- | --- |
-| Swift Core tests | PASS, 71 tests | `mobile-ios/scripts/verify.sh build`; `0.6.0` artifact `/tmp/telemetry-ios-verify.Quloyo` |
+| Swift Core tests | PASS, 71 tests | `mobile-ios/scripts/verify.sh build`; `0.6.1` artifact `/tmp/telemetry-ios-verify.Ybec9T` |
 | Server CAN contract tests | PASS, 3 tests | `ServerCANFrameTests` in the same artifact |
 | CAN pipeline tests | PASS, 3 tests | `CANSignalPipelineTests` in the same artifact |
 | End-to-end CAN measurement pipeline | PASS, 1 test | `CANMeasurementPipelineTests` covers MockCANTransport -> ELM327Session -> Store -> SQLite |
 | ELM327 DLC/recovery tests | PASS, 7 session tests | `ELM327SessionTests` in the same artifact |
-| Native app build after hardening | PASS | XcodeGen-generated `0.6.0` project, Xcode 26.3/iOS 26.2 Simulator SDK; `/tmp/telemetry-ios-verify.Quloyo` |
+| Native app build after hardening | PASS | XcodeGen-generated `0.6.1` project, Xcode 26.3/iOS 26.2 Simulator SDK; `/tmp/telemetry-ios-verify.Ybec9T` |
 | MapKit track widget compile | PASS | Native target includes `MapKit`, `MapPolyline`, and bounded GPS track model; runtime GPS fix not run |
 | BLE discovery probe compile | PASS | Native target compile; physical BT4N GATT observation not run |
 | Current cockpit visual smoke | PASS (simulator render) | `0.4.0` iPhone 17 Pro simulator screenshot: `docs/reports/evidence/swiftui-cockpit-v040-2026-09-27.png`; disconnected/stale state rendered safely |
@@ -119,9 +121,9 @@ Current native development version: `0.6.0` (build `1`).
 | UI runtime smoke | PASS | Direct install/launch on the iPhone 17 Pro **simulator** with iOS 26.2 showed non-overlapping migrated Speed/FR/RL/RR/Yaw/Ay grid widgets, local recorder, and Dashboard Editor controls; this is not the target physical iPhone 17/iOS 27 result, and XCTest runner remains unreliable |
 | SwiftUI cockpit visual smoke | PASS | Direct install/launch on the iPhone 17 Pro iOS 26.2 simulator; screenshot evidence is stored under docs/reports/evidence/ |
 | iOS 27 build | NOT RUN | Host has Xcode 26.3 / iOS 26.2 SDK |
-| iPhone 17 physical build | PASS (SDK boundary) | Fresh `0.6.0` Personal Team build `/tmp/telemetry-ios-device-inspector.cqcbaA` with Xcode 26.3/iOS 26.2 SDK; not an iOS 27 SDK result |
-| iPhone 17 physical install | PASS | `0.6.0` build `1` installed by `devicectl` |
-| iPhone 17 physical launch | BLOCKED BY DEVICE LOCK | `verify_device.sh` returned exit `12`; log `/tmp/telemetry-v060-device-check.log`; unlock the iPhone and rerun |
+| iPhone 17 physical build | PASS (SDK boundary) | Fresh `0.6.1` Personal Team build `/tmp/telemetry-ios-device-blefix.xgcm8a` with Xcode 26.3/iOS 26.2 SDK; not an iOS 27 SDK result |
+| iPhone 17 physical install | PASS | `0.6.1` build `1` installed by `devicectl` |
+| iPhone 17 physical launch | BLOCKED BY DEVICE LOCK | `verify_device.sh` returned exit `12`; log `/tmp/telemetry-v061-device-check.log`; unlock the iPhone and rerun |
 | Software ELM vertical slice | PASS | Direct simulator demo adapter start/monitor/stop; not a BT4N or vehicle result |
 | CarPlay external display host | PASS (display only) | Simulator `I/O > External Displays > CarPlay` opened the default CarPlay home screen; app rendering was not claimed |
 | BT4N live profile | NOT RUN | No observed GATT/serial profile or firmware capture |

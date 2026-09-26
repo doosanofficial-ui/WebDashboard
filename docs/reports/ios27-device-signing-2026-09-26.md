@@ -17,7 +17,8 @@ compatibility or release approval.
 - Previous feature build: 0.3.1, build 1
 - Previous feature build: 0.4.0, build 1
 - Previous feature build: 0.5.0, build 1
-- Current feature build: 0.6.0, build 1
+- Previous feature build: 0.6.0, build 1
+- Current feature build: 0.6.1, build 1
 
 ## Evidence
 
@@ -152,6 +153,14 @@ The v0.6.0 widget configuration inspector build was built and installed:
 - Install: **PASS**
 - Launch: **BLOCKED BY DEVICE LOCK**, verifier exit `12`
 - Exact verifier log: `/tmp/telemetry-v060-device-check.log`
+
+The v0.6.1 BLE first-tap permission fix build was built and installed:
+
+- Build artifact: `/tmp/telemetry-ios-device-blefix.xgcm8a`
+- Bundle version: `0.6.1` build `1`
+- Install: **PASS**
+- Launch: **BLOCKED BY DEVICE LOCK**, verifier exit `12`
+- Exact verifier log: `/tmp/telemetry-v061-device-check.log`
 
 ## Limitations
 
