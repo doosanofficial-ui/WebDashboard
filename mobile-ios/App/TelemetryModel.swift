@@ -28,7 +28,9 @@ final class TelemetryModel: NSObject {
     var storageStatus: String?
     var localRecordingStatus = "Local recorder unavailable"
     var dashboardProfile: DashboardProfile?
+    var adapterProfile: AdapterProfile?
     var adapterStatus = "Adapter disconnected"
+    var adapterProfileStatus = "No live adapter profile"
     var adapterSignalValue: Double?
     var rawCANText = "-"
     var frame: CanFrame?
@@ -46,6 +48,7 @@ final class TelemetryModel: NSObject {
     @ObservationIgnored private var outbox: DurableOutbox?
     @ObservationIgnored private var localRecorder: MeasurementRecorder?
     @ObservationIgnored private var dashboardURL: URL?
+    @ObservationIgnored private var adapterProfileURL: URL?
     @ObservationIgnored var uploader: BackgroundUploader?
     @ObservationIgnored private var socket: URLSessionWebSocketTask?
     @ObservationIgnored private var socketLoop: Task<Void, Never>?
@@ -82,6 +85,13 @@ final class TelemetryModel: NSObject {
             } else {
                 dashboardProfile = Self.defaultDashboardProfile()
                 persistDashboardProfile()
+            }
+            adapterProfileURL = root.appendingPathComponent("adapter-profile.json")
+            if let adapterProfileURL,
+               let profileData = try? Data(contentsOf: adapterProfileURL),
+               let savedProfile = try? JSONDecoder().decode(AdapterProfile.self, from: profileData) {
+                adapterProfile = savedProfile
+                adapterProfileStatus = "Profile loaded: \(savedProfile.name)"
             }
             let box = try DurableOutbox(path: root.appendingPathComponent("outbox.sqlite3"))
             outbox = box
@@ -198,6 +208,20 @@ final class TelemetryModel: NSObject {
         demoAdapter.stop()
         adapterSignalValue = nil
         rawCANText = "-"
+    }
+
+    func importAdapterProfile(_ data: Data) {
+        do {
+            let profile = try JSONDecoder().decode(AdapterProfile.self, from: data)
+            adapterProfile = profile
+            adapterProfileStatus = "Profile loaded: \(profile.name)"
+            if let adapterProfileURL {
+                try data.write(to: adapterProfileURL, options: .atomic)
+            }
+        } catch {
+            adapterProfile = nil
+            adapterProfileStatus = "Adapter profile invalid"
+        }
     }
 
     private func handleDemoFrame(_ frame: CANFrame, decoded: DecodedSignal) {

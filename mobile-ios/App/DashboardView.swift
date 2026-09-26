@@ -100,6 +100,9 @@ struct DashboardView: View {
             Text("Demo only. Live BLE/Wi-Fi requires an observed adapter profile.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+            Text(model.adapterProfileStatus)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
             HStack {
                 Button("Start demo adapter", action: model.startDemoAdapter)
                     .accessibilityIdentifier("start-adapter-demo")
