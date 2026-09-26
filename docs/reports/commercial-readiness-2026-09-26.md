@@ -145,6 +145,8 @@ Current native development version: `0.10.1` (build `1`).
 
 ## Release blockers
 
+Physical execution procedure: `docs/reports/ios-physical-v010-runbook.md`.
+
 - Install Xcode 27 and verify the exact iPhone 17 iOS 27 build on hardware; the current Personal Team build only proves signing/install with the 26.2 SDK.
 - Collect first-run physical runtime evidence for GPS permission handling, live CAN/adapter state, recording, and app lifecycle; launch alone does not establish those behaviors.
 - Run the new read-only BLE discovery probe against the NANICAR ELM327-BT4N and
