@@ -31,6 +31,9 @@ Current native development version: `0.1.1` (build `1`).
 - Compile-gated, status-only CarPlay projection now receives live adapter, recording,
   profile, elapsed-session and limited primary-value state through a bridge. No
   entitlement key or CarPlay scene manifest was invented.
+- CarPlay projection bridge now reuses one scene-owned CPListTemplate, updates
+  discrete adapter/recording/profile changes immediately, and throttles numeric
+  list updates to one second instead of resetting the root template per CAN frame.
 - Versioned dashboard profile JSON with typed numeric widgets, persisted profile
   loading, legacy default-grid migration, page lifecycle, rect/z-order editing,
   drag/resize grid canvas, page selection, duplicate/delete/snap operations, and a
