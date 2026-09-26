@@ -79,6 +79,8 @@ Current native development version: `0.6.1` (build `1`).
   treating every signal in a frame as equally fresh.
 - WebSocket URL construction now fails closed with a connection status instead of
   force-unwrapping malformed URL components.
+- SQLite outbox payload reads now fail closed on NULL/corrupt rows instead of
+  constructing a C string from an invalid pointer.
 - Foreground GPS now starts with When In Use authorization; Always remains the
   explicit requirement for locked-screen collection. Native MapKit track rendering
   uses a bounded in-memory coordinate history.
@@ -103,12 +105,12 @@ Current native development version: `0.6.1` (build `1`).
 
 | Area | Result | Evidence |
 | --- | --- | --- |
-| Swift Core tests | PASS, 71 tests | `mobile-ios/scripts/verify.sh build`; `0.6.1` artifact `/tmp/telemetry-ios-verify.Ybec9T` |
+| Swift Core tests | PASS, 71 tests | `mobile-ios/scripts/verify.sh build`; `0.6.1` artifact `/tmp/telemetry-ios-verify.kCAu3T` |
 | Server CAN contract tests | PASS, 3 tests | `ServerCANFrameTests` in the same artifact |
 | CAN pipeline tests | PASS, 3 tests | `CANSignalPipelineTests` in the same artifact |
 | End-to-end CAN measurement pipeline | PASS, 1 test | `CANMeasurementPipelineTests` covers MockCANTransport -> ELM327Session -> Store -> SQLite |
 | ELM327 DLC/recovery tests | PASS, 7 session tests | `ELM327SessionTests` in the same artifact |
-| Native app build after hardening | PASS | XcodeGen-generated `0.6.1` project, Xcode 26.3/iOS 26.2 Simulator SDK; `/tmp/telemetry-ios-verify.Ybec9T` |
+| Native app build after hardening | PASS | XcodeGen-generated `0.6.1` project, Xcode 26.3/iOS 26.2 Simulator SDK; `/tmp/telemetry-ios-verify.kCAu3T` |
 | MapKit track widget compile | PASS | Native target includes `MapKit`, `MapPolyline`, and bounded GPS track model; runtime GPS fix not run |
 | BLE discovery probe compile | PASS | Native target compile; physical BT4N GATT observation not run |
 | Current cockpit visual smoke | PASS (simulator render) | `0.4.0` iPhone 17 Pro simulator screenshot: `docs/reports/evidence/swiftui-cockpit-v040-2026-09-27.png`; disconnected/stale state rendered safely |

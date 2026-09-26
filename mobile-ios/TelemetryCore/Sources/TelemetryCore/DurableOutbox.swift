@@ -85,7 +85,10 @@ public actor DurableOutbox {
             try bind(event.id, to: existing, index: 1)
             let existingResult = sqlite3_step(existing)
             if existingResult == SQLITE_ROW {
-                guard String(cString: sqlite3_column_text(existing, 0)) == payload else { throw TelemetryError.eventConflict }
+                guard let existingText = sqlite3_column_text(existing, 0) else {
+                    throw TelemetryError.storage
+                }
+                guard String(cString: existingText) == payload else { throw TelemetryError.eventConflict }
                 return
             }
             guard existingResult == SQLITE_DONE else { throw TelemetryError.storage }
@@ -107,8 +110,11 @@ public actor DurableOutbox {
         while true {
             let result = sqlite3_step(query)
             if result == SQLITE_DONE { return events }
-            guard result == SQLITE_ROW else { throw TelemetryError.storage }
-            let payload = String(cString: sqlite3_column_text(query, 0))
+            guard result == SQLITE_ROW,
+                  let payloadText = sqlite3_column_text(query, 0) else {
+                throw TelemetryError.storage
+            }
+            let payload = String(cString: payloadText)
             events.append(try JSONDecoder().decode(TelemetryEvent.self, from: Data(payload.utf8)))
         }
     }
