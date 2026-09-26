@@ -27,6 +27,7 @@ final class TelemetryModel: NSObject {
     var uploadStatus = "Not paired"
     var storageStatus: String?
     var localRecordingStatus = "Local recorder unavailable"
+    var dashboardProfile: DashboardProfile?
     var frame: CanFrame?
     var lastFrameAt: Date?
     var lastLocation: TelemetryEvent?
@@ -40,6 +41,7 @@ final class TelemetryModel: NSObject {
     @ObservationIgnored private let locationService: LocationService
     @ObservationIgnored private var outbox: DurableOutbox?
     @ObservationIgnored private var localRecorder: MeasurementRecorder?
+    @ObservationIgnored private var dashboardURL: URL?
     @ObservationIgnored var uploader: BackgroundUploader?
     @ObservationIgnored private var socket: URLSessionWebSocketTask?
     @ObservationIgnored private var socketLoop: Task<Void, Never>?
@@ -64,6 +66,14 @@ final class TelemetryModel: NSObject {
                 appropriateFor: nil, create: true).appendingPathComponent("Telemetry")
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true,
                 attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
+            dashboardURL = root.appendingPathComponent("dashboard.json")
+            if let dashboardURL, let dashboardData = try? Data(contentsOf: dashboardURL),
+               let saved = try? JSONDecoder().decode(DashboardProfile.self, from: dashboardData) {
+                dashboardProfile = saved
+            } else {
+                dashboardProfile = Self.defaultDashboardProfile()
+                persistDashboardProfile()
+            }
             let box = try DurableOutbox(path: root.appendingPathComponent("outbox.sqlite3"))
             outbox = box
             let sessionID = "ios-\(Int(Date().timeIntervalSince1970))-\(clientID)"
@@ -245,6 +255,69 @@ final class TelemetryModel: NSObject {
                 storageStatus = "Local measurement recording failed; server/GPS queue remains separate."
             }
         }
+    }
+
+    func duplicateDashboardWidget(pageID: String, widgetID: String) {
+        guard var profile = dashboardProfile else { return }
+        let newID = "\(widgetID)-\(UUID().uuidString.prefix(6).lowercased())"
+        guard (try? profile.duplicateWidget(pageID: pageID, widgetID: widgetID, newID: newID)) != nil else { return }
+        dashboardProfile = profile
+        persistDashboardProfile()
+    }
+
+    func deleteDashboardWidget(pageID: String, widgetID: String) {
+        guard var profile = dashboardProfile,
+              profile.deleteWidget(pageID: pageID, widgetID: widgetID) else { return }
+        dashboardProfile = profile
+        persistDashboardProfile()
+    }
+
+    func snapDashboard(pageID: String, grid: Int = 8) {
+        guard var profile = dashboardProfile else { return }
+        profile.snapToGrid(pageID: pageID, grid: grid)
+        dashboardProfile = profile
+        persistDashboardProfile()
+    }
+
+    private func persistDashboardProfile() {
+        guard let dashboardProfile, let dashboardURL,
+              let data = try? JSONEncoder().encode(dashboardProfile) else { return }
+        do {
+            try data.write(to: dashboardURL, options: .atomic)
+        } catch {
+            storageStatus = "Dashboard profile could not be saved"
+        }
+    }
+
+    private static func defaultDashboardProfile() -> DashboardProfile? {
+        func widget(_ id: String, _ label: String, _ signalID: String, _ unit: String) -> DashboardWidgetDefinition {
+            DashboardWidgetDefinition(
+                id: id,
+                type: .numericGauge,
+                signalID: signalID,
+                rect: DashboardRect(x: 0, y: 0, width: 2, height: 1),
+                zIndex: 0,
+                configuration: DashboardWidgetConfiguration(
+                    label: label, unit: unit, decimals: 1,
+                    minimum: nil, maximum: nil, warningThreshold: nil, criticalThreshold: nil
+                )
+            )
+        }
+        return try? DashboardProfile(
+            id: "vehicle-a-normal",
+            name: "Vehicle A Normal",
+            pages: [DashboardPage(
+                id: "main", name: "Main", orientation: .landscape,
+                widgets: [
+                    widget("ws-fl", "Speed", "ws_fl", "km/h"),
+                    widget("ws-fr", "FR", "ws_fr", "km/h"),
+                    widget("ws-rl", "RL", "ws_rl", "km/h"),
+                    widget("ws-rr", "RR", "ws_rr", "km/h"),
+                    widget("yaw", "Yaw", "yaw", "deg/s"),
+                    widget("ay", "Ay", "ay", "m/s2")
+                ]
+            )]
+        )
     }
 
     func mark() {

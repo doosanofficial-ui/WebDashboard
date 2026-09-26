@@ -137,6 +137,13 @@ public struct DashboardPage: Codable, Equatable, Identifiable, Sendable {
         widgets.append(copy)
     }
 
+    public mutating func addWidget(_ widget: DashboardWidgetDefinition) throws {
+        guard !widgets.contains(where: { $0.id == widget.id }) else {
+            throw DashboardModelError.duplicateWidgetID(widget.id)
+        }
+        widgets.append(widget)
+    }
+
     @discardableResult
     public mutating func deleteWidget(id: String) -> Bool {
         let oldCount = widgets.count
@@ -158,7 +165,7 @@ public struct DashboardProfile: Codable, Equatable, Identifiable, Sendable {
     public let schemaVersion: Int
     public let id: String
     public let name: String
-    public let pages: [DashboardPage]
+    public private(set) var pages: [DashboardPage]
 
     public init(id: String, name: String, pages: [DashboardPage]) throws {
         guard !id.isEmpty, !name.isEmpty, !pages.isEmpty else {
@@ -204,5 +211,30 @@ public struct DashboardProfile: Codable, Equatable, Identifiable, Sendable {
         try values.encode(id, forKey: .id)
         try values.encode(name, forKey: .name)
         try values.encode(pages, forKey: .pages)
+    }
+
+    public mutating func addWidget(_ widget: DashboardWidgetDefinition, toPage pageID: String) throws {
+        guard let index = pages.firstIndex(where: { $0.id == pageID }) else {
+            throw DashboardModelError.invalidProfile
+        }
+        try pages[index].addWidget(widget)
+    }
+
+    public mutating func duplicateWidget(pageID: String, widgetID: String, newID: String) throws {
+        guard let index = pages.firstIndex(where: { $0.id == pageID }) else {
+            throw DashboardModelError.invalidProfile
+        }
+        try pages[index].duplicateWidget(id: widgetID, newID: newID)
+    }
+
+    @discardableResult
+    public mutating func deleteWidget(pageID: String, widgetID: String) -> Bool {
+        guard let index = pages.firstIndex(where: { $0.id == pageID }) else { return false }
+        return pages[index].deleteWidget(id: widgetID)
+    }
+
+    public mutating func snapToGrid(pageID: String, grid: Int) {
+        guard let index = pages.firstIndex(where: { $0.id == pageID }) else { return }
+        pages[index].snapToGrid(grid)
     }
 }

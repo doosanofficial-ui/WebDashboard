@@ -33,4 +33,11 @@ final class TelemetryUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["local-recording-status"].waitForExistence(timeout: 5))
     }
+
+    func testDashboardRendersProfileDefinedWidgetLabel() {
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Speed"].waitForExistence(timeout: 5))
+    }
 }

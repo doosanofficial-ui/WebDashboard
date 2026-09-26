@@ -1,8 +1,10 @@
 import SwiftUI
 import Charts
+import TelemetryCore
 
 struct DashboardView: View {
     @Bindable var model: TelemetryModel
+    @State private var editorPresented = false
     var body: some View {
         TabView {
             NavigationStack {
@@ -10,13 +12,18 @@ struct DashboardView: View {
                     ScrollView {
                         VStack(spacing: 16) {
                             connectionSummary(at: timeline.date)
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 145))], spacing: 12) {
-                                gauge("FL", key: "ws_fl", unit: "km/h")
-                                gauge("FR", key: "ws_fr", unit: "km/h")
-                                gauge("RL", key: "ws_rl", unit: "km/h")
-                                gauge("RR", key: "ws_rr", unit: "km/h")
-                                gauge("Yaw", key: "yaw", unit: "deg/s")
-                                gauge("Ay", key: "ay", unit: "m/s2")
+                            if let page = model.dashboardProfile?.pages.first {
+                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 145))], spacing: 12) {
+                                    ForEach(page.widgets.sorted { $0.zIndex < $1.zIndex }) { widget in
+                                        dashboardWidget(widget)
+                                    }
+                                }
+                                Button("Edit Dashboard") { editorPresented = true }
+                                    .buttonStyle(.bordered)
+                                    .accessibilityIdentifier("edit-dashboard")
+                            } else {
+                                Text("No dashboard profile loaded")
+                                    .foregroundStyle(.secondary)
                             }
                             SignalChart(title: "Wheel speed", points: model.points,
                                         signals: ["ws_fl", "ws_fr"], now: timeline.date)
@@ -40,6 +47,9 @@ struct DashboardView: View {
                 }
                 .background(Color(.systemGroupedBackground))
                 .navigationTitle("Telemetry")
+                .sheet(isPresented: $editorPresented) {
+                    DashboardEditorView(model: model)
+                }
             }.tabItem { Label("Live", systemImage: "gauge.with.dots.needle.67percent") }
             SettingsView(model: model).tabItem { Label("Connection", systemImage: "network") }
         }.tint(.cyan)
@@ -80,6 +90,23 @@ struct DashboardView: View {
             Text(unit).font(.caption).foregroundStyle(.secondary)
         }.frame(maxWidth: .infinity, alignment: .leading).padding()
             .background(.background, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func dashboardWidget(_ widget: DashboardWidgetDefinition) -> some View {
+        let value = widget.signalID.flatMap { model.frame?.sig[$0] }
+        let decimals = widget.configuration.decimals
+        return VStack(alignment: .leading, spacing: 5) {
+            Text(widget.configuration.label).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+            Text(value.map { String(format: "%.*f", decimals, $0) } ?? "-")
+                .font(.system(size: 34, weight: .semibold, design: .rounded)).monospacedDigit()
+                .contentTransition(.numericText())
+                .animation(.linear(duration: 0.1), value: value)
+            Text(widget.configuration.unit).font(.caption).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(.background, in: RoundedRectangle(cornerRadius: 16))
+        .accessibilityIdentifier("profile-widget-\(widget.id)")
     }
 
     private func locationCard(at now: Date) -> some View {
