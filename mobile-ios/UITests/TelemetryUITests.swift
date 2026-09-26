@@ -76,6 +76,14 @@ final class TelemetryUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["measurement-export-status"].waitForExistence(timeout: 5))
     }
 
+    func testMeasurementCSVExportControlIsVisible() {
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
+        app.tabBars.buttons["Connection"].tap()
+        XCTAssertTrue(app.buttons["export-measurement-csv"].waitForExistence(timeout: 5))
+    }
+
     func testDashboardEditorExposesPageAndLayoutControls() {
         let app = XCUIApplication()
         app.launch()

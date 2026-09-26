@@ -29,6 +29,30 @@ public struct PersistedMeasurement: Codable, Equatable, Sendable {
     }
 }
 
+public struct PersistedMeasurementSession: Codable, Equatable, Sendable {
+    public let sessionID: String
+    public let startedAt: Double
+    public let endedAt: Double?
+
+    public init(sessionID: String, startedAt: Double, endedAt: Double?) {
+        self.sessionID = sessionID
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+    }
+}
+
+public struct MeasurementExport: Codable, Equatable, Sendable {
+    public let schemaVersion: Int
+    public let session: PersistedMeasurementSession
+    public let measurements: [PersistedMeasurement]
+
+    public init(session: PersistedMeasurementSession, measurements: [PersistedMeasurement]) {
+        schemaVersion = 1
+        self.session = session
+        self.measurements = measurements
+    }
+}
+
 public actor MeasurementRecorder {
     private static let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
     private let db: OpaquePointer
@@ -158,6 +182,41 @@ public actor MeasurementRecorder {
         return try encoder.encode(export())
     }
 
+    public func exportSessionJSON() throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return try encoder.encode(MeasurementExport(session: exportSession(), measurements: export()))
+    }
+
+    public func exportCSV() throws -> Data {
+        let header = "sequence,session_id,kind,source_timestamp,received_at,received_monotonic,payload_json"
+        let lines = try export().map { row in
+            [
+                String(row.sequence),
+                row.sessionID,
+                row.kind,
+                String(row.sourceTimestamp),
+                String(row.receivedAtEpoch),
+                String(row.receivedAtMonotonicNanos),
+                row.payloadJSON
+            ].map(Self.csvField).joined(separator: ",")
+        }
+        return Data(([header] + lines).joined(separator: "\n").appending("\n").utf8)
+    }
+
+    public func exportSession() throws -> PersistedMeasurementSession {
+        let query = try Self.prepare(db, "SELECT started_at, ended_at FROM measurement_sessions WHERE session_id=?")
+        defer { sqlite3_finalize(query) }
+        try Self.bind(sessionID, to: query, index: 1)
+        guard sqlite3_step(query) == SQLITE_ROW else { throw TelemetryError.storage }
+        let endedAt = sqlite3_column_type(query, 1) == SQLITE_NULL ? nil : sqlite3_column_double(query, 1)
+        return PersistedMeasurementSession(
+            sessionID: sessionID,
+            startedAt: sqlite3_column_double(query, 0),
+            endedAt: endedAt
+        )
+    }
+
     private struct EncodedRow {
         let kind: String
         let sourceTimestamp: Double
@@ -238,5 +297,12 @@ public actor MeasurementRecorder {
     private static func bind(_ value: String, to statement: OpaquePointer, index: Int32) throws {
         let result = value.withCString { sqlite3_bind_text(statement, index, $0, -1, transient) }
         guard result == SQLITE_OK else { throw TelemetryError.storage }
+    }
+
+    private static func csvField(_ value: String) -> String {
+        guard value.contains(where: { $0 == "," || $0 == "\"" || $0 == "\n" || $0 == "\r" }) else {
+            return value
+        }
+        return "\"" + value.replacingOccurrences(of: "\"", with: "\"\"") + "\""
     }
 }

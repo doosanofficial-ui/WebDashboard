@@ -621,11 +621,26 @@ final class TelemetryModel: NSObject {
             return nil
         }
         do {
-            let data = try await localRecorder.exportJSON()
+            let data = try await localRecorder.exportSessionJSON()
             exportStatus = "Export ready: \(data.count) bytes"
             return data
         } catch {
             exportStatus = "Measurement export failed"
+            return nil
+        }
+    }
+
+    func exportMeasurementCSV() async -> Data? {
+        guard let localRecorder else {
+            exportStatus = "Local recorder unavailable"
+            return nil
+        }
+        do {
+            let data = try await localRecorder.exportCSV()
+            exportStatus = "CSV export ready: \(data.count) bytes"
+            return data
+        } catch {
+            exportStatus = "CSV export failed"
             return nil
         }
     }

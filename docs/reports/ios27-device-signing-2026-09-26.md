@@ -13,7 +13,8 @@ compatibility or release approval.
 - Build SDK: iOS 26.2, not iOS 27
 - Xcode account: Personal Team, Team ID 548HKZYKDP
 - Previous app version: 0.1.1, build 1
-- Current feature build: 0.2.0, build 1
+- Previous feature build: 0.2.0, build 1
+- Current feature build: 0.3.0, build 1
 
 ## Evidence
 
@@ -108,6 +109,14 @@ The current signal-quality timeout build was then installed and launched:
 - Install/launch artifacts: `/tmp/telemetry-ios-device-run.K5CPXX/`
 - Result: **physical launch PASS**
 - Process observed: `Telemetry.app/Telemetry`, PID `20677`
+
+The v0.3.0 session-envelope/CSV export build was then installed and launched:
+
+- Build artifact: `/tmp/telemetry-ios-device-export.c7gtN1`
+- Install/launch artifacts: `/tmp/telemetry-ios-device-run.swoXAp/`
+- Bundle version: `0.3.0` build `1`
+- Result: **physical launch PASS**
+- Process observed: `Telemetry.app/Telemetry`, PID `20683`
 
 ## Limitations
 

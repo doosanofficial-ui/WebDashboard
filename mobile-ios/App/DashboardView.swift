@@ -46,6 +46,8 @@ private struct SettingsView: View {
     @State private var importingAdapterProfile = false
     @State private var exportDocument: MeasurementExportDocument?
     @State private var exportPresented = false
+    @State private var csvExportDocument: MeasurementCSVExportDocument?
+    @State private var csvExportPresented = false
 
     var body: some View {
         NavigationStack {
@@ -100,6 +102,14 @@ private struct SettingsView: View {
                         }
                     }
                     .accessibilityIdentifier("export-measurement-json")
+                    Button("Export measurement CSV") {
+                        Task {
+                            guard let data = await model.exportMeasurementCSV() else { return }
+                            csvExportDocument = MeasurementCSVExportDocument(data: data)
+                            csvExportPresented = true
+                        }
+                    }
+                    .accessibilityIdentifier("export-measurement-csv")
                     Text(model.exportStatus)
                         .font(.caption)
                         .foregroundStyle(TelemetryTheme.mutedText)
@@ -183,6 +193,16 @@ private struct SettingsView: View {
             ) { result in
                 if case .failure = result {
                     model.exportStatus = "Measurement export failed"
+                }
+            }
+            .fileExporter(
+                isPresented: $csvExportPresented,
+                document: csvExportDocument,
+                contentType: .commaSeparatedText,
+                defaultFilename: "telemetry-measurements"
+            ) { result in
+                if case .failure = result {
+                    model.exportStatus = "CSV export failed"
                 }
             }
         }

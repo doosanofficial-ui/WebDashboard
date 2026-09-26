@@ -47,6 +47,17 @@ final class MeasurementRecorderTests: XCTestCase {
         let json = try await reopened.exportJSON()
         let decoded = try JSONDecoder().decode([PersistedMeasurement].self, from: json)
         XCTAssertEqual(decoded, rows)
+
+        let envelope = try JSONDecoder().decode(MeasurementExport.self, from: await reopened.exportSessionJSON())
+        XCTAssertEqual(envelope.schemaVersion, 1)
+        XCTAssertEqual(envelope.session.sessionID, sessionID)
+        XCTAssertEqual(envelope.session.startedAt, 90)
+        XCTAssertEqual(envelope.session.endedAt, 101)
+        XCTAssertEqual(envelope.measurements, rows)
+
+        let csv = String(decoding: try await reopened.exportCSV(), as: UTF8.self)
+        XCTAssertTrue(csv.hasPrefix("sequence,session_id,kind,source_timestamp,received_at,received_monotonic,payload_json\n"))
+        XCTAssertTrue(csv.contains("\"{\"\"name\"\":\"\"monitoring_started\"\"}\""))
     }
 
     func testLocationExportPreservesOriginalTimestampAndCoordinates() async throws {
