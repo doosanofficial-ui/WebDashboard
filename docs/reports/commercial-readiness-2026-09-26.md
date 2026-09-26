@@ -32,7 +32,7 @@ This is an evidence checkpoint, not a release approval.
 | Server tests | PASS, 63 tests | `/tmp/webdashboard-verify-20260924.Z9wDKb/python/bin/python -m unittest discover -s server/tests -p 'test*.py'` |
 | GPS/web contract tests | PASS, 28 tests | `node --experimental-vm-modules --test scripts/tests/gps-data-integrity.test.mjs` |
 | Service worker tests | PASS, 8 tests | `node scripts/tests/service-worker.test.mjs` |
-| UI runtime test | NOT VERIFIED | Xcode simulator runner entered stopped/worker-materialization state before assertion; no PASS claimed |
+| UI runtime smoke | PASS | Direct install/launch on iPhone 17 Pro iOS 26.2 showed `Local recorder ready`, profile-defined Speed/FR/RL/RR/Yaw/Ay widgets, and Dashboard Editor; XCTest runner remains unreliable |
 | iOS 27 build | NOT RUN | Host has Xcode 26.3 / iOS 26.2 SDK |
 | BT4N live profile | NOT RUN | No observed GATT/serial profile or firmware capture |
 | Santa Fe MX5 HEV vehicle capture | NOT RUN | Model year/market and raw CAN access remain unverified |
@@ -60,3 +60,8 @@ The current software tests establish deterministic parsing, storage, and error
 handling. They do not establish BT4N compatibility, vehicle CAN visibility,
 iOS 27 compatibility, background execution guarantees, CarPlay approval, or
 power-loss durability. Those gates remain explicitly open.
+
+The direct simulator smoke is not a physical iPhone or iOS 27 result. The
+XCTest runner was separately interrupted by the simulator worker before its
+assertion, so the direct accessibility observation and XCTest result are kept
+as separate evidence classes.
