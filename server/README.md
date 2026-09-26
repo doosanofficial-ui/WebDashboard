@@ -2,6 +2,24 @@
 
 ## 1분 실행 (Windows PowerShell)
 
+권장 운영 진입점은 의존성 hash를 확인하는 `start.ps1`입니다.
+
+```powershell
+cd server
+.\start.ps1
+```
+
+LAN/iPad 테스트가 필요한 경우에만 명시적으로 외부 바인딩합니다.
+
+```powershell
+.\start.ps1 -HostAddress 0.0.0.0 -Port 8080
+```
+
+탐색기에서 실행하려면 `start.cmd`를 사용합니다. 최초 실행 시 `server/.venv`
+를 만들고 `requirements.txt`가 변경된 경우에만 패키지를 갱신합니다.
+
+수동 실행 경로:
+
 ```powershell
 cd server
 py -3.11 -m venv .venv
@@ -9,6 +27,10 @@ py -3.11 -m venv .venv
 pip install -r requirements.txt
 python app.py
 ```
+
+`start.ps1`/`start.cmd`는 이 Mac에서는 PowerShell 런타임이 없어 syntax/runtime
+검증을 수행할 수 없습니다. Windows clean-machine C09 gate에서 실제 실행,
+재부팅 후 설정 보존, 방화벽/롤백을 별도로 검증해야 합니다.
 
 기본 주소(보수 설정):
 - HTTP: `http://127.0.0.1:8080`
