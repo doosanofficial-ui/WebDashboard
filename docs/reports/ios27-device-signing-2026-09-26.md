@@ -1,7 +1,8 @@
 # iPhone 17 Signing and Install Checkpoint
 
-Checked: 2026-09-26. This is a physical-device signing/install checkpoint,
-not an iOS 27 production compatibility or release approval.
+Checked: 2026-09-26; physical launch follow-up: 2026-09-27. This is a
+physical-device signing/install/launch checkpoint, not an iOS 27 production
+compatibility or release approval.
 
 ## Observed environment
 
@@ -37,20 +38,28 @@ devicectl device install app also returned installed and listed:
 - Version: 0.1.1
 - Build: 1
 
-## Current launch result
+## Launch follow-up
 
-devicectl device process launch was denied by SpringBoard with:
+The initial launch attempt was denied by SpringBoard because the Personal Team
+developer had not yet been trusted on the phone. After the user completed the
+device-side developer trust flow, the same signed app was verified again with:
 
-Unable to launch because the application was not explicitly trusted by the user.
+```sh
+DEVICE_ID=2C0892EB-662D-5D9A-A908-96EA723DEEB4 \
+APP_PATH=/tmp/telemetry-ios-device-verify.58nYom/app-build/Build/Products/Debug-iphoneos/Telemetry.app \
+./mobile-ios/scripts/verify_device.sh
+```
 
-The local signature and provisioning profile checks pass, and Developer Mode is
-enabled. Therefore the remaining observed boundary is device-side developer
-trust/verification, not a compile or profile-mismatch failure.
+Result: **physical launch PASS**.
 
-On the physical iPhone, open the installed Telemetry app once. If iOS presents
-an untrusted/verification prompt, complete the device trust/verification flow
-in Settings for the Apple development account, ensure the phone has internet
-access, then retry launch from Xcode or devicectl.
+- `devicectl` installed bundle `local.webdashboard.Telemetry`, version `0.1.1`, build `1`.
+- `devicectl` returned `Launched application with local.webdashboard.Telemetry bundle identifier.`
+- The process list observed `Telemetry.app/Telemetry` at PID `20622`.
+- Verification artifacts: `/tmp/telemetry-ios-device-run.tyM1je/`
+
+This proves installation and process launch after trust. It does not yet prove
+first-run GPS permission handling, live CAN transport, recording endurance, or
+background execution.
 
 ## Limitations
 

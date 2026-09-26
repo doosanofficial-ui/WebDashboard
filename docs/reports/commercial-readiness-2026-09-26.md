@@ -1,6 +1,6 @@
 # Commercial Readiness Checkpoint: iOS CAN/GPS Dashboard
 
-Checked: 2026-09-26. Branch: `codex/native-telemetry-productization`.
+Checked: 2026-09-26; physical launch follow-up: 2026-09-27. Branch: `codex/native-telemetry-productization`.
 This is an evidence checkpoint, not a release approval.
 Current native development version: `0.1.1` (build `1`).
 
@@ -73,7 +73,7 @@ Current native development version: `0.1.1` (build `1`).
 | iOS 27 build | NOT RUN | Host has Xcode 26.3 / iOS 26.2 SDK |
 | iPhone 17 physical build | PASS (SDK boundary) | Personal Team signed device build with Xcode 26.3/iOS 26.2 SDK; not an iOS 27 SDK result |
 | iPhone 17 physical install | PASS | devicectl installed Telemetry 0.1.1 build 1 |
-| iPhone 17 physical launch | BLOCKED BY DEVICE TRUST | SpringBoard denied launch until the Personal Team developer is explicitly trusted/verified on the phone |
+| iPhone 17 physical launch | PASS (launch boundary) | After device-side trust was completed, `verify_device.sh` returned `Physical launch PASS`; process `Telemetry.app/Telemetry` observed at PID `20622`; artifacts `/tmp/telemetry-ios-device-run.tyM1je/` |
 | Software ELM vertical slice | PASS | Direct simulator demo adapter start/monitor/stop; not a BT4N or vehicle result |
 | CarPlay external display host | PASS (display only) | Simulator `I/O > External Displays > CarPlay` opened the default CarPlay home screen; app rendering was not claimed |
 | BT4N live profile | NOT RUN | No observed GATT/serial profile or firmware capture |
@@ -83,7 +83,7 @@ Current native development version: `0.1.1` (build `1`).
 ## Release blockers
 
 - Install Xcode 27 and verify the exact iPhone 17 iOS 27 build on hardware; the current Personal Team build only proves signing/install with the 26.2 SDK.
-- Complete device-side trust/verification, then repeat physical launch and first-run runtime evidence.
+- Collect first-run physical runtime evidence for GPS permission handling, live CAN/adapter state, recording, and app lifecycle; launch alone does not establish those behaviors.
 - Discover and record the NANICAR ELM327-BT4N transport, services, characteristics,
   framing, protocol, and supported commands without storing secrets or VIN data.
 - Verify one stationary CAN ID and one signal against a trusted reference on the
