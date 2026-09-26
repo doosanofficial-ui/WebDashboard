@@ -103,8 +103,8 @@ Current native development version: `0.4.0` (build `1`).
 | Native app build after hardening | PASS | XcodeGen-generated `0.4.0` project, Xcode 26.3/iOS 26.2 Simulator SDK; `/tmp/telemetry-ios-verify.WQVzdn` |
 | MapKit track widget compile | PASS | Native target includes `MapKit`, `MapPolyline`, and bounded GPS track model; runtime GPS fix not run |
 | BLE discovery probe compile | PASS | Native target compile; physical BT4N GATT observation not run |
-| Current cockpit visual smoke | PASS (simulator render) | `0.3.1` iPhone 17 Pro simulator screenshot: `docs/reports/evidence/swiftui-cockpit-v031-2026-09-27.png`; disconnected/stale state rendered safely |
-| iOS application build | PASS | Xcode 26.3, iOS 26.2 Simulator SDK, `/tmp/telemetry-ios-verify.YgmE0Q`; bundle version `0.1.1 (1)` |
+| Current cockpit visual smoke | PASS (simulator render) | `0.4.0` iPhone 17 Pro simulator screenshot: `docs/reports/evidence/swiftui-cockpit-v040-2026-09-27.png`; disconnected/stale state rendered safely |
+| iOS application build | PASS | XcodeGen-generated `0.4.0`, Xcode 26.3/iOS 26.2 Simulator SDK, `/tmp/telemetry-ios-verify.5iGwT4`; bundle version `0.4.0 (1)` |
 | Server tests | PASS, 65 tests | `/tmp/webdashboard-verify-20260924.Z9wDKb/python/bin/python -m unittest discover -s server/tests -p 'test*.py'` |
 | GPS/web contract tests | PASS, 28 tests | `node --experimental-vm-modules --test scripts/tests/gps-data-integrity.test.mjs` |
 | Service worker tests | PASS, 8 tests | `node scripts/tests/service-worker.test.mjs` |
