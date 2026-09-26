@@ -28,7 +28,9 @@ This is an evidence checkpoint, not a release approval.
 - Compile-gated, status-only CarPlay projection. No entitlement key or CarPlay
   scene manifest was invented.
 - Versioned dashboard profile JSON with typed numeric widgets, persisted profile
-  loading, editor duplicate/delete/snap operations, and a SwiftUI editor view.
+  loading, legacy default-grid migration, page lifecycle, rect/z-order editing,
+  drag/resize grid canvas, page selection, duplicate/delete/snap operations, and a
+  SwiftUI editor view.
 - Windows `start.ps1`/`start.cmd` bootstrap path with requirements hash tracking,
   and default-deny CORS with explicit `ALLOWED_ORIGINS` opt-in.
 - Simulator software vertical slice: `MockCANTransport -> ELM327Session ->
@@ -45,14 +47,14 @@ This is an evidence checkpoint, not a release approval.
 
 | Area | Result | Evidence |
 | --- | --- | --- |
-| Swift Core tests | PASS, 56 tests | `swift test --package-path mobile-ios/TelemetryCore` |
-| iOS application build | PASS | Xcode 26.3, iOS 26.2 Simulator SDK, `/tmp/telemetry-ios-verify.z1cvJG` |
+| Swift Core tests | PASS, 59 tests | `swift test --package-path mobile-ios/TelemetryCore` |
+| iOS application build | PASS | Xcode 26.3, iOS 26.2 Simulator SDK, `/tmp/telemetry-ios-verify.mmFJlr` |
 | Server tests | PASS, 65 tests | `/tmp/webdashboard-verify-20260924.Z9wDKb/python/bin/python -m unittest discover -s server/tests -p 'test*.py'` |
 | GPS/web contract tests | PASS, 28 tests | `node --experimental-vm-modules --test scripts/tests/gps-data-integrity.test.mjs` |
 | Service worker tests | PASS, 8 tests | `node scripts/tests/service-worker.test.mjs` |
 | GitHub smoke | PASS, server/client/mobile | PR #23 run `36242750253` |
 | Native Reliability | PASS, Core + Linux/Windows contracts | PR #23 run `36242749947` |
-| UI runtime smoke | PASS | Direct install/launch on the iPhone 17 Pro **simulator** with iOS 26.2 showed `Local recorder ready`, profile-defined Speed/FR/RL/RR/Yaw/Ay widgets, Dashboard Editor, and a duplicated Speed widget; this is not the target physical iPhone 17/iOS 27 result, and XCTest runner remains unreliable |
+| UI runtime smoke | PASS | Direct install/launch on the iPhone 17 Pro **simulator** with iOS 26.2 showed non-overlapping migrated Speed/FR/RL/RR/Yaw/Ay grid widgets, local recorder, and Dashboard Editor controls; this is not the target physical iPhone 17/iOS 27 result, and XCTest runner remains unreliable |
 | iOS 27 build | NOT RUN | Host has Xcode 26.3 / iOS 26.2 SDK |
 | Software ELM vertical slice | PASS | Direct simulator demo adapter start/monitor/stop; not a BT4N or vehicle result |
 | BT4N live profile | NOT RUN | No observed GATT/serial profile or firmware capture |
@@ -73,9 +75,9 @@ This is an evidence checkpoint, not a release approval.
 - Resolve the simulator UI runner issue and obtain a readable assertion result.
 - Finish Windows clean-machine packaging, rollback, and real Vector/CANoe bridge
   acceptance.
-- Complete the configurable multi-widget dashboard editor against live signal state;
-  the current profile editor supports persisted dashboard profile editing, duplicate,
-  delete and grid snap, but not the full production editor acceptance scope.
+- Complete the configurable widget-type rendering and full production editor acceptance
+  scope; the current editor now persists pages, orientation, rect drag/resize, z-order,
+  duplicate/delete and grid snap, while advanced LED/bit/map widget rendering remains.
 
 ## Evidence boundary
 

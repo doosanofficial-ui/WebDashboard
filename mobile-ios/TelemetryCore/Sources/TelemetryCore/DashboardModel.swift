@@ -6,6 +6,8 @@ public enum DashboardModelError: Error, Equatable, Sendable {
     case duplicatePageID(String)
     case duplicateWidgetID(String)
     case missingWidgetID(String)
+    case missingPageID(String)
+    case cannotDeleteLastPage
 }
 
 public enum DashboardOrientation: String, Codable, Equatable, Sendable {
@@ -35,8 +37,8 @@ public struct DashboardRect: Codable, Equatable, Sendable {
     public let height: Int
 
     public init(x: Int, y: Int, width: Int, height: Int) {
-        self.x = x
-        self.y = y
+        self.x = max(0, x)
+        self.y = max(0, y)
         self.width = max(1, width)
         self.height = max(1, height)
     }
@@ -144,6 +146,29 @@ public struct DashboardPage: Codable, Equatable, Identifiable, Sendable {
         widgets.append(widget)
     }
 
+    public mutating func updateWidgetRect(id: String, rect: DashboardRect) throws {
+        guard let index = widgets.firstIndex(where: { $0.id == id }) else {
+            throw DashboardModelError.missingWidgetID(id)
+        }
+        widgets[index].rect = rect
+    }
+
+    public mutating func bringWidgetToFront(id: String) throws {
+        guard let index = widgets.firstIndex(where: { $0.id == id }) else {
+            throw DashboardModelError.missingWidgetID(id)
+        }
+        let top = widgets.map(\.zIndex).max() ?? 0
+        widgets[index].zIndex = top + 1
+    }
+
+    public mutating func setWidgetLayout(id: String, rect: DashboardRect, zIndex: Int) throws {
+        guard let index = widgets.firstIndex(where: { $0.id == id }) else {
+            throw DashboardModelError.missingWidgetID(id)
+        }
+        widgets[index].rect = rect
+        widgets[index].zIndex = zIndex
+    }
+
     @discardableResult
     public mutating func deleteWidget(id: String) -> Bool {
         let oldCount = widgets.count
@@ -220,6 +245,46 @@ public struct DashboardProfile: Codable, Equatable, Identifiable, Sendable {
         try pages[index].addWidget(widget)
     }
 
+    public mutating func addPage(_ page: DashboardPage) throws {
+        guard !pages.contains(where: { $0.id == page.id }) else {
+            throw DashboardModelError.duplicatePageID(page.id)
+        }
+        pages.append(page)
+    }
+
+    @discardableResult
+    public mutating func deletePage(id: String) throws -> Bool {
+        guard pages.contains(where: { $0.id == id }) else {
+            throw DashboardModelError.missingPageID(id)
+        }
+        guard pages.count > 1 else { throw DashboardModelError.cannotDeleteLastPage }
+        pages.removeAll { $0.id == id }
+        return true
+    }
+
+    public mutating func setPageOrientation(pageID: String, orientation: DashboardOrientation) throws {
+        guard let index = pages.firstIndex(where: { $0.id == pageID }) else {
+            throw DashboardModelError.missingPageID(pageID)
+        }
+        let page = pages[index]
+        pages[index] = DashboardPage(id: page.id, name: page.name, orientation: orientation,
+                                     widgets: page.widgets)
+    }
+
+    public mutating func updateWidgetRect(pageID: String, widgetID: String, rect: DashboardRect) throws {
+        guard let index = pages.firstIndex(where: { $0.id == pageID }) else {
+            throw DashboardModelError.missingPageID(pageID)
+        }
+        try pages[index].updateWidgetRect(id: widgetID, rect: rect)
+    }
+
+    public mutating func bringWidgetToFront(pageID: String, widgetID: String) throws {
+        guard let index = pages.firstIndex(where: { $0.id == pageID }) else {
+            throw DashboardModelError.missingPageID(pageID)
+        }
+        try pages[index].bringWidgetToFront(id: widgetID)
+    }
+
     public mutating func duplicateWidget(pageID: String, widgetID: String, newID: String) throws {
         guard let index = pages.firstIndex(where: { $0.id == pageID }) else {
             throw DashboardModelError.invalidProfile
@@ -236,5 +301,31 @@ public struct DashboardProfile: Codable, Equatable, Identifiable, Sendable {
     public mutating func snapToGrid(pageID: String, grid: Int) {
         guard let index = pages.firstIndex(where: { $0.id == pageID }) else { return }
         pages[index].snapToGrid(grid)
+    }
+
+    /// Migrates the original MVP default, where every built-in widget shared one rect.
+    /// Custom overlapping layouts are left untouched because they may be intentional.
+    @discardableResult
+    public mutating func migrateLegacyDefaultGrid() -> Bool {
+        var changed = false
+        let legacyWidgetIDs: Set<String> = ["ws-fl", "ws-fr", "ws-rl", "ws-rr", "yaw", "ay"]
+        for pageIndex in pages.indices {
+            let widgets = pages[pageIndex].widgets
+            let defaultRect = DashboardRect(x: 0, y: 0, width: 2, height: 1)
+            let legacyWidgets = widgets.filter {
+                legacyWidgetIDs.contains($0.id) && $0.rect == defaultRect
+            }
+            guard legacyWidgets.count > 1 else { continue }
+            var page = pages[pageIndex]
+            for (widgetIndex, widget) in legacyWidgets.enumerated() {
+                let rect = DashboardRect(x: (widgetIndex % 3) * 2,
+                                         y: (widgetIndex / 3) * 1,
+                                         width: 2, height: 1)
+                try? page.setWidgetLayout(id: widget.id, rect: rect, zIndex: widgetIndex)
+            }
+            pages[pageIndex] = page
+            changed = true
+        }
+        return changed
     }
 }

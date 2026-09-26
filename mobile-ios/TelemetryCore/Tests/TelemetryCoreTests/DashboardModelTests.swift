@@ -59,4 +59,48 @@ final class DashboardModelTests: XCTestCase {
         page.snapToGrid(8)
         XCTAssertEqual(page.widgets[0].rect, DashboardRect(x: 16, y: 16, width: 144, height: 64))
     }
+
+    func testWidgetRectAndZOrderCanBeUpdatedByID() throws {
+        var page = DashboardPage(id: "main", name: "Main", orientation: .landscape,
+                                 widgets: [widget(), widget(id: "rpm")])
+        try page.updateWidgetRect(id: "speed", rect: DashboardRect(x: 24, y: 16, width: 0, height: 0))
+        XCTAssertEqual(page.widgets[0].rect, DashboardRect(x: 24, y: 16, width: 1, height: 1))
+        try page.bringWidgetToFront(id: "speed")
+        XCTAssertGreaterThan(page.widgets[0].zIndex, page.widgets[1].zIndex)
+    }
+
+    func testProfilePageLifecycleProtectsLastPage() throws {
+        var profile = try profile()
+        try profile.addPage(DashboardPage(id: "debug", name: "Debug", orientation: .portrait, widgets: []))
+        XCTAssertEqual(profile.pages.map(\.id), ["main", "debug"])
+        try profile.setPageOrientation(pageID: "main", orientation: .portrait)
+        XCTAssertEqual(profile.pages[0].orientation, .portrait)
+        XCTAssertTrue(try profile.deletePage(id: "debug"))
+        XCTAssertThrowsError(try profile.deletePage(id: "main")) { error in
+            XCTAssertEqual(error as? DashboardModelError, .cannotDeleteLastPage)
+        }
+    }
+
+    func testLegacyDefaultGridMigrationOnlyTouchesSharedDefaultRects() throws {
+        var first = widget(id: "ws-fl")
+        var second = widget(id: "ws-fr")
+        var third = widget(id: "ws-rl")
+        first.rect = DashboardRect(x: 0, y: 0, width: 2, height: 1)
+        second.rect = first.rect
+        third.rect = first.rect
+        var profile = try DashboardProfile(
+            id: "legacy", name: "Legacy", pages: [DashboardPage(
+                id: "main", name: "Main", orientation: .landscape,
+                widgets: [first, second, third]
+            )]
+        )
+        XCTAssertTrue(profile.migrateLegacyDefaultGrid())
+        let rects = profile.pages[0].widgets.map(\.rect)
+        XCTAssertEqual(rects, [
+            DashboardRect(x: 0, y: 0, width: 2, height: 1),
+            DashboardRect(x: 2, y: 0, width: 2, height: 1),
+            DashboardRect(x: 4, y: 0, width: 2, height: 1)
+        ])
+        XCTAssertFalse(profile.migrateLegacyDefaultGrid())
+    }
 }

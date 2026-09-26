@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 struct DashboardView: View {
     @Bindable var model: TelemetryModel
     @State private var editorPresented = false
+    @State private var selectedPageID: String?
     var body: some View {
         TabView {
             NavigationStack {
@@ -14,12 +15,21 @@ struct DashboardView: View {
                         VStack(spacing: 16) {
                             connectionSummary(at: timeline.date)
                             adapterCard()
-                            if let page = model.dashboardProfile?.pages.first {
-                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 145))], spacing: 12) {
-                                    ForEach(page.widgets.sorted { $0.zIndex < $1.zIndex }) { widget in
-                                        dashboardWidget(widget)
+                            if let profile = model.dashboardProfile,
+                               let page = profile.pages.first(where: { $0.id == selectedPageID }) ?? profile.pages.first {
+                                if profile.pages.count > 1 {
+                                    Picker("Dashboard page", selection: Binding(
+                                        get: { selectedPageID ?? page.id },
+                                        set: { selectedPageID = $0 }
+                                    )) {
+                                        ForEach(profile.pages) { page in
+                                            Text(page.name).tag(page.id)
+                                        }
                                     }
+                                    .pickerStyle(.menu)
+                                    .accessibilityIdentifier("live-page-picker")
                                 }
+                                dashboardCanvas(page)
                                 Button("Edit Dashboard") { editorPresented = true }
                                     .buttonStyle(.bordered)
                                     .accessibilityIdentifier("edit-dashboard")
@@ -142,6 +152,32 @@ struct DashboardView: View {
         .padding()
         .background(.background, in: RoundedRectangle(cornerRadius: 16))
         .accessibilityIdentifier("profile-widget-\(widget.id)")
+    }
+
+    private func dashboardCanvas(_ page: DashboardPage) -> some View {
+        let columns = page.orientation == .portrait ? 4 : 6
+        let maxRow = max(4, (page.widgets.map { $0.rect.y + $0.rect.height }.max() ?? 4) + 1)
+        return GeometryReader { proxy in
+            let cell = max(42, proxy.size.width / CGFloat(columns))
+            ZStack(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(Color(.secondarySystemGroupedBackground))
+                ForEach(page.widgets.sorted { $0.zIndex < $1.zIndex }) { widget in
+                    dashboardWidget(widget)
+                        .frame(width: max(36, cell * CGFloat(widget.rect.width) - 8),
+                               height: max(36, cell * CGFloat(widget.rect.height) - 8),
+                               alignment: .topLeading)
+                        .position(
+                            x: cell * (CGFloat(widget.rect.x) + CGFloat(widget.rect.width) / 2),
+                            y: cell * (CGFloat(widget.rect.y) + CGFloat(widget.rect.height) / 2)
+                        )
+                }
+            }
+            .frame(height: cell * CGFloat(maxRow), alignment: .top)
+        }
+        .frame(minHeight: page.orientation == .portrait ? 420 : 300,
+               maxHeight: page.orientation == .portrait ? 660 : 500)
+        .accessibilityIdentifier("dashboard-canvas-\(page.id)")
     }
 
     private func locationCard(at now: Date) -> some View {

@@ -86,8 +86,13 @@ final class TelemetryModel: NSObject {
                 attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
             dashboardURL = root.appendingPathComponent("dashboard.json")
             if let dashboardURL, let dashboardData = try? Data(contentsOf: dashboardURL),
-               let saved = try? JSONDecoder().decode(DashboardProfile.self, from: dashboardData) {
-                dashboardProfile = saved
+               var saved = try? JSONDecoder().decode(DashboardProfile.self, from: dashboardData) {
+                if saved.migrateLegacyDefaultGrid() {
+                    dashboardProfile = saved
+                    persistDashboardProfile()
+                } else {
+                    dashboardProfile = saved
+                }
             } else {
                 dashboardProfile = Self.defaultDashboardProfile()
                 persistDashboardProfile()
@@ -383,6 +388,44 @@ final class TelemetryModel: NSObject {
         persistDashboardProfile()
     }
 
+    func updateDashboardWidgetRect(pageID: String, widgetID: String, rect: DashboardRect) {
+        guard var profile = dashboardProfile,
+              (try? profile.updateWidgetRect(pageID: pageID, widgetID: widgetID, rect: rect)) != nil else { return }
+        dashboardProfile = profile
+        persistDashboardProfile()
+    }
+
+    func bringDashboardWidgetToFront(pageID: String, widgetID: String) {
+        guard var profile = dashboardProfile,
+              (try? profile.bringWidgetToFront(pageID: pageID, widgetID: widgetID)) != nil else { return }
+        dashboardProfile = profile
+        persistDashboardProfile()
+    }
+
+    func addDashboardPage() {
+        guard var profile = dashboardProfile else { return }
+        let id = "page-" + UUID().uuidString.prefix(8).lowercased()
+        let page = DashboardPage(id: id, name: "Page " + String(profile.pages.count + 1),
+                                 orientation: .landscape, widgets: [])
+        guard (try? profile.addPage(page)) != nil else { return }
+        dashboardProfile = profile
+        persistDashboardProfile()
+    }
+
+    func deleteDashboardPage(pageID: String) {
+        guard var profile = dashboardProfile,
+              (try? profile.deletePage(id: pageID)) != nil else { return }
+        dashboardProfile = profile
+        persistDashboardProfile()
+    }
+
+    func setDashboardOrientation(pageID: String, orientation: DashboardOrientation) {
+        guard var profile = dashboardProfile,
+              (try? profile.setPageOrientation(pageID: pageID, orientation: orientation)) != nil else { return }
+        dashboardProfile = profile
+        persistDashboardProfile()
+    }
+
     private func persistDashboardProfile() {
         guard let dashboardProfile, let dashboardURL,
               let data = try? JSONEncoder().encode(dashboardProfile) else { return }
@@ -394,13 +437,14 @@ final class TelemetryModel: NSObject {
     }
 
     private static func defaultDashboardProfile() -> DashboardProfile? {
-        func widget(_ id: String, _ label: String, _ signalID: String, _ unit: String) -> DashboardWidgetDefinition {
+        func widget(_ id: String, _ label: String, _ signalID: String, _ unit: String,
+                    x: Int, y: Int) -> DashboardWidgetDefinition {
             DashboardWidgetDefinition(
                 id: id,
                 type: .numericGauge,
                 signalID: signalID,
-                rect: DashboardRect(x: 0, y: 0, width: 2, height: 1),
-                zIndex: 0,
+                rect: DashboardRect(x: x, y: y, width: 2, height: 1),
+                zIndex: y * 3 + x / 2,
                 configuration: DashboardWidgetConfiguration(
                     label: label, unit: unit, decimals: 1,
                     minimum: nil, maximum: nil, warningThreshold: nil, criticalThreshold: nil
@@ -413,12 +457,12 @@ final class TelemetryModel: NSObject {
             pages: [DashboardPage(
                 id: "main", name: "Main", orientation: .landscape,
                 widgets: [
-                    widget("ws-fl", "Speed", "ws_fl", "km/h"),
-                    widget("ws-fr", "FR", "ws_fr", "km/h"),
-                    widget("ws-rl", "RL", "ws_rl", "km/h"),
-                    widget("ws-rr", "RR", "ws_rr", "km/h"),
-                    widget("yaw", "Yaw", "yaw", "deg/s"),
-                    widget("ay", "Ay", "ay", "m/s2")
+                    widget("ws-fl", "Speed", "ws_fl", "km/h", x: 0, y: 0),
+                    widget("ws-fr", "FR", "ws_fr", "km/h", x: 2, y: 0),
+                    widget("ws-rl", "RL", "ws_rl", "km/h", x: 4, y: 0),
+                    widget("ws-rr", "RR", "ws_rr", "km/h", x: 0, y: 1),
+                    widget("yaw", "Yaw", "yaw", "deg/s", x: 2, y: 1),
+                    widget("ay", "Ay", "ay", "m/s2", x: 4, y: 1)
                 ]
             )]
         )
