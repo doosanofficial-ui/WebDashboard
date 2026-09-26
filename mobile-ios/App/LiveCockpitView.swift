@@ -46,7 +46,8 @@ struct LiveCockpitView: View {
 
     private func connectionStrip(at now: Date) -> some View {
         let age = model.lastFrameAt.map { now.timeIntervalSince($0) }
-        let fresh = model.connection == "Connected" && (age ?? .infinity) <= 1.5
+        let adapterLive = model.adapterStatus.localizedCaseInsensitiveContains("monitoring")
+        let fresh = (model.connection == "Connected" || adapterLive) && (age ?? .infinity) <= 1.5
         let stateColor = fresh ? TelemetryTheme.valid : TelemetryTheme.warning
         return HStack(spacing: TelemetryTheme.Spacing.small) {
             ZStack {
@@ -62,7 +63,7 @@ struct LiveCockpitView: View {
                     .font(.caption.weight(.bold))
                     .tracking(1.2)
                     .foregroundStyle(TelemetryTheme.mutedText)
-                Text(model.connection.uppercased())
+                Text((adapterLive ? "ADAPTER LIVE" : model.connection).uppercased())
                     .font(.headline.weight(.bold))
                     .foregroundStyle(.white)
                 Text("SEQ \(model.frame?.status.seq.description ?? "-")  ·  DROP \(model.clientDrops + (model.frame?.status.drop ?? 0))")
@@ -598,7 +599,9 @@ struct LiveCockpitView: View {
     }
 
     private func canDataIsFresh(at now: Date) -> Bool {
-        guard model.connection == "Connected", let lastFrameAt = model.lastFrameAt else { return false }
+        let adapterLive = model.adapterStatus.localizedCaseInsensitiveContains("monitoring")
+        guard (model.connection == "Connected" || adapterLive),
+              let lastFrameAt = model.lastFrameAt else { return false }
         return now.timeIntervalSince(lastFrameAt) <= 1.5
     }
 

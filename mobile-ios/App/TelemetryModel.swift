@@ -32,6 +32,7 @@ final class TelemetryModel: NSObject {
     var rawCANText = "-"
     var frame: CanFrame?
     var lastFrameAt: Date?
+    var canSource = "Server"
     var lastLocation: TelemetryEvent?
     var locationTrack: [CLLocationCoordinate2D] = []
     var points: [CanPoint] = []
@@ -194,6 +195,7 @@ final class TelemetryModel: NSObject {
                             }
                             previousSequence = frame.status.seq
                             self.frame = frame; self.lastFrameAt = Date(); self.connection = "Connected"
+                            self.canSource = "Server"
                             backoff = 1
                             if !frame.sig.isEmpty {
                                 self.points.append(CanPoint(time: Date(), signals: frame.sig))
@@ -231,6 +233,7 @@ final class TelemetryModel: NSObject {
     func stopDemoAdapter() {
         demoAdapter.stop()
         adapterSignalValue = nil
+        canSource = "None"
         rawCANText = "-"
         publishCarPlayProjection()
     }
@@ -247,6 +250,7 @@ final class TelemetryModel: NSObject {
     func stopLiveAdapter() {
         liveAdapter.stop()
         adapterSignalValue = nil
+        canSource = "None"
         rawCANText = "-"
         publishCarPlayProjection()
     }
@@ -284,6 +288,7 @@ final class TelemetryModel: NSObject {
         adapterSignalValue = decoded.value
         rawCANText = String(format: "0x%03X  %@", frame.canID,
                             frame.payload.map { String(format: "%02X", $0) }.joined(separator: " "))
+        applyLocalSignals(frame, values: ["demo.signal": decoded.value], source: "Demo")
         record(.can(frame: frame))
         record(.signal(DecodedSignalSample(
             signalID: "demo.signal",
@@ -304,6 +309,11 @@ final class TelemetryModel: NSObject {
         let idFormat = frame.isExtended ? "0x%08X  %@" : "0x%03X  %@"
         rawCANText = String(format: idFormat, frame.canID,
                             frame.payload.map { String(format: "%02X", $0) }.joined(separator: " "))
+        applyLocalSignals(
+            frame,
+            values: Dictionary(uniqueKeysWithValues: decoded.map { ($0.definition.id, $0.decoded.value) }),
+            source: "Adapter"
+        )
         // Raw frames remain valuable even when the current signal catalog does
         // not contain a matching definition. Never drop the source measurement
         // solely because signal decoding is unavailable.
@@ -321,6 +331,24 @@ final class TelemetryModel: NSObject {
             )))
         }
         publishCarPlayProjection()
+    }
+
+    private func applyLocalSignals(_ frame: CANFrame, values: [String: Double], source: String) {
+        guard !values.isEmpty,
+              frame.sequence <= UInt64(Int.max),
+              let snapshot = try? ServerCANFrame(
+                version: 1,
+                serverTimestamp: frame.receivedAtEpoch,
+                signals: values,
+                status: .init(sequence: Int(frame.sequence), drop: 0)
+              ) else { return }
+        let now = Date()
+        self.frame = snapshot
+        lastFrameAt = now
+        canSource = source
+        points.append(CanPoint(time: now, signals: values))
+        points.removeAll { $0.time < now.addingTimeInterval(-60) }
+        if points.count > 600 { points.removeFirst(points.count - 600) }
     }
 
     private func publishCarPlayProjection() {

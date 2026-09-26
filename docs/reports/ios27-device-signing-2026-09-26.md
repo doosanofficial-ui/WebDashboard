@@ -12,7 +12,8 @@ compatibility or release approval.
 - Xcode: 26.3
 - Build SDK: iOS 26.2, not iOS 27
 - Xcode account: Personal Team, Team ID 548HKZYKDP
-- App version: 0.1.1, build 1
+- Previous app version: 0.1.1, build 1
+- Current feature build: 0.2.0, build 1
 
 ## Evidence
 
@@ -76,6 +77,14 @@ same Personal Team and installed on the same phone:
 This rerun is still an Xcode 26.3/iOS 26.2 SDK result against iOS 27.0; it does
 not promote the iOS 27 SDK, GPS permission, BT4N, vehicle CAN, background, or
 CarPlay gates.
+
+The versioned `0.2.0` feature build was then installed and launched again:
+
+- Build artifact: `/tmp/telemetry-ios-device-v020.3ChbUq`
+- Install/launch artifacts: `/tmp/telemetry-ios-device-run.Fjq8oB/`
+- Bundle version: `0.2.0` build `1`
+- Result: **physical launch PASS**
+- Process observed: `Telemetry.app/Telemetry`, PID `20664`
 
 ## Limitations
 

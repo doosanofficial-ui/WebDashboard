@@ -2,7 +2,7 @@
 
 Checked: 2026-09-26; engineering follow-up: 2026-09-27. Branch: `codex/native-telemetry-productization`.
 This is an evidence checkpoint, not a release approval.
-Current native development version: `0.1.1` (build `1`).
+Current native development version: `0.2.0` (build `1`).
 
 ## Implemented in this checkpoint
 
@@ -63,6 +63,9 @@ Current native development version: `0.1.1` (build `1`).
   signal matches.
 - Recoverable live adapter failures recreate the transport/session with bounded
   exponential backoff instead of terminating the monitoring task.
+- Direct demo/live adapter decoded signals now share the validated CAN snapshot and
+  chart buffer used by the cockpit, so native adapter data is visible in gauges and
+  graphs instead of being recorder-only.
 - Foreground GPS now starts with When In Use authorization; Always remains the
   explicit requirement for locked-screen collection. Native MapKit track rendering
   uses a bounded in-memory coordinate history.
@@ -91,9 +94,9 @@ Current native development version: `0.1.1` (build `1`).
 | UI runtime smoke | PASS | Direct install/launch on the iPhone 17 Pro **simulator** with iOS 26.2 showed non-overlapping migrated Speed/FR/RL/RR/Yaw/Ay grid widgets, local recorder, and Dashboard Editor controls; this is not the target physical iPhone 17/iOS 27 result, and XCTest runner remains unreliable |
 | SwiftUI cockpit visual smoke | PASS | Direct install/launch on the iPhone 17 Pro iOS 26.2 simulator; screenshot evidence is stored under docs/reports/evidence/ |
 | iOS 27 build | NOT RUN | Host has Xcode 26.3 / iOS 26.2 SDK |
-| iPhone 17 physical build | PASS (SDK boundary) | Fresh Personal Team build `/tmp/telemetry-ios-device-current.MdU7LB` with Xcode 26.3/iOS 26.2 SDK; not an iOS 27 SDK result |
-| iPhone 17 physical install | PASS | Fresh build installed by `devicectl`; bundle `local.webdashboard.Telemetry`, version `0.1.1` build `1` |
-| iPhone 17 physical launch | PASS (launch boundary) | Fresh `verify_device.sh` run returned `Physical launch PASS`; process `Telemetry.app/Telemetry` observed at PID `20655`; artifacts `/tmp/telemetry-ios-device-run.Wn1dx9/` |
+| iPhone 17 physical build | PASS (SDK boundary) | Fresh `0.2.0` Personal Team build `/tmp/telemetry-ios-device-v020.3ChbUq` with Xcode 26.3/iOS 26.2 SDK; not an iOS 27 SDK result |
+| iPhone 17 physical install | PASS | `0.2.0` build `1` installed by `devicectl` |
+| iPhone 17 physical launch | PASS (launch boundary) | Fresh `verify_device.sh` run returned `Physical launch PASS`; process `Telemetry.app/Telemetry` observed at PID `20664`; artifacts `/tmp/telemetry-ios-device-run.Fjq8oB/` |
 | Software ELM vertical slice | PASS | Direct simulator demo adapter start/monitor/stop; not a BT4N or vehicle result |
 | CarPlay external display host | PASS (display only) | Simulator `I/O > External Displays > CarPlay` opened the default CarPlay home screen; app rendering was not claimed |
 | BT4N live profile | NOT RUN | No observed GATT/serial profile or firmware capture |
