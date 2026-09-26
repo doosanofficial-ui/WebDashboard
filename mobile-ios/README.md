@@ -69,6 +69,9 @@ Xcode response-file parsing failure for NBSP-containing paths. Source hashes,
 compiler logs, Core test output and xcresult stay in the printed artifact directory.
 This is a build snapshot, not a second editable checkout. Edit only this repository.
 Simulator signing uses the local ad-hoc identity; it does not provision a real iPhone.
+Do not open staged /tmp Xcode projects in Xcode 26.3; its Source Control workspace
+status integration has a crash path for that temporary snapshot. Use the shell
+verification command and inspect the printed artifacts instead.
 
 ## Real device
 
