@@ -120,8 +120,10 @@ authorization and requests Always authorization for screen-lock collection.
 Stop ends collection. MARK is shown only after its local durable write completes.
 
 Use Connection > BLE discovery for a read-only GATT observation pass before creating
-an adapter profile. Copy the observed service/characteristic JSON and verify the
-write/notify properties and framing against the physical adapter documentation.
+an adapter profile. Scanning lists advertisements without connecting; tap Inspect
+GATT for the selected peripheral only. Copy the observed service/characteristic JSON
+and verify the write/notify properties and framing against the physical adapter
+documentation.
 
 For locked-screen operation, the native store uses file protection available after
 first unlock. Force-quit, reboot before first unlock, revoked permissions, and OS

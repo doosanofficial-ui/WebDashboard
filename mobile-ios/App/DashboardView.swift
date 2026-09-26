@@ -141,6 +141,10 @@ private struct SettingsView: View {
                             Text("\(device.id.uuidString) · RSSI \(device.rssi) · \(device.state)")
                                 .font(.caption2.monospaced())
                                 .foregroundStyle(TelemetryTheme.mutedText)
+                            Button("Inspect GATT") {
+                                model.inspectBLEDevice(device.id)
+                            }
+                            .font(.caption.weight(.semibold))
                             ForEach(device.services) { service in
                                 Text("Service \(service.id)")
                                     .font(.caption2.monospaced())
@@ -153,7 +157,7 @@ private struct SettingsView: View {
                         }
                         .textSelection(.enabled)
                     }
-                    Text("Discovery only observes GATT metadata. It does not write commands or assume ELM327 UUIDs.")
+                    Text("Scan lists advertisements. Inspect GATT connects only to the selected device, reads service metadata, and never writes commands or assumes ELM327 UUIDs.")
                         .font(.caption)
                         .foregroundStyle(TelemetryTheme.mutedText)
                 }

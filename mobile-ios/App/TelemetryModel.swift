@@ -268,6 +268,8 @@ final class TelemetryModel: NSObject {
 
     func stopBLEScan() { bleDiscovery.stop() }
 
+    func inspectBLEDevice(_ id: UUID) { bleDiscovery.inspect(id) }
+
     func copyBLEObservation() {
         guard let data = bleDiscovery.observationData(),
               let text = String(data: data, encoding: .utf8) else {

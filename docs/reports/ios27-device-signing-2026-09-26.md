@@ -94,6 +94,14 @@ rebuilt and rerun:
 - Result: **physical launch PASS**
 - Process observed: `Telemetry.app/Telemetry`, PID `20670`
 
+The deferred-permission/selected-device BLE probe build was then installed and
+launched:
+
+- Build artifact: `/tmp/telemetry-ios-device-ble.y1h34q`
+- Install/launch artifacts: `/tmp/telemetry-ios-device-run.5ggshA/`
+- Result: **physical launch PASS**
+- Process observed: `Telemetry.app/Telemetry`, PID `20673`
+
 ## Limitations
 
 - This build uses the installed iOS 26.2 SDK against an iOS 27 device. It is

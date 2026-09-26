@@ -26,21 +26,25 @@ final class BLEDiscoveryController: NSObject, @preconcurrency CBCentralManagerDe
     @preconcurrency CBPeripheralDelegate {
     var onUpdate: (([BLEDiscoveredDevice], String) -> Void)?
 
-    private var central: CBCentralManager!
+    private var central: CBCentralManager?
     private var peripherals: [UUID: CBPeripheral] = [:]
     private var devices: [UUID: BLEDiscoveredDevice] = [:]
     private var scanning = false
 
     override init() {
         super.init()
-        central = CBCentralManager(delegate: self, queue: nil, options: [
-            CBCentralManagerOptionShowPowerAlertKey: true
-        ])
     }
 
     func start() {
-        guard central.state == .poweredOn else {
-            publish(status(for: central.state))
+        if central == nil {
+            central = CBCentralManager(delegate: self, queue: nil, options: [
+                CBCentralManagerOptionShowPowerAlertKey: true
+            ])
+            publish("Requesting Bluetooth permission")
+            return
+        }
+        guard let central, central.state == .poweredOn else {
+            publish(status(for: self.central?.state))
             return
         }
         devices.removeAll()
@@ -54,11 +58,26 @@ final class BLEDiscoveryController: NSObject, @preconcurrency CBCentralManagerDe
 
     func stop() {
         scanning = false
-        central.stopScan()
+        central?.stopScan()
         for peripheral in peripherals.values where peripheral.state == .connected {
-            central.cancelPeripheralConnection(peripheral)
+            central?.cancelPeripheralConnection(peripheral)
         }
         publish("BLE scan stopped")
+    }
+
+    func inspect(_ id: UUID) {
+        guard let central, let peripheral = peripherals[id] else {
+            publish("BLE peripheral is no longer available")
+            return
+        }
+        scanning = false
+        central.stopScan()
+        update(id) { $0.state = "connecting for GATT inspection" }
+        if peripheral.state == .connected {
+            peripheral.discoverServices(nil)
+        } else {
+            central.connect(peripheral, options: nil)
+        }
     }
 
     func observationData() -> Data? {
@@ -92,9 +111,6 @@ final class BLEDiscoveryController: NSObject, @preconcurrency CBCentralManagerDe
         devices[peripheral.identifier] = device
         peripheral.delegate = self
         publish("Found \(devices.count) BLE peripheral(s)")
-        if peripheral.state == .disconnected {
-            central.connect(peripheral, options: nil)
-        }
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
@@ -161,7 +177,8 @@ final class BLEDiscoveryController: NSObject, @preconcurrency CBCentralManagerDe
         onUpdate?(devices.values.sorted { $0.name < $1.name }, status)
     }
 
-    private func status(for state: CBManagerState) -> String {
+    private func status(for state: CBManagerState?) -> String {
+        guard let state else { return "Bluetooth manager not started" }
         switch state {
         case .poweredOn: return "Bluetooth ready"
         case .poweredOff: return "Bluetooth is off"
