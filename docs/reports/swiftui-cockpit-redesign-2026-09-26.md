@@ -32,6 +32,7 @@ iPhone/iOS 27 or production release approval.
 | iOS app compile | PASS | Xcode 26.3, iOS 26.2 Simulator SDK; latest artifact /tmp/telemetry-ios-verify.T9DSef |
 | Direct install/launch | PASS | Bundle local.webdashboard.Telemetry installed and launched on iPhone 17 Pro simulator 5BDA4708-2F38-4018-A3A9-023C7DC661A2 |
 | Visual smoke | PASS | evidence/swiftui-cockpit-2026-09-26.png; SHA-256 80e82cc348b4ff283047b3c73511ccf7c1834a68714ef7c3c8ef31d10e8c8aa1 |
+| Landscape visual smoke | PASS | evidence/swiftui-cockpit-landscape-2026-09-26.png; SHA-256 6e269c0e7cfd9d170dea44901407f53c965ccb6c0e9d110efdc897668ca0583d |
 | Semantic XcodeBuildMCP snapshot | UNVERIFIED | Runtime snapshot returned No translation object returned for simulator; direct screenshot remains the visual evidence |
 | XCTest UI runner | UNVERIFIED | Existing xcodebuild test runner stopped in the known environment hang after building the test runner; no assertion result was promoted to PASS |
 
@@ -48,7 +49,7 @@ rendering.
 - Resolve or replace the simulator XCTest runner hang so the new accessibility
   anchors receive an automated assertion result.
 - Repeat the same build on Xcode 27/iOS 27 SDK and the physical iPhone 17.
-- Validate portrait/landscape and iPad regular-width screenshots.
+- Validate iPad regular-width screenshots.
 - Validate live CAN, GPS, recorder, and screen-lock behavior on hardware.
 - Complete Apple Developer team/App ID/CarPlay capability approval before adding
   the scene manifest or entitlement.
