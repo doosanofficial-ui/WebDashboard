@@ -305,6 +305,36 @@ final class TelemetryModel: NSObject {
         }
     }
 
+    func replaceAdapterProfileSignals(_ signals: [SignalDefinition]) -> Bool {
+        guard let profile = adapterProfile, let adapterProfileURL, !signals.isEmpty else {
+            adapterProfileStatus = "Load an adapter profile before editing signals"
+            return false
+        }
+        do {
+            let updated = try AdapterProfile(
+                id: profile.id,
+                name: profile.name,
+                transport: profile.transport,
+                peripheralID: profile.peripheralID,
+                serviceUUID: profile.serviceUUID,
+                writeCharacteristicUUID: profile.writeCharacteristicUUID,
+                notifyCharacteristicUUID: profile.notifyCharacteristicUUID,
+                host: profile.host,
+                port: profile.port,
+                signals: signals
+            )
+            let data = try JSONEncoder().encode(updated)
+            try data.write(to: adapterProfileURL, options: .atomic)
+            adapterProfile = updated
+            adapterProfileStatus = "Profile saved: \(updated.name), \(signals.count) signals"
+            configureLocalSignalTimeouts(signals)
+            return true
+        } catch {
+            adapterProfileStatus = "Signal catalog invalid"
+            return false
+        }
+    }
+
     private func handleDemoFrame(_ frame: CANFrame, decoded: DecodedSignal) {
         adapterStatus = "Demo adapter monitoring"
         adapterSignalValue = decoded.value

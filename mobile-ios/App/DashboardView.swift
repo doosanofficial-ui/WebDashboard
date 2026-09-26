@@ -44,6 +44,7 @@ private struct SettingsView: View {
     @Bindable var model: TelemetryModel
     @State private var credential = ""
     @State private var importingAdapterProfile = false
+    @State private var signalEditorPresented = false
     @State private var exportDocument: MeasurementExportDocument?
     @State private var exportPresented = false
     @State private var csvExportDocument: MeasurementCSVExportDocument?
@@ -126,6 +127,11 @@ private struct SettingsView: View {
                         importingAdapterProfile = true
                     }
                     .accessibilityIdentifier("import-adapter-profile")
+                    Button("Edit signal catalog") {
+                        signalEditorPresented = true
+                    }
+                    .accessibilityIdentifier("edit-signal-catalog")
+                    .disabled(model.adapterProfile == nil)
                     Button("Start live adapter", action: model.startLiveAdapter)
                         .accessibilityIdentifier("start-live-adapter")
                         .disabled(model.adapterProfile == nil)
@@ -193,6 +199,11 @@ private struct SettingsView: View {
             ) { result in
                 if case .failure = result {
                     model.exportStatus = "Measurement export failed"
+                }
+            }
+            .sheet(isPresented: $signalEditorPresented) {
+                if let profile = model.adapterProfile {
+                    SignalCatalogEditorView(model: model, profile: profile)
                 }
             }
             .fileExporter(

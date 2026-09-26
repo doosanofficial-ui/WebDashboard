@@ -72,6 +72,7 @@ final class TelemetryUITests: XCTestCase {
         app.tabBars.buttons["Connection"].tap()
         XCTAssertTrue(app.buttons["import-adapter-profile"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["start-live-adapter"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["edit-signal-catalog"].waitForExistence(timeout: 5))
     }
 
     func testMeasurementExportControlIsVisible() {
