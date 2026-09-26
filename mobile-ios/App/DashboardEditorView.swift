@@ -6,6 +6,14 @@ struct DashboardEditorView: View {
     @Bindable var model: TelemetryModel
     @State private var selectedPageID: String?
     @State private var selectedWidgetID: String?
+    @State private var draftLabel = ""
+    @State private var draftSignalID = ""
+    @State private var draftUnit = ""
+    @State private var draftDecimals = "1"
+    @State private var draftMinimum = ""
+    @State private var draftMaximum = ""
+    @State private var draftWarning = ""
+    @State private var draftCritical = ""
 
     private var selectedPage: DashboardPage? {
         guard let profile = model.dashboardProfile else { return nil }
@@ -36,7 +44,10 @@ struct DashboardEditorView: View {
             }
             .onAppear {
                 if selectedPageID == nil { selectedPageID = model.dashboardProfile?.pages.first?.id }
+                loadDraftFromSelection()
             }
+            .onChange(of: selectedWidgetID) { _, _ in loadDraftFromSelection() }
+            .onChange(of: selectedPageID) { _, _ in loadDraftFromSelection() }
         }
     }
 
@@ -105,10 +116,11 @@ struct DashboardEditorView: View {
         }
     }
 
+    @ViewBuilder
     private func selectionControls(page: DashboardPage) -> some View {
-        Group {
-            if let selectedWidgetID,
-               let widget = page.widgets.first(where: { $0.id == selectedWidgetID }) {
+        if let selectedWidgetID,
+           let widget = page.widgets.first(where: { $0.id == selectedWidgetID }) {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text(widget.configuration.label).font(.caption.weight(.semibold))
                     Spacer()
@@ -124,10 +136,76 @@ struct DashboardEditorView: View {
                     }
                 }
                 .buttonStyle(.bordered)
-                .padding(.horizontal)
-                .padding(.bottom, 6)
+
+                Text("Widget configuration")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+                HStack {
+                    TextField("Label", text: $draftLabel)
+                    TextField("Signal ID", text: $draftSignalID)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
+                HStack {
+                    TextField("Unit", text: $draftUnit)
+                    TextField("Decimals", text: $draftDecimals)
+                        .keyboardType(.numberPad)
+                }
+                HStack {
+                    TextField("Min", text: $draftMinimum).keyboardType(.numbersAndPunctuation)
+                    TextField("Max", text: $draftMaximum).keyboardType(.numbersAndPunctuation)
+                    TextField("Warn", text: $draftWarning).keyboardType(.numbersAndPunctuation)
+                    TextField("Critical", text: $draftCritical).keyboardType(.numbersAndPunctuation)
+                }
+                Button("Apply widget configuration") {
+                    applyDraft(pageID: page.id, widgetID: widget.id)
+                }
+                .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("apply-widget-configuration")
             }
+            .textFieldStyle(.roundedBorder)
+            .padding(.horizontal)
+            .padding(.bottom, 6)
         }
+    }
+
+    private func loadDraftFromSelection() {
+        guard let page = selectedPage,
+              let selectedWidgetID,
+              let widget = page.widgets.first(where: { $0.id == selectedWidgetID }) else { return }
+        draftLabel = widget.configuration.label
+        draftSignalID = widget.signalID ?? ""
+        draftUnit = widget.configuration.unit
+        draftDecimals = String(widget.configuration.decimals)
+        draftMinimum = widget.configuration.minimum.map { String($0) } ?? ""
+        draftMaximum = widget.configuration.maximum.map { String($0) } ?? ""
+        draftWarning = widget.configuration.warningThreshold.map { String($0) } ?? ""
+        draftCritical = widget.configuration.criticalThreshold.map { String($0) } ?? ""
+    }
+
+    private func applyDraft(pageID: String, widgetID: String) {
+        guard let decimals = Int(draftDecimals.trimmingCharacters(in: .whitespacesAndNewlines)) else { return }
+        let configuration = DashboardWidgetConfiguration(
+            label: draftLabel.isEmpty ? "Signal" : draftLabel,
+            unit: draftUnit,
+            decimals: decimals,
+            minimum: optionalDouble(draftMinimum),
+            maximum: optionalDouble(draftMaximum),
+            warningThreshold: optionalDouble(draftWarning),
+            criticalThreshold: optionalDouble(draftCritical)
+        )
+        let signal = draftSignalID.trimmingCharacters(in: .whitespacesAndNewlines)
+        model.updateDashboardWidgetBinding(
+            pageID: pageID,
+            widgetID: widgetID,
+            signalID: signal.isEmpty ? nil : signal,
+            configuration: configuration
+        )
+    }
+
+    private func optionalDouble(_ text: String) -> Double? {
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : Double(value)
     }
 }
 

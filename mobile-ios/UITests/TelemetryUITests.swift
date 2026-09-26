@@ -107,4 +107,14 @@ final class TelemetryUITests: XCTestCase {
         app.buttons["edit-dashboard"].tap()
         XCTAssertTrue(app.buttons["add-dashboard-widget"].waitForExistence(timeout: 5))
     }
+
+    func testDashboardEditorExposesWidgetConfigurationInspector() {
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
+        app.buttons["edit-dashboard"].tap()
+        XCTAssertTrue(app.otherElements["editor-widget-ws-fl"].waitForExistence(timeout: 5))
+        app.otherElements["editor-widget-ws-fl"].tap()
+        XCTAssertTrue(app.buttons["apply-widget-configuration"].waitForExistence(timeout: 5))
+    }
 }

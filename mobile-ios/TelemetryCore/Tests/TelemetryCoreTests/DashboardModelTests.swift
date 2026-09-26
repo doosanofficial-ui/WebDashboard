@@ -90,6 +90,23 @@ final class DashboardModelTests: XCTestCase {
         XCTAssertGreaterThan(page.widgets[0].zIndex, page.widgets[1].zIndex)
     }
 
+    func testWidgetBindingAndConfigurationCanBeUpdatedByID() throws {
+        var profile = try profile()
+        let configuration = DashboardWidgetConfiguration(
+            label: "Yaw rate", unit: "deg/s", decimals: 2,
+            minimum: -50, maximum: 50, warningThreshold: 30, criticalThreshold: 45
+        )
+        try profile.updateWidgetBinding(
+            pageID: "main",
+            widgetID: "speed",
+            signalID: "yaw",
+            configuration: configuration
+        )
+        let widget = try XCTUnwrap(profile.pages[0].widgets.first)
+        XCTAssertEqual(widget.signalID, "yaw")
+        XCTAssertEqual(widget.configuration, configuration)
+    }
+
     func testProfilePageLifecycleProtectsLastPage() throws {
         var profile = try profile()
         try profile.addPage(DashboardPage(id: "debug", name: "Debug", orientation: .portrait, widgets: []))

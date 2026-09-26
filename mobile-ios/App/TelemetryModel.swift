@@ -561,6 +561,23 @@ final class TelemetryModel: NSObject {
         persistDashboardProfile()
     }
 
+    func updateDashboardWidgetBinding(
+        pageID: String,
+        widgetID: String,
+        signalID: String?,
+        configuration: DashboardWidgetConfiguration
+    ) {
+        guard var profile = dashboardProfile,
+              (try? profile.updateWidgetBinding(
+                pageID: pageID,
+                widgetID: widgetID,
+                signalID: signalID,
+                configuration: configuration
+              )) != nil else { return }
+        dashboardProfile = profile
+        persistDashboardProfile()
+    }
+
     func bringDashboardWidgetToFront(pageID: String, widgetID: String) {
         guard var profile = dashboardProfile,
               (try? profile.bringWidgetToFront(pageID: pageID, widgetID: widgetID)) != nil else { return }

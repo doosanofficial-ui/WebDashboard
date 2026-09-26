@@ -83,10 +83,10 @@ public struct DashboardWidgetConfiguration: Codable, Equatable, Sendable {
 public struct DashboardWidgetDefinition: Codable, Equatable, Identifiable, Sendable {
     public let id: String
     public let type: DashboardWidgetType
-    public let signalID: String?
+    public var signalID: String?
     public var rect: DashboardRect
     public var zIndex: Int
-    public let configuration: DashboardWidgetConfiguration
+    public var configuration: DashboardWidgetConfiguration
 
     public init(
         id: String,
@@ -151,6 +151,18 @@ public struct DashboardPage: Codable, Equatable, Identifiable, Sendable {
             throw DashboardModelError.missingWidgetID(id)
         }
         widgets[index].rect = rect
+    }
+
+    public mutating func updateWidgetBinding(
+        id: String,
+        signalID: String?,
+        configuration: DashboardWidgetConfiguration
+    ) throws {
+        guard let index = widgets.firstIndex(where: { $0.id == id }) else {
+            throw DashboardModelError.missingWidgetID(id)
+        }
+        widgets[index].signalID = signalID
+        widgets[index].configuration = configuration
     }
 
     public mutating func bringWidgetToFront(id: String) throws {
@@ -276,6 +288,22 @@ public struct DashboardProfile: Codable, Equatable, Identifiable, Sendable {
             throw DashboardModelError.missingPageID(pageID)
         }
         try pages[index].updateWidgetRect(id: widgetID, rect: rect)
+    }
+
+    public mutating func updateWidgetBinding(
+        pageID: String,
+        widgetID: String,
+        signalID: String?,
+        configuration: DashboardWidgetConfiguration
+    ) throws {
+        guard let index = pages.firstIndex(where: { $0.id == pageID }) else {
+            throw DashboardModelError.missingPageID(pageID)
+        }
+        try pages[index].updateWidgetBinding(
+            id: widgetID,
+            signalID: signalID,
+            configuration: configuration
+        )
     }
 
     public mutating func bringWidgetToFront(pageID: String, widgetID: String) throws {
