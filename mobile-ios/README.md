@@ -12,6 +12,8 @@ validation and is not a released product. App Store/CarPlay approval is not impl
   migration, in-app creation of every supported widget type, alignment controls, and
   a configuration inspector for signal binding, labels, units, ranges, and thresholds.
   The signal catalog editor validates and persists CAN signal definitions inside the profile.
+  LED/status conditions support equality, threshold, range, bit, hysteresis,
+  hold-time, and stale-data semantics.
 - Widget rendering covers numeric/circular/bar/LED/status/raw/bit/time-series/GPS
   representations with stale-state handling. The native map widget renders a
   bounded MapKit track; external map/roadview providers remain a separate gate.
@@ -101,7 +103,7 @@ This target update does not raise the app's minimum deployment version or consti
 a release.
 
 Generate/open Telemetry.xcodeproj with XcodeGen, select the verified Apple team,
-then build for the connected device. The current native development version is 0.8.0 while
+then build for the connected device. The current native development version is 0.9.0 while
 Git integration and release verification are incomplete. Use the original source
 path only if it has no NBSP; otherwise use the verification snapshot for a trial build
 and make edits back in the canonical source.

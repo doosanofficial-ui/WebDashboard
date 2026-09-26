@@ -14,6 +14,14 @@ struct DashboardEditorView: View {
     @State private var draftMaximum = ""
     @State private var draftWarning = ""
     @State private var draftCritical = ""
+    @State private var draftConditionEnabled = false
+    @State private var draftConditionOperator: DashboardConditionOperator = .greaterThan
+    @State private var draftConditionThreshold = ""
+    @State private var draftConditionUpper = ""
+    @State private var draftConditionBit = ""
+    @State private var draftConditionHysteresis = "0"
+    @State private var draftConditionHold = "0"
+    @State private var draftConditionStaleActive = false
 
     private var selectedPage: DashboardPage? {
         guard let profile = model.dashboardProfile else { return nil }
@@ -170,6 +178,35 @@ struct DashboardEditorView: View {
                     TextField("Warn", text: $draftWarning).keyboardType(.numbersAndPunctuation)
                     TextField("Critical", text: $draftCritical).keyboardType(.numbersAndPunctuation)
                 }
+                Toggle("Condition enabled", isOn: $draftConditionEnabled)
+                if draftConditionEnabled {
+                    Picker("Condition", selection: $draftConditionOperator) {
+                        Text("Equals").tag(DashboardConditionOperator.equals)
+                        Text("Greater than").tag(DashboardConditionOperator.greaterThan)
+                        Text("Less than").tag(DashboardConditionOperator.lessThan)
+                        Text("Within range").tag(DashboardConditionOperator.withinRange)
+                        Text("Bit set").tag(DashboardConditionOperator.bitSet)
+                    }
+                    HStack {
+                        TextField("Threshold", text: $draftConditionThreshold)
+                            .keyboardType(.numbersAndPunctuation)
+                        if draftConditionOperator == .withinRange {
+                            TextField("Upper", text: $draftConditionUpper)
+                                .keyboardType(.numbersAndPunctuation)
+                        }
+                        if draftConditionOperator == .bitSet {
+                            TextField("Bit 0-63", text: $draftConditionBit)
+                                .keyboardType(.numberPad)
+                        }
+                    }
+                    HStack {
+                        TextField("Hysteresis", text: $draftConditionHysteresis)
+                            .keyboardType(.numbersAndPunctuation)
+                        TextField("Hold seconds", text: $draftConditionHold)
+                            .keyboardType(.numbersAndPunctuation)
+                    }
+                    Toggle("Stale is active", isOn: $draftConditionStaleActive)
+                }
                 Button("Apply widget configuration") {
                     applyDraft(pageID: page.id, widgetID: widget.id)
                 }
@@ -194,10 +231,39 @@ struct DashboardEditorView: View {
         draftMaximum = widget.configuration.maximum.map { String($0) } ?? ""
         draftWarning = widget.configuration.warningThreshold.map { String($0) } ?? ""
         draftCritical = widget.configuration.criticalThreshold.map { String($0) } ?? ""
+        if let condition = widget.configuration.condition {
+            draftConditionEnabled = true
+            draftConditionOperator = condition.op
+            draftConditionThreshold = condition.threshold.map { String($0) } ?? ""
+            draftConditionUpper = condition.upperThreshold.map { String($0) } ?? ""
+            draftConditionBit = condition.bit.map { String($0) } ?? ""
+            draftConditionHysteresis = String(condition.hysteresis)
+            draftConditionHold = String(condition.holdTime)
+            draftConditionStaleActive = condition.staleIsActive
+        } else {
+            draftConditionEnabled = false
+            draftConditionThreshold = ""
+            draftConditionUpper = ""
+            draftConditionBit = ""
+            draftConditionHysteresis = "0"
+            draftConditionHold = "0"
+            draftConditionStaleActive = false
+        }
     }
 
     private func applyDraft(pageID: String, widgetID: String) {
         guard let decimals = Int(draftDecimals.trimmingCharacters(in: .whitespacesAndNewlines)) else { return }
+        let condition: DashboardCondition? = draftConditionEnabled
+            ? DashboardCondition(
+                op: draftConditionOperator,
+                threshold: optionalDouble(draftConditionThreshold),
+                upperThreshold: optionalDouble(draftConditionUpper),
+                bit: Int(draftConditionBit),
+                hysteresis: optionalDouble(draftConditionHysteresis) ?? 0,
+                holdTime: optionalDouble(draftConditionHold) ?? 0,
+                staleIsActive: draftConditionStaleActive
+            )
+            : nil
         let configuration = DashboardWidgetConfiguration(
             label: draftLabel.isEmpty ? "Signal" : draftLabel,
             unit: draftUnit,
@@ -205,7 +271,8 @@ struct DashboardEditorView: View {
             minimum: optionalDouble(draftMinimum),
             maximum: optionalDouble(draftMaximum),
             warningThreshold: optionalDouble(draftWarning),
-            criticalThreshold: optionalDouble(draftCritical)
+            criticalThreshold: optionalDouble(draftCritical),
+            condition: condition
         )
         let signal = draftSignalID.trimmingCharacters(in: .whitespacesAndNewlines)
         model.updateDashboardWidgetBinding(

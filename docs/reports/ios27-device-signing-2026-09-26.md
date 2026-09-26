@@ -20,7 +20,8 @@ compatibility or release approval.
 - Previous feature build: 0.6.0, build 1
 - Previous feature build: 0.6.1, build 1
 - Previous feature build: 0.7.0, build 1
-- Current feature build: 0.8.0, build 1
+- Previous feature build: 0.8.0, build 1
+- Current feature build: 0.9.0, build 1
 
 ## Evidence
 
@@ -179,6 +180,14 @@ The v0.8.0 dashboard alignment build was built and installed:
 - Install: **PASS**
 - Launch: **BLOCKED BY DEVICE LOCK**, verifier exit `12`
 - Exact verifier log: `/tmp/telemetry-v080-device-check.log`
+
+The v0.9.0 condition engine/editor build was built and installed:
+
+- Build artifact: `/tmp/telemetry-ios-device-condition.GbIvr0`
+- Bundle version: `0.9.0` build `1`
+- Install: **PASS**
+- Launch: **BLOCKED BY DEVICE LOCK**, verifier exit `12`
+- Exact verifier log: `/tmp/telemetry-v090-device-check.log`
 
 ## Limitations
 

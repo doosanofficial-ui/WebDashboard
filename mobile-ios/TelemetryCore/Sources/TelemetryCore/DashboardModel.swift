@@ -39,6 +39,108 @@ public enum DashboardWidgetType: String, Codable, Equatable, Hashable, CaseItera
     case map
 }
 
+public enum DashboardConditionOperator: String, Codable, Equatable, Hashable, CaseIterable, Sendable {
+    case equals
+    case greaterThan
+    case lessThan
+    case withinRange
+    case bitSet
+}
+
+public struct DashboardCondition: Codable, Equatable, Sendable {
+    public let op: DashboardConditionOperator
+    public let threshold: Double?
+    public let upperThreshold: Double?
+    public let bit: Int?
+    public let hysteresis: Double
+    public let holdTime: Double
+    public let staleIsActive: Bool
+
+    public init(
+        op: DashboardConditionOperator,
+        threshold: Double?,
+        upperThreshold: Double? = nil,
+        bit: Int? = nil,
+        hysteresis: Double = 0,
+        holdTime: Double = 0,
+        staleIsActive: Bool = false
+    ) {
+        self.op = op
+        self.threshold = threshold
+        self.upperThreshold = upperThreshold
+        self.bit = bit.map { max(0, min($0, 63)) }
+        self.hysteresis = hysteresis.isFinite ? max(0, hysteresis) : 0
+        self.holdTime = holdTime.isFinite ? max(0, holdTime) : 0
+        self.staleIsActive = staleIsActive
+    }
+}
+
+/// Stateful evaluator for LED/status conditions. It never transmits CAN data.
+public struct DashboardConditionRuntime: Equatable, Sendable {
+    public private(set) var isActive = false
+    private var candidateSince: Double?
+
+    public init() {}
+
+    @discardableResult
+    public mutating func update(
+        condition: DashboardCondition,
+        value: Double?,
+        rawValue: UInt64?,
+        stale: Bool,
+        now: Double
+    ) -> Bool {
+        guard now.isFinite else { return isActive }
+        if stale {
+            candidateSince = nil
+            isActive = condition.staleIsActive
+            return isActive
+        }
+        guard let value, value.isFinite else {
+            candidateSince = nil
+            isActive = false
+            return false
+        }
+        let candidate = matches(condition: condition, value: value, rawValue: rawValue)
+        guard candidate else {
+            candidateSince = nil
+            isActive = false
+            return false
+        }
+        guard !isActive else { return true }
+        guard condition.holdTime > 0 else {
+            isActive = true
+            return true
+        }
+        if candidateSince == nil { candidateSince = now }
+        if let candidateSince, now - candidateSince >= condition.holdTime {
+            isActive = true
+        }
+        return isActive
+    }
+
+    private func matches(condition: DashboardCondition, value: Double, rawValue: UInt64?) -> Bool {
+        switch condition.op {
+        case .equals:
+            guard let threshold = condition.threshold else { return false }
+            return abs(value - threshold) <= max(condition.hysteresis, 0.000_001)
+        case .greaterThan:
+            guard let threshold = condition.threshold else { return false }
+            return value > threshold - (isActive ? condition.hysteresis : 0)
+        case .lessThan:
+            guard let threshold = condition.threshold else { return false }
+            return value < threshold + (isActive ? condition.hysteresis : 0)
+        case .withinRange:
+            guard let lower = condition.threshold, let upper = condition.upperThreshold else { return false }
+            let margin = isActive ? condition.hysteresis : 0
+            return value >= lower - margin && value <= upper + margin
+        case .bitSet:
+            guard let bit = condition.bit, let rawValue else { return false }
+            return rawValue & (UInt64(1) << UInt64(bit)) != 0
+        }
+    }
+}
+
 public struct DashboardRect: Codable, Equatable, Sendable {
     public let x: Int
     public let y: Int
@@ -69,6 +171,7 @@ public struct DashboardWidgetConfiguration: Codable, Equatable, Sendable {
     public let maximum: Double?
     public let warningThreshold: Double?
     public let criticalThreshold: Double?
+    public let condition: DashboardCondition?
 
     public init(
         label: String,
@@ -77,7 +180,8 @@ public struct DashboardWidgetConfiguration: Codable, Equatable, Sendable {
         minimum: Double?,
         maximum: Double?,
         warningThreshold: Double?,
-        criticalThreshold: Double?
+        criticalThreshold: Double?,
+        condition: DashboardCondition? = nil
     ) {
         self.label = label
         self.unit = unit
@@ -86,6 +190,7 @@ public struct DashboardWidgetConfiguration: Codable, Equatable, Sendable {
         self.maximum = maximum
         self.warningThreshold = warningThreshold
         self.criticalThreshold = criticalThreshold
+        self.condition = condition
     }
 }
 
