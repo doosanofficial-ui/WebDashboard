@@ -50,7 +50,8 @@ This is an evidence checkpoint, not a release approval.
 | Server tests | PASS, 65 tests | `/tmp/webdashboard-verify-20260924.Z9wDKb/python/bin/python -m unittest discover -s server/tests -p 'test*.py'` |
 | GPS/web contract tests | PASS, 28 tests | `node --experimental-vm-modules --test scripts/tests/gps-data-integrity.test.mjs` |
 | Service worker tests | PASS, 8 tests | `node scripts/tests/service-worker.test.mjs` |
-| GitHub smoke | PASS, server/client/mobile | PR #23 run `36240489396` |
+| GitHub smoke | PASS, server/client/mobile | PR #23 run `36242750253` |
+| Native Reliability | PASS, Core + Linux/Windows contracts | PR #23 run `36242749947` |
 | UI runtime smoke | PASS | Direct install/launch on iPhone 17 Pro iOS 26.2 showed `Local recorder ready`, profile-defined Speed/FR/RL/RR/Yaw/Ay widgets, Dashboard Editor, and a duplicated Speed widget; XCTest runner remains unreliable |
 | iOS 27 build | NOT RUN | Host has Xcode 26.3 / iOS 26.2 SDK |
 | Software ELM vertical slice | PASS | Direct simulator demo adapter start/monitor/stop; not a BT4N or vehicle result |
