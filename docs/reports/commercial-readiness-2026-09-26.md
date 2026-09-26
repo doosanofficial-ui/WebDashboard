@@ -28,6 +28,9 @@ This is an evidence checkpoint, not a release approval.
   CANFrame -> SignalDecoder -> numeric UI -> local recorder`, with direct
   accessibility evidence for `RAW 0x123`, decoded signal values, active recorder,
   and explicit stop.
+- Versioned `AdapterProfile` JSON now validates transport-specific Wi-Fi endpoint
+  or observed BLE peripheral/service/write/notify identifiers and rejects duplicate
+  signal IDs before a live connection can start.
 - Windows/server CSV recording isolation, bounded queues, write receipts, fault
   health, and web/native recording-health UI.
 
@@ -35,7 +38,7 @@ This is an evidence checkpoint, not a release approval.
 
 | Area | Result | Evidence |
 | --- | --- | --- |
-| Swift Core tests | PASS, 49 tests | `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-path mobile-ios/TelemetryCore` |
+| Swift Core tests | PASS, 53 tests | `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-path mobile-ios/TelemetryCore` |
 | iOS application build | PASS | Xcode 26.3, iOS 26.2 Simulator SDK, `/tmp/telemetry-ios-verify.IFVJob` |
 | Server tests | PASS, 65 tests | `/tmp/webdashboard-verify-20260924.Z9wDKb/python/bin/python -m unittest discover -s server/tests -p 'test*.py'` |
 | GPS/web contract tests | PASS, 28 tests | `node --experimental-vm-modules --test scripts/tests/gps-data-integrity.test.mjs` |

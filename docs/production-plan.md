@@ -98,7 +98,8 @@ Windows 브리지 대안이며 실물 호환은 아직 미검증이다.
   완료: 선택한 BT4N의 실제 서비스/특성/응답과 MX5 HEV의 지원 PID 증거 확보. 포장만으로 PASS 금지.
 - [ ] **C20 P0 iOS OBD 수집**: Core Bluetooth transport, 명령 allowlist, prompt parser, 단일 질의·타임아웃·재연결.
   진행: `TelemetryCore/ELM327.swift` 순수 파서/4개 PID 명령, allowlisted raw-monitor session,
-  synthetic XCTest와 simulator `MockCANTransport -> decoder -> recorder -> UI` vertical slice를 구현했다.
+  synthetic XCTest, versioned `AdapterProfile`/signal catalog와 simulator
+  `MockCANTransport -> decoder -> recorder -> UI` vertical slice를 구현했다.
   BLE 연결/실차 샘플/UI/업링크는 아직 연결하지 않았으며 이 단계만으로 완료 처리하지 않음.
   완료: iOS 27 실기기에서 지원 PID 읽기, 권한 거부/분할 응답/단절/Stop 회귀 검사 통과.
 - [ ] **C21 P1 Windows OBD 브리지**: 확인된 BLE 또는 serial transport와 비차단 sample cache.
