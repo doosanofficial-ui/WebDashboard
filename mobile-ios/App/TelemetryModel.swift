@@ -55,6 +55,7 @@ final class TelemetryModel: NSObject {
     @ObservationIgnored private var socketLoop: Task<Void, Never>?
     @ObservationIgnored private var connectionGeneration = UUID()
     @ObservationIgnored private let clientID: String
+    @ObservationIgnored private let measurementStartedAt = Date()
 
     private override init() {
         let existing = UserDefaults.standard.string(forKey: "clientID")
@@ -71,11 +72,17 @@ final class TelemetryModel: NSObject {
         locationService.onLocations = { [weak self] locations in
             self?.handleLocations(locations)
         }
-        demoAdapter.onState = { [weak self] state in self?.adapterStatus = state }
+        demoAdapter.onState = { [weak self] state in
+            self?.adapterStatus = state
+            self?.publishCarPlayProjection()
+        }
         demoAdapter.onFrame = { [weak self] frame, decoded in
             self?.handleDemoFrame(frame, decoded: decoded)
         }
-        liveAdapter.onState = { [weak self] state in self?.adapterStatus = state }
+        liveAdapter.onState = { [weak self] state in
+            self?.adapterStatus = state
+            self?.publishCarPlayProjection()
+        }
         liveAdapter.onFrame = { [weak self] frame, decoded in
             self?.handleLiveFrame(frame, decoded: decoded)
         }
@@ -113,6 +120,7 @@ final class TelemetryModel: NSObject {
                 startedAt: Date().timeIntervalSince1970
             )
             localRecordingStatus = "Local recorder ready"
+            publishCarPlayProjection()
             uploader = try BackgroundUploader(outbox: box, clientID: clientID,
                 directory: root.appendingPathComponent("uploads"))
             uploader?.onStatus = { [weak self] message in
@@ -209,6 +217,7 @@ final class TelemetryModel: NSObject {
         socket?.cancel(with: .normalClosure, reason: nil); socket = nil
         connection = "Disconnected"
         serverRecording = nil
+        publishCarPlayProjection()
     }
 
     func startDemoAdapter() {
@@ -219,6 +228,7 @@ final class TelemetryModel: NSObject {
         demoAdapter.stop()
         adapterSignalValue = nil
         rawCANText = "-"
+        publishCarPlayProjection()
     }
 
     func startLiveAdapter() {
@@ -234,6 +244,7 @@ final class TelemetryModel: NSObject {
         liveAdapter.stop()
         adapterSignalValue = nil
         rawCANText = "-"
+        publishCarPlayProjection()
     }
 
     func importAdapterProfile(_ data: Data) {
@@ -266,6 +277,7 @@ final class TelemetryModel: NSObject {
             receivedAtEpoch: frame.receivedAtEpoch,
             receivedAtMonotonicNanos: frame.receivedAtMonotonicNanos
         )))
+        publishCarPlayProjection()
     }
 
     private func handleLiveFrame(_ frame: CANFrame, decoded: [LiveDecodedSignal]) {
@@ -288,6 +300,31 @@ final class TelemetryModel: NSObject {
                 receivedAtMonotonicNanos: frame.receivedAtMonotonicNanos
             )))
         }
+        publishCarPlayProjection()
+    }
+
+    private func publishCarPlayProjection() {
+        #if canImport(CarPlay)
+        let recordingState: String
+        if storageStatus != nil {
+            recordingState = "failed"
+        } else if localRecordingStatus.contains("active") || localRecordingStatus.contains("Writing") {
+            recordingState = "recording"
+        } else if localRecordingStatus.contains("ready") {
+            recordingState = "ready"
+        } else {
+            recordingState = "idle"
+        }
+        var values = frame?.sig ?? [:]
+        if let adapterSignalValue { values["adapter"] = adapterSignalValue }
+        CarPlayProjectionBridge.shared.update(CarPlayProjectionState(
+            adapterState: adapterStatus,
+            recordingState: recordingState,
+            profileName: dashboardProfile?.name ?? "Unselected",
+            elapsedSeconds: Int(max(0, Date().timeIntervalSince(measurementStartedAt))),
+            primaryValues: values
+        ))
+        #endif
     }
 
     func startLocation() {

@@ -9,7 +9,7 @@ enum CarPlayProjection {
             CPListItem(text: "Adapter", detailText: state.adapterState),
             CPListItem(text: "Recording", detailText: state.recordingState),
             CPListItem(text: "Profile", detailText: state.profileName),
-            CPListItem(text: "Session", detailText: "(state.elapsedSeconds) s")
+            CPListItem(text: "Session", detailText: "\(state.elapsedSeconds) s")
         ]
         items.append(contentsOf: state.primaryValues
             .sorted { $0.key < $1.key }

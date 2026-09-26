@@ -13,6 +13,8 @@ validation and is not a released product. App Store/CarPlay approval is not impl
 - Widget rendering covers numeric/circular/bar/LED/status/raw/bit/time-series/GPS
   representations with stale-state handling; map track/provider integration remains
   a separate gate.
+- The optional CarPlay scene is status-only and receives live projection state through
+  an entitlement-gated bridge; no CarPlay entitlement or arbitrary gauge UI is assumed.
 - Original GPS capture timestamps; unknown speed/course stays unknown.
 - Core Location continuous updates after explicit Start and Always authorization.
 - Durable SQLite outbox: records survive process restart and remain until server ACK.

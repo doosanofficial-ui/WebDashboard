@@ -25,8 +25,9 @@ This is an evidence checkpoint, not a release approval.
 - `bluetooth-central` is declared alongside location background mode for the explicitly
   started session. Background scheduling, state restoration, and locked-screen endurance
   remain physical-device gates.
-- Compile-gated, status-only CarPlay projection. No entitlement key or CarPlay
-  scene manifest was invented.
+- Compile-gated, status-only CarPlay projection now receives live adapter, recording,
+  profile, elapsed-session and limited primary-value state through a bridge. No
+  entitlement key or CarPlay scene manifest was invented.
 - Versioned dashboard profile JSON with typed numeric widgets, persisted profile
   loading, legacy default-grid migration, page lifecycle, rect/z-order editing,
   drag/resize grid canvas, page selection, duplicate/delete/snap operations, and a
