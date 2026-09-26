@@ -164,6 +164,23 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-pa
 - [ ] **Step 4: Run Core tests and an iOS build; rerun UI only when the simulator worker is healthy**
 - [ ] **Step 5: Commit:** `feat: render configurable dashboard profiles`
 
+### Task 8: Versioned adapter profile and signal catalog
+
+**Files:**
+- Create: `mobile-ios/TelemetryCore/Sources/TelemetryCore/AdapterProfile.swift`
+- Create: `mobile-ios/TelemetryCore/Tests/TelemetryCoreTests/AdapterProfileTests.swift`
+- Modify: `mobile-ios/App/TelemetryModel.swift` to load a profile without guessing hardware identifiers
+
+**Interfaces:**
+- Consumes: `CANTransport`, `SignalDefinition`, and `DashboardProfile`.
+- Produces: versioned BLE/Wi-Fi adapter configuration, signal catalog validation, and explicit `notConfigured`/`profileInvalid` states.
+
+- [ ] **Step 1: Write failing tests** for profile JSON round-trip, unsupported schema, duplicate signal IDs, and transport-specific required fields.
+- [ ] **Step 2: Run focused tests and verify the expected missing-symbol failure**
+- [ ] **Step 3: Implement the pure catalog/profile model and safe loading boundary**
+- [ ] **Step 4: Run full Core tests and iOS build**
+- [ ] **Step 5: Commit:** `feat: add versioned adapter and signal profiles`
+
 ## Verification gate
 
 Every task must run its focused tests and then the complete applicable suite.
