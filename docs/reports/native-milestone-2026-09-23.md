@@ -28,7 +28,7 @@ Naver map/roadview, real CAN integration, CarPlay and the platform release gates
 | Legacy RN Jest | 16 PASS | Current changed code tested against the intended commit's original package/lock files |
 | Reproducible native simulator build | PASS | Xcode 26.3, Debug, iOS Simulator SDK 26.2 |
 | Device architecture build | PASS | generic iOS ARM64, unsigned; **not installed on iPhone** |
-| App installation and launch | PASS on simulator | iPhone 17 simulator / iOS 26.2 |
+| App installation and launch | PASS on simulator | iPhone 17 Pro simulator / iOS 26.2; physical target is iPhone 17 / iOS 27 |
 | HTTPS URL validation | Observed through UI | Entered http://example.invalid, Connect showed HTTPS requirement |
 | MARK persistence | Observed through UI and SQLite | Original record survived app replacement/relaunch; latest reviewed build's button press increased stored MARK count to 3 |
 | XCUITest automatic screen suite | NOT PASSED | Runner suspended before test execution; no test assertions completed |

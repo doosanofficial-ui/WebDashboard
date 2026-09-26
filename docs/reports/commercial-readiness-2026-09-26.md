@@ -52,7 +52,7 @@ This is an evidence checkpoint, not a release approval.
 | Service worker tests | PASS, 8 tests | `node scripts/tests/service-worker.test.mjs` |
 | GitHub smoke | PASS, server/client/mobile | PR #23 run `36242750253` |
 | Native Reliability | PASS, Core + Linux/Windows contracts | PR #23 run `36242749947` |
-| UI runtime smoke | PASS | Direct install/launch on iPhone 17 Pro iOS 26.2 showed `Local recorder ready`, profile-defined Speed/FR/RL/RR/Yaw/Ay widgets, Dashboard Editor, and a duplicated Speed widget; XCTest runner remains unreliable |
+| UI runtime smoke | PASS | Direct install/launch on the iPhone 17 Pro **simulator** with iOS 26.2 showed `Local recorder ready`, profile-defined Speed/FR/RL/RR/Yaw/Ay widgets, Dashboard Editor, and a duplicated Speed widget; this is not the target physical iPhone 17/iOS 27 result, and XCTest runner remains unreliable |
 | iOS 27 build | NOT RUN | Host has Xcode 26.3 / iOS 26.2 SDK |
 | Software ELM vertical slice | PASS | Direct simulator demo adapter start/monitor/stop; not a BT4N or vehicle result |
 | BT4N live profile | NOT RUN | No observed GATT/serial profile or firmware capture |
