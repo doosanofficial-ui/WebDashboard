@@ -99,7 +99,7 @@ This target update does not raise the app's minimum deployment version or consti
 a release.
 
 Generate/open Telemetry.xcodeproj with XcodeGen, select the verified Apple team,
-then build for the connected device. The current native development version is 0.3.1 while
+then build for the connected device. The current native development version is 0.4.0 while
 Git integration and release verification are incomplete. Use the original source
 path only if it has no NBSP; otherwise use the verification snapshot for a trial build
 and make edits back in the canonical source.
@@ -113,8 +113,8 @@ APP_PATH="/path/to/Telemetry.app" \
 ```
 
 The script records device, install, launch, and process evidence. A trust error
-returns exit code 10 and prints the exact iPhone Settings path; it never handles
-passwords, MFA, payment, or device passcodes.
+returns exit code 10 and prints the exact iPhone Settings path; a locked device
+returns exit code 12. It never handles passwords, MFA, payment, or device passcodes.
 
 In the app, enter the trusted HTTPS server origin in Connection. Store the ingest
 credential in Keychain. The server needs INGEST_TOKEN configured; without it the

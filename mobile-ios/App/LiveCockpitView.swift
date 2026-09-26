@@ -242,8 +242,25 @@ struct LiveCockpitView: View {
             .disabled(model.storageStatus != nil)
             .accessibilityIdentifier("mark-event")
 
+            Button {
+                if model.localRecordingEnabled {
+                    model.stopRecording()
+                } else {
+                    model.startRecording()
+                }
+            } label: {
+                Label(model.localRecordingEnabled ? "STOP" : "REC",
+                      systemImage: model.localRecordingEnabled ? "stop.fill" : "record.circle")
+                    .font(.headline.weight(.bold))
+                    .frame(minWidth: 72)
+                    .padding(.vertical, 13)
+            }
+            .buttonStyle(.bordered)
+            .tint(model.localRecordingEnabled ? TelemetryTheme.critical : TelemetryTheme.valid)
+            .accessibilityIdentifier("toggle-recording")
+
             VStack(alignment: .leading, spacing: 3) {
-                Text(model.localRecordingStatus.contains("active") || model.localRecordingStatus.contains("Writing") ? "RECORDING" : "READY")
+                Text(model.localRecordingEnabled ? "RECORDING" : "REC OFF")
                     .font(.caption.weight(.bold))
                     .tracking(0.8)
                     .foregroundStyle(TelemetryTheme.valid)

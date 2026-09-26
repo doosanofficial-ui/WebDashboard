@@ -14,7 +14,8 @@ compatibility or release approval.
 - Xcode account: Personal Team, Team ID 548HKZYKDP
 - Previous app version: 0.1.1, build 1
 - Previous feature build: 0.2.0, build 1
-- Current feature build: 0.3.1, build 1
+- Previous feature build: 0.3.1, build 1
+- Current feature build: 0.4.0, build 1
 
 ## Evidence
 
@@ -125,6 +126,14 @@ The v0.3.1 adapter-runtime-event build was then installed and launched:
 - Bundle version: `0.3.1` build `1`
 - Result: **physical launch PASS**
 - Process observed: `Telemetry.app/Telemetry`, PID `20685`
+
+The v0.4.0 explicit recording lifecycle build was built and installed:
+
+- Build artifact: `/tmp/telemetry-ios-device-recording.HYgERd`
+- Bundle version: `0.4.0` build `1`
+- Install: **PASS**
+- Launch: **BLOCKED BY DEVICE LOCK**, verifier exit `12`
+- Exact verifier log: `/tmp/telemetry-device-locked-check.log`
 
 ## Limitations
 

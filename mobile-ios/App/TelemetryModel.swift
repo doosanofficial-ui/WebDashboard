@@ -22,6 +22,7 @@ final class TelemetryModel: NSObject {
     var storageStatus: String?
     var localRecordingStatus = "Local recorder unavailable"
     var exportStatus = "No export generated"
+    var localRecordingEnabled = true
     var dashboardProfile: DashboardProfile?
     var adapterProfile: AdapterProfile?
     var adapterStatus = "Adapter disconnected"
@@ -51,6 +52,8 @@ final class TelemetryModel: NSObject {
     @ObservationIgnored private let telemetryStore: TelemetryStore
     @ObservationIgnored private var outbox: DurableOutbox?
     @ObservationIgnored private var localRecorder: MeasurementRecorder?
+    @ObservationIgnored private var completedRecorder: MeasurementRecorder?
+    @ObservationIgnored private var measurementDBURL: URL?
     @ObservationIgnored private var dashboardURL: URL?
     @ObservationIgnored private var adapterProfileURL: URL?
     @ObservationIgnored var uploader: BackgroundUploader?
@@ -120,9 +123,10 @@ final class TelemetryModel: NSObject {
             }
             let box = try DurableOutbox(path: root.appendingPathComponent("outbox.sqlite3"))
             outbox = box
+            measurementDBURL = root.appendingPathComponent("measurements.sqlite3")
             let sessionID = "ios-\(Int(Date().timeIntervalSince1970))-\(clientID)"
             localRecorder = try MeasurementRecorder(
-                path: root.appendingPathComponent("measurements.sqlite3"),
+                path: measurementDBURL!,
                 sessionID: sessionID,
                 startedAt: Date().timeIntervalSince1970
             )
@@ -136,7 +140,10 @@ final class TelemetryModel: NSObject {
             }
             restoreBackgroundSession()
             Task { await refreshQueueDepth() }
-        } catch { storageStatus = "Storage unavailable. Collection is disabled." }
+        } catch {
+            localRecordingEnabled = false
+            storageStatus = "Storage unavailable. Collection is disabled."
+        }
     }
 
     private func endpoint() throws -> URL {
@@ -468,7 +475,7 @@ final class TelemetryModel: NSObject {
 
     private func record(_ event: MeasurementEvent) {
         guard let localRecorder else {
-            localRecordingStatus = "Local recorder unavailable"
+            localRecordingStatus = "Recording off"
             return
         }
         localRecordingStatus = "Writing local measurements"
@@ -622,12 +629,12 @@ final class TelemetryModel: NSObject {
     }
 
     func exportMeasurementJSON() async -> Data? {
-        guard let localRecorder else {
+        guard let recorder = localRecorder ?? completedRecorder else {
             exportStatus = "Local recorder unavailable"
             return nil
         }
         do {
-            let data = try await localRecorder.exportSessionJSON()
+            let data = try await recorder.exportSessionJSON()
             exportStatus = "Export ready: \(data.count) bytes"
             return data
         } catch {
@@ -637,12 +644,12 @@ final class TelemetryModel: NSObject {
     }
 
     func exportMeasurementCSV() async -> Data? {
-        guard let localRecorder else {
+        guard let recorder = localRecorder ?? completedRecorder else {
             exportStatus = "Local recorder unavailable"
             return nil
         }
         do {
-            let data = try await localRecorder.exportCSV()
+            let data = try await recorder.exportCSV()
             exportStatus = "CSV export ready: \(data.count) bytes"
             return data
         } catch {
@@ -656,10 +663,68 @@ final class TelemetryModel: NSObject {
         let endedAt = Date().timeIntervalSince1970
         Task {
             do {
+                try await localRecorder.append(.system(
+                    name: "recording_stopped",
+                    timestamp: endedAt,
+                    monotonicNanos: DispatchTime.now().uptimeNanoseconds
+                ))
                 try await localRecorder.finish(endedAt: endedAt)
+                self.completedRecorder = localRecorder
+                self.localRecorder = nil
+                self.localRecordingEnabled = false
                 localRecordingStatus = "Local measurement session closed"
             } catch {
                 localRecordingStatus = "Local recorder could not close cleanly"
+            }
+        }
+    }
+
+    func startRecording() {
+        guard localRecorder == nil, let measurementDBURL else { return }
+        do {
+            let now = Date().timeIntervalSince1970
+            let sessionID = "ios-\(Int(now))-\(clientID)"
+            let recorder = try MeasurementRecorder(path: measurementDBURL, sessionID: sessionID, startedAt: now)
+            localRecorder = recorder
+            completedRecorder = nil
+            localRecordingEnabled = true
+            localRecordingStatus = "Local recorder ready"
+            Task {
+                try? await recorder.append(.system(
+                    name: "recording_started",
+                    timestamp: now,
+                    monotonicNanos: DispatchTime.now().uptimeNanoseconds
+                ))
+            }
+            publishCarPlayProjection()
+        } catch {
+            localRecordingStatus = "Local recorder unavailable"
+        }
+    }
+
+    func stopRecording() {
+        guard let recorder = localRecorder else {
+            localRecordingEnabled = false
+            localRecordingStatus = "Recording off"
+            return
+        }
+        localRecordingEnabled = false
+        localRecordingStatus = "Closing local recording"
+        let endedAt = Date().timeIntervalSince1970
+        Task {
+            do {
+                try await recorder.append(.system(
+                    name: "recording_stopped",
+                    timestamp: endedAt,
+                    monotonicNanos: DispatchTime.now().uptimeNanoseconds
+                ))
+                try await recorder.finish(endedAt: endedAt)
+                completedRecorder = recorder
+                localRecorder = nil
+                localRecordingStatus = "Recording off"
+                publishCarPlayProjection()
+            } catch {
+                localRecordingStatus = "Local recorder close failed"
             }
         }
     }

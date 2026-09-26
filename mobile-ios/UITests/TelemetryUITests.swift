@@ -34,6 +34,13 @@ final class TelemetryUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["local-recording-status"].waitForExistence(timeout: 5))
     }
 
+    func testRecordingToggleIsVisibleInLiveCockpit() {
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["toggle-recording"].waitForExistence(timeout: 5))
+    }
+
     func testCockpitAnchorsAreVisible() {
         let app = XCUIApplication()
         app.launch()

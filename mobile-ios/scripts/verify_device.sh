@@ -43,7 +43,7 @@ xcrun devicectl device info processes --device "$DEVICE_ID" \
   >"$PROCESS_LOG" 2>&1 || true
 
 if [[ "$launch_status" -ne 0 ]]; then
-  if rg -qi 'not been explicitly trusted|Untrusted|Unable to Verify|RequestDenied' "$LAUNCH_LOG"; then
+  if rg -qi 'not been explicitly trusted|Untrusted|Unable to Verify' "$LAUNCH_LOG"; then
     cat >&2 <<'TRUST'
 
 Launch was denied by device trust/verification.
@@ -53,6 +53,15 @@ Apple Development > Trust or Allow & Restart.
 Keep the device online and rerun this script.
 TRUST
     exit 10
+  fi
+  if rg -qi 'device was not, or could not, be unlocked|BSErrorCodeDescription = Locked|FBSOpenApplicationServiceErrorDomain.*Locked' "$LAUNCH_LOG"; then
+    cat >&2 <<'LOCKED'
+
+Launch was denied because the iPhone is locked.
+Unlock the device, keep it connected, and rerun this script.
+This is not a developer-trust failure and the script will not enter a passcode.
+LOCKED
+    exit 12
   fi
   echo "Launch failed for a non-trust reason. See $LAUNCH_LOG." >&2
   exit "$launch_status"
