@@ -108,8 +108,8 @@ Current native development version: `0.4.0` (build `1`).
 | Server tests | PASS, 65 tests | `/tmp/webdashboard-verify-20260924.Z9wDKb/python/bin/python -m unittest discover -s server/tests -p 'test*.py'` |
 | GPS/web contract tests | PASS, 28 tests | `node --experimental-vm-modules --test scripts/tests/gps-data-integrity.test.mjs` |
 | Service worker tests | PASS, 8 tests | `node scripts/tests/service-worker.test.mjs` |
-| GitHub smoke | PASS, server/client/mobile | PR #23 run `36242750253` |
-| Native Reliability | PASS, Core + Linux/Windows contracts | PR #23 run `36242749947` |
+| GitHub smoke | PASS, server/client/mobile | PR #23 run `36255650936` |
+| Native Reliability | PASS, Core + native app + Linux/Windows contracts | PR #23 run `36255650801`; native-app job generated XcodeGen project and built the iOS target |
 | UI runtime smoke | PASS | Direct install/launch on the iPhone 17 Pro **simulator** with iOS 26.2 showed non-overlapping migrated Speed/FR/RL/RR/Yaw/Ay grid widgets, local recorder, and Dashboard Editor controls; this is not the target physical iPhone 17/iOS 27 result, and XCTest runner remains unreliable |
 | SwiftUI cockpit visual smoke | PASS | Direct install/launch on the iPhone 17 Pro iOS 26.2 simulator; screenshot evidence is stored under docs/reports/evidence/ |
 | iOS 27 build | NOT RUN | Host has Xcode 26.3 / iOS 26.2 SDK |
