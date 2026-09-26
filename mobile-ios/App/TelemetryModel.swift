@@ -75,7 +75,26 @@ final class TelemetryModel: NSObject {
         telemetryStore = TelemetryStore()
         super.init()
         UserDefaults.standard.set(clientID, forKey: "clientID")
-        locationService.onStatus = { [weak self] status in self?.locationStatus = status }
+        locationService.onStatus = { [weak self] status in
+            guard let self else { return }
+            self.locationStatus = status
+            let normalized = status.lowercased()
+            let eventName: String?
+            if normalized.contains("permission denied") {
+                eventName = "gps_permission_denied"
+            } else if normalized.contains("unavailable") {
+                eventName = "gps_unavailable"
+            } else {
+                eventName = nil
+            }
+            if let eventName {
+                self.record(.system(
+                    name: eventName,
+                    timestamp: Date().timeIntervalSince1970,
+                    monotonicNanos: DispatchTime.now().uptimeNanoseconds
+                ))
+            }
+        }
         locationService.onCollectingChanged = { [weak self] collecting in
             self?.collecting = collecting
         }
