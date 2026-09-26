@@ -56,7 +56,7 @@ final class AdapterProfileTests: XCTestCase {
         XCTAssertThrowsError(try AdapterProfile(
             id: "wifi-missing", name: "Wi-Fi", transport: .wifi,
             peripheralID: nil, serviceUUID: nil, writeCharacteristicUUID: nil,
-            notifyCharacteristicUUID: nil, host: nil, port: nil, signals: []
+            notifyCharacteristicUUID: nil, host: nil, port: nil, signals: [try signal()]
         )) { error in
             XCTAssertEqual(error as? AdapterProfileError, .missingWiFiEndpoint)
         }
@@ -64,9 +64,30 @@ final class AdapterProfileTests: XCTestCase {
         XCTAssertThrowsError(try AdapterProfile(
             id: "ble-missing", name: "BLE", transport: .ble,
             peripheralID: nil, serviceUUID: "", writeCharacteristicUUID: "",
-            notifyCharacteristicUUID: "", host: nil, port: nil, signals: []
+            notifyCharacteristicUUID: "", host: nil, port: nil, signals: [try signal()]
         )) { error in
             XCTAssertEqual(error as? AdapterProfileError, .missingBLEProfile)
+        }
+    }
+
+    func testEmptySignalCatalogIsRejected() throws {
+        XCTAssertThrowsError(try AdapterProfile(
+            id: "empty", name: "Empty", transport: .wifi,
+            peripheralID: nil, serviceUUID: nil, writeCharacteristicUUID: nil,
+            notifyCharacteristicUUID: nil, host: "127.0.0.1", port: 1, signals: []
+        )) { error in
+            XCTAssertEqual(error as? AdapterProfileError, .emptySignalCatalog)
+        }
+    }
+
+    func testBLEUUIDsMustBeHexBluetoothIdentifiers() throws {
+        XCTAssertThrowsError(try AdapterProfile(
+            id: "invalid-uuid", name: "Invalid", transport: .ble,
+            peripheralID: UUID(), serviceUUID: "not-a-uuid",
+            writeCharacteristicUUID: "FFE1", notifyCharacteristicUUID: "FFE2",
+            host: nil, port: nil, signals: [try signal()]
+        )) { error in
+            XCTAssertEqual(error as? AdapterProfileError, .invalidBLEUUID("not-a-uuid"))
         }
     }
 }

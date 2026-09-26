@@ -9,8 +9,10 @@ public enum AdapterProfileError: Error, Equatable, Sendable {
     case unsupportedSchemaVersion(Int)
     case invalidProfile
     case duplicateSignalID(String)
+    case emptySignalCatalog
     case missingWiFiEndpoint
     case missingBLEProfile
+    case invalidBLEUUID(String)
 }
 
 public struct AdapterProfile: Codable, Equatable, Identifiable, Sendable {
@@ -39,6 +41,7 @@ public struct AdapterProfile: Codable, Equatable, Identifiable, Sendable {
         signals: [SignalDefinition]
     ) throws {
         guard !id.isEmpty, !name.isEmpty else { throw AdapterProfileError.invalidProfile }
+        guard !signals.isEmpty else { throw AdapterProfileError.emptySignalCatalog }
         var ids = Set<String>()
         for signal in signals {
             guard ids.insert(signal.id).inserted else {
@@ -58,6 +61,10 @@ public struct AdapterProfile: Codable, Equatable, Identifiable, Sendable {
                   let notifyCharacteristicUUID, !notifyCharacteristicUUID.isEmpty else {
                 throw AdapterProfileError.missingBLEProfile
             }
+            for uuid in [serviceUUID, writeCharacteristicUUID, notifyCharacteristicUUID]
+                where !Self.isValidBLEUUID(uuid) {
+                throw AdapterProfileError.invalidBLEUUID(uuid)
+            }
         }
         schemaVersion = 1
         self.id = id
@@ -74,6 +81,18 @@ public struct AdapterProfile: Codable, Equatable, Identifiable, Sendable {
 
     public func signal(id: String) -> SignalDefinition? {
         signals.first { $0.id == id }
+    }
+
+    private static func isValidBLEUUID(_ value: String) -> Bool {
+        if value.count == 4 || value.count == 8 {
+            return value.unicodeScalars.allSatisfy { scalar in
+                switch scalar.value {
+                case 48...57, 65...70, 97...102: return true
+                default: return false
+                }
+            }
+        }
+        return UUID(uuidString: value) != nil
     }
 
     private enum CodingKeys: String, CodingKey {

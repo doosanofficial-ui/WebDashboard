@@ -47,4 +47,13 @@ final class TelemetryUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["start-adapter-demo"].waitForExistence(timeout: 5))
     }
+
+    func testAdapterProfileImportAndLiveControlsAreVisible() {
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
+        app.tabBars.buttons["Connection"].tap()
+        XCTAssertTrue(app.buttons["import-adapter-profile"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["start-live-adapter"].waitForExistence(timeout: 5))
+    }
 }

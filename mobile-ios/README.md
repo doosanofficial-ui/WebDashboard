@@ -23,10 +23,20 @@ headerless Mode 01 decoder for capabilities, RPM, speed and coolant temperature.
 It rejects ambiguous/malformed replies and keeps no-data separate from real zero.
 The parser's examples/tests are synthetic, not recordings from this scanner.
 
-**Bluetooth connection, live OBD display, background polling and OBD ingestion are
-not implemented yet.** The existing v2 upload accepts GPS/MARK/STATE, not OBD.
-Profile discovery must precede Core Bluetooth transport wiring; do not assume common
-ELM GATT UUIDs. Track requirements and real-device evidence in
+The app declares `location` and `bluetooth-central` background modes for the
+explicitly started session. This is a capability declaration, not a guarantee of
+continuous execution after suspension or termination.
+
+The current software boundary also includes a versioned `AdapterProfile` JSON,
+explicit observed-profile BLE and Wi-Fi transports, cancellation-safe ELM session
+startup, and a live adapter controller that decodes every matching signal in the
+profile and records the raw frame plus decoded samples. The demo adapter exercises
+the same session, decoder, recorder and UI path without radio hardware.
+The existing v2 upload accepts GPS/MARK/STATE, not OBD frames.
+
+This is not BT4N compatibility proof. Profile discovery must precede Core Bluetooth
+use; do not assume common ELM GATT UUIDs or that the box's dual-mode claim means
+arbitrary iOS Bluetooth Classic access. Track requirements and real-device evidence in
 [ADR-0004](../docs/adr/0004-obd-bt4n-integration.md) and
 [the hardware run sheet](../docs/reports/obd-bt4n-compatibility.md).
 
@@ -82,6 +92,7 @@ case; a healthy display or simulator is not a 30-minute background pass.
 ## Remaining release gates
 
 Real-device signing/install and 30-minute logs, automatic pairing/provisioning,
-full upload recovery fault testing, Naver map/roadview integration in the native UI,
-CarPlay templates/entitlement, Android parity, Windows packaging and real CAN adapter.
+live BT4N profile capture, vehicle signal validation, full upload recovery fault
+testing, Naver map/roadview integration in the native UI, CarPlay templates/entitlement,
+Android parity, Windows packaging and real CAN adapter acceptance.
 See ../docs/production-plan.md for the full completion criteria.

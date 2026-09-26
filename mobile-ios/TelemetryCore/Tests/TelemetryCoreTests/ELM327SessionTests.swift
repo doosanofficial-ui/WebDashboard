@@ -115,4 +115,22 @@ final class ELM327SessionTests: XCTestCase {
         let secondError = await secondSession.lastError
         XCTAssertEqual(secondError, .disconnected)
     }
+
+    func testStopDuringInitializationReleasesPendingResponse() async throws {
+        let transport = MockCANTransport()
+        let session = ELM327Session(transport: transport)
+        let startTask = Task { try await session.start() }
+        try await waitForWrites(1, on: transport)
+
+        await session.stop()
+
+        do {
+            try await startTask.value
+            XCTFail("Expected initialization to be cancelled")
+        } catch let error as ELM327SessionError {
+            XCTAssertEqual(error, .disconnected)
+        }
+        let state = await session.state
+        XCTAssertEqual(state, .disconnected)
+    }
 }

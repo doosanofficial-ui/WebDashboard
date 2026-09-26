@@ -1,6 +1,7 @@
 import SwiftUI
 import Charts
 import TelemetryCore
+import UniformTypeIdentifiers
 
 struct DashboardView: View {
     @Bindable var model: TelemetryModel
@@ -207,6 +208,7 @@ private struct SignalChart: View {
 private struct SettingsView: View {
     @Bindable var model: TelemetryModel
     @State private var credential = ""
+    @State private var importingAdapterProfile = false
     var body: some View {
         NavigationStack {
             Form {
@@ -241,7 +243,33 @@ private struct SettingsView: View {
                         if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
                     }
                 }
+                Section("CAN adapter profile") {
+                    Text(model.adapterProfileStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("Import adapter profile JSON") {
+                        importingAdapterProfile = true
+                    }
+                    .accessibilityIdentifier("import-adapter-profile")
+                    Button("Start live adapter", action: model.startLiveAdapter)
+                        .accessibilityIdentifier("start-live-adapter")
+                        .disabled(model.adapterProfile == nil)
+                    Button("Stop live adapter", role: .destructive, action: model.stopLiveAdapter)
+                    Text("BLE requires observed service/write/notify UUIDs. Wi-Fi requires an observed TCP endpoint. No adapter identifiers are guessed.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }.navigationTitle("Connection")
+                .fileImporter(isPresented: $importingAdapterProfile, allowedContentTypes: [.json]) { result in
+                    guard case .success(let url) = result else { return }
+                    let accessed = url.startAccessingSecurityScopedResource()
+                    defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+                    guard let data = try? Data(contentsOf: url) else {
+                        model.adapterProfileStatus = "Adapter profile could not be read"
+                        return
+                    }
+                    model.importAdapterProfile(data)
+                }
         }
     }
 }

@@ -8,6 +8,8 @@ enum BLETransportError: Error, Equatable {
     case characteristicsNotConfigured
     case notConnected
     case connectionFailed
+    case unsupportedCharacteristicProperties
+    case notificationFailed
 }
 
 /// Core Bluetooth adapter with explicit, observed characteristic configuration.
@@ -25,6 +27,7 @@ final class BLETransport: NSObject, CANTransport, @preconcurrency CBCentralManag
     private var writeCharacteristic: CBCharacteristic?
     private var notifyCharacteristic: CBCharacteristic?
     private var connectContinuation: CheckedContinuation<Void, Error>?
+    private var stateContinuation: CheckedContinuation<Void, Error>?
     private var closed = false
 
     init(targetPeripheralID: UUID?, serviceUUID: CBUUID?, writeUUID: CBUUID?, notifyUUID: CBUUID?) {
@@ -55,23 +58,39 @@ final class BLETransport: NSObject, CANTransport, @preconcurrency CBCentralManag
     }
 
     func connect() async throws {
-        guard central.state == .poweredOn else { throw BLETransportError.bluetoothUnavailable }
+        try await waitForBluetoothReady()
+        if peripheral == nil, let targetPeripheralID {
+            peripheral = central.retrievePeripherals(withIdentifiers: [targetPeripheralID]).first
+        }
         guard let peripheral else { throw BLETransportError.peripheralNotSelected }
         guard serviceUUID != nil, writeUUID != nil, notifyUUID != nil else {
             throw BLETransportError.characteristicsNotConfigured
         }
         closed = false
+        writeCharacteristic = nil
+        notifyCharacteristic = nil
         peripheral.delegate = self
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            connectContinuation = continuation
-            central.connect(peripheral, options: nil)
-        }
+        try await withTaskCancellationHandler(operation: {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                if Task.isCancelled {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+                connectContinuation = continuation
+                central.connect(peripheral, options: nil)
+            }
+        }, onCancel: { [weak self] in
+            Task { @MainActor in self?.cancelPendingConnection() }
+        })
     }
 
     func write(_ data: Data) async throws {
         guard let peripheral, peripheral.state == .connected,
               let characteristic = writeCharacteristic else {
             throw BLETransportError.notConnected
+        }
+        guard characteristic.properties.contains(.write) || characteristic.properties.contains(.writeWithoutResponse) else {
+            throw BLETransportError.unsupportedCharacteristicProperties
         }
         let type: CBCharacteristicWriteType = characteristic.properties.contains(.write)
             ? .withResponse : .withoutResponse
@@ -83,12 +102,23 @@ final class BLETransport: NSObject, CANTransport, @preconcurrency CBCentralManag
         if let peripheral { central.cancelPeripheralConnection(peripheral) }
         connectContinuation?.resume(throwing: BLETransportError.connectionFailed)
         connectContinuation = nil
+        stateContinuation?.resume(throwing: BLETransportError.connectionFailed)
+        stateContinuation = nil
         continuation.finish()
     }
 
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        if central.state == .poweredOff {
-            fail(BLETransportError.bluetoothUnavailable)
+        switch central.state {
+        case .poweredOn:
+            stateContinuation?.resume()
+            stateContinuation = nil
+        case .poweredOff, .unauthorized, .unsupported:
+            let error = BLETransportError.bluetoothUnavailable
+            stateContinuation?.resume(throwing: error)
+            stateContinuation = nil
+            fail(error)
+        default:
+            break
         }
     }
 
@@ -138,8 +168,23 @@ final class BLETransport: NSObject, CANTransport, @preconcurrency CBCentralManag
             if let writeUUID, characteristic.uuid == writeUUID { writeCharacteristic = characteristic }
             if let notifyUUID, characteristic.uuid == notifyUUID { notifyCharacteristic = characteristic }
         }
-        guard let notifyCharacteristic, writeCharacteristic != nil else { return }
+        guard let writeCharacteristic, let notifyCharacteristic else { return }
+        guard writeCharacteristic.properties.contains(.write) || writeCharacteristic.properties.contains(.writeWithoutResponse),
+              notifyCharacteristic.properties.contains(.notify) || notifyCharacteristic.properties.contains(.indicate) else {
+            fail(BLETransportError.unsupportedCharacteristicProperties)
+            return
+        }
         peripheral.setNotifyValue(true, for: notifyCharacteristic)
+    }
+
+    func peripheral(_ peripheral: CBPeripheral,
+                    didUpdateNotificationStateFor characteristic: CBCharacteristic,
+                    error: Error?) {
+        guard characteristic.uuid == notifyUUID else { return }
+        guard error == nil, characteristic.isNotifying else {
+            fail(BLETransportError.notificationFailed)
+            return
+        }
         connectContinuation?.resume()
         connectContinuation = nil
     }
@@ -155,5 +200,44 @@ final class BLETransport: NSObject, CANTransport, @preconcurrency CBCentralManag
         connectContinuation?.resume(throwing: error)
         connectContinuation = nil
         continuation.finish(throwing: error)
+    }
+
+    private func waitForBluetoothReady() async throws {
+        switch central.state {
+        case .poweredOn:
+            return
+        case .poweredOff, .unauthorized, .unsupported:
+            throw BLETransportError.bluetoothUnavailable
+        case .unknown, .resetting:
+            try await withTaskCancellationHandler(operation: {
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                    if central.state == .poweredOn {
+                        continuation.resume()
+                    } else if central.state == .poweredOff || central.state == .unauthorized || central.state == .unsupported {
+                        continuation.resume(throwing: BLETransportError.bluetoothUnavailable)
+                    } else {
+                        stateContinuation = continuation
+                    }
+                }
+            }, onCancel: { [weak self] in
+                Task { @MainActor in self?.cancelStateWait() }
+            })
+        @unknown default:
+            throw BLETransportError.bluetoothUnavailable
+        }
+    }
+
+    private func cancelStateWait() {
+        let pending = stateContinuation
+        stateContinuation = nil
+        pending?.resume(throwing: CancellationError())
+    }
+
+    private func cancelPendingConnection() {
+        let pending = connectContinuation
+        connectContinuation = nil
+        pending?.resume(throwing: CancellationError())
+        if let peripheral { central.cancelPeripheralConnection(peripheral) }
+        closed = true
     }
 }

@@ -18,6 +18,13 @@ This is an evidence checkpoint, not a release approval.
 - iOS `LocationService` extraction and local measurement recorder status.
 - Explicit BLE and Wi-Fi transport adapters. BT4N UUIDs are not guessed; BLE
   connection fails closed until service/write/notify characteristics are known.
+- Versioned adapter profile import and live adapter controller. Startup has a bounded
+  connection timeout, pending prompt cancellation, explicit BLE write/notify property
+  checks, and profile-defined multi-signal decode/recording. This remains a transport
+  implementation result, not BT4N hardware evidence.
+- `bluetooth-central` is declared alongside location background mode for the explicitly
+  started session. Background scheduling, state restoration, and locked-screen endurance
+  remain physical-device gates.
 - Compile-gated, status-only CarPlay projection. No entitlement key or CarPlay
   scene manifest was invented.
 - Versioned dashboard profile JSON with typed numeric widgets, persisted profile
@@ -38,15 +45,15 @@ This is an evidence checkpoint, not a release approval.
 
 | Area | Result | Evidence |
 | --- | --- | --- |
-| Swift Core tests | PASS, 53 tests | `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-path mobile-ios/TelemetryCore` |
-| iOS application build | PASS | Xcode 26.3, iOS 26.2 Simulator SDK, `/tmp/telemetry-ios-verify.IFVJob` |
+| Swift Core tests | PASS, 56 tests | `swift test --package-path mobile-ios/TelemetryCore` |
+| iOS application build | PASS | Xcode 26.3, iOS 26.2 Simulator SDK, `/tmp/telemetry-ios-verify.z1cvJG` |
 | Server tests | PASS, 65 tests | `/tmp/webdashboard-verify-20260924.Z9wDKb/python/bin/python -m unittest discover -s server/tests -p 'test*.py'` |
 | GPS/web contract tests | PASS, 28 tests | `node --experimental-vm-modules --test scripts/tests/gps-data-integrity.test.mjs` |
 | Service worker tests | PASS, 8 tests | `node scripts/tests/service-worker.test.mjs` |
 | GitHub smoke | PASS, server/client/mobile | PR #23 run `36240489396` |
 | UI runtime smoke | PASS | Direct install/launch on iPhone 17 Pro iOS 26.2 showed `Local recorder ready`, profile-defined Speed/FR/RL/RR/Yaw/Ay widgets, Dashboard Editor, and a duplicated Speed widget; XCTest runner remains unreliable |
 | iOS 27 build | NOT RUN | Host has Xcode 26.3 / iOS 26.2 SDK |
-| Software ELM vertical slice | PASS | Direct simulator demo adapter path; not a BT4N or vehicle result |
+| Software ELM vertical slice | PASS | Direct simulator demo adapter start/monitor/stop; not a BT4N or vehicle result |
 | BT4N live profile | NOT RUN | No observed GATT/serial profile or firmware capture |
 | Santa Fe MX5 HEV vehicle capture | NOT RUN | Model year/market and raw CAN access remain unverified |
 | CarPlay entitlement/runtime | NOT RUN | Apple entitlement not requested or granted |
@@ -65,7 +72,9 @@ This is an evidence checkpoint, not a release approval.
 - Resolve the simulator UI runner issue and obtain a readable assertion result.
 - Finish Windows clean-machine packaging, rollback, and real Vector/CANoe bridge
   acceptance.
-- Add the configurable multi-widget dashboard editor after the vertical slice.
+- Complete the configurable multi-widget dashboard editor against live signal state;
+  the current profile editor supports persisted dashboard profile editing, duplicate,
+  delete and grid snap, but not the full production editor acceptance scope.
 
 ## Evidence boundary
 

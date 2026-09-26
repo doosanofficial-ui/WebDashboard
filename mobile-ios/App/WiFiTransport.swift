@@ -34,13 +34,21 @@ final class WiFiTransport: CANTransport {
     func connect() async throws {
         if isReady { return }
         closed = false
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            connectContinuation = continuation
-            connection.stateUpdateHandler = { [weak self] state in
-                Task { @MainActor in self?.handle(state) }
+        try await withTaskCancellationHandler(operation: {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                if Task.isCancelled {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+                connectContinuation = continuation
+                connection.stateUpdateHandler = { [weak self] state in
+                    Task { @MainActor in self?.handle(state) }
+                }
+                connection.start(queue: queue)
             }
-            connection.start(queue: queue)
-        }
+        }, onCancel: { [weak self] in
+            Task { @MainActor in self?.cancelPendingConnection() }
+        })
     }
 
     func write(_ data: Data) async throws {
@@ -78,6 +86,15 @@ final class WiFiTransport: CANTransport {
         default:
             break
         }
+    }
+
+    private func cancelPendingConnection() {
+        guard !isReady else { return }
+        closed = true
+        let pending = connectContinuation
+        connectContinuation = nil
+        pending?.resume(throwing: CancellationError())
+        connection.cancel()
     }
 
     private func receive() {

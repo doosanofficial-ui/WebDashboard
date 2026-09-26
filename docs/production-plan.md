@@ -98,9 +98,11 @@ Windows 브리지 대안이며 실물 호환은 아직 미검증이다.
   완료: 선택한 BT4N의 실제 서비스/특성/응답과 MX5 HEV의 지원 PID 증거 확보. 포장만으로 PASS 금지.
 - [ ] **C20 P0 iOS OBD 수집**: Core Bluetooth transport, 명령 allowlist, prompt parser, 단일 질의·타임아웃·재연결.
   진행: `TelemetryCore/ELM327.swift` 순수 파서/4개 PID 명령, allowlisted raw-monitor session,
-  synthetic XCTest, versioned `AdapterProfile`/signal catalog와 simulator
+  synthetic XCTest, versioned `AdapterProfile`/signal catalog, observed-profile BLE/Wi-Fi
+  transport, cancellation-safe startup, live multi-signal controller와 simulator
   `MockCANTransport -> decoder -> recorder -> UI` vertical slice를 구현했다.
-  BLE 연결/실차 샘플/UI/업링크는 아직 연결하지 않았으며 이 단계만으로 완료 처리하지 않음.
+  실제 BT4N GATT/프레이밍, 실차 샘플, background polling, iOS 27 실기기와 업링크는
+  아직 검증하지 않았으며 이 단계만으로 완료 처리하지 않음.
   완료: iOS 27 실기기에서 지원 PID 읽기, 권한 거부/분할 응답/단절/Stop 회귀 검사 통과.
 - [ ] **C21 P1 Windows OBD 브리지**: 확인된 BLE 또는 serial transport와 비차단 sample cache.
   완료: Windows 실물 연결, 느린 OBD 응답에도 CAN 10Hz 지속, 웹/iPad 표시 확인.
@@ -111,7 +113,8 @@ Windows 브리지 대안이며 실물 호환은 아직 미검증이다.
 - [ ] **C24 P1 MX5 HEV 호환 승인**: 기준 진단기와 값/단위 대조, 엔진 정지 RPM 0·미지원·no-data 구별.
   완료: 같은 앱/서버 빌드의 차종·연식·장비 프로파일과 실제 PID 목록 공개. 제조사 전용 HEV 값은 추측 금지.
 - [ ] **C25 P0 오픈소스 채택 검증**: 스타 수와 별도로 실제 사용 보고·미해결 결함·라이선스·대상 플랫폼 평가.
-  조사: [8개 후보 및 Pelican/OBDb 근거](reports/obd-oss-research-2026-09-23.md).
+  조사: [8개 후보 및 Pelican/OBDb 근거](reports/obd-oss-research-2026-09-23.md),
+  [최신 공개 저장소/운영 증거 보강](reports/obd-oss-research-2026-09-26.md).
   완료: 고정 commit 후보의 빌드/재연결/실물 재현과 재사용 조건 확인. 충분한 독립 성공 사례가 없으면
   부족함을 명시하고 승인 완료로 처리하지 않음. 공개 저장소/별점/댓글 수를 실차 성공 건수로 계산하지 않음.
   iOS는 LTSupportAutomotive/SwiftOBD2 비교 평가를 우선한다. 자체 전체 스캐너 스택 확장보다 이 평가가 선행한다.

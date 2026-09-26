@@ -45,6 +45,7 @@ final class TelemetryModel: NSObject {
     // Core Location delivers delegate events on this manager's main run loop.
     @ObservationIgnored private let locationService: LocationService
     @ObservationIgnored private let demoAdapter: DemoAdapterController
+    @ObservationIgnored private let liveAdapter: LiveAdapterController
     @ObservationIgnored private var outbox: DurableOutbox?
     @ObservationIgnored private var localRecorder: MeasurementRecorder?
     @ObservationIgnored private var dashboardURL: URL?
@@ -60,6 +61,7 @@ final class TelemetryModel: NSObject {
         clientID = existing ?? UUID().uuidString.lowercased()
         locationService = LocationService()
         demoAdapter = DemoAdapterController()
+        liveAdapter = LiveAdapterController()
         super.init()
         UserDefaults.standard.set(clientID, forKey: "clientID")
         locationService.onStatus = { [weak self] status in self?.locationStatus = status }
@@ -72,6 +74,10 @@ final class TelemetryModel: NSObject {
         demoAdapter.onState = { [weak self] state in self?.adapterStatus = state }
         demoAdapter.onFrame = { [weak self] frame, decoded in
             self?.handleDemoFrame(frame, decoded: decoded)
+        }
+        liveAdapter.onState = { [weak self] state in self?.adapterStatus = state }
+        liveAdapter.onFrame = { [weak self] frame, decoded in
+            self?.handleLiveFrame(frame, decoded: decoded)
         }
         do {
             let root = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
@@ -210,6 +216,21 @@ final class TelemetryModel: NSObject {
         rawCANText = "-"
     }
 
+    func startLiveAdapter() {
+        guard let adapterProfile else {
+            adapterProfileStatus = "No live adapter profile"
+            adapterStatus = "Live adapter not configured"
+            return
+        }
+        liveAdapter.start(profile: adapterProfile)
+    }
+
+    func stopLiveAdapter() {
+        liveAdapter.stop()
+        adapterSignalValue = nil
+        rawCANText = "-"
+    }
+
     func importAdapterProfile(_ data: Data) {
         do {
             let profile = try JSONDecoder().decode(AdapterProfile.self, from: data)
@@ -240,6 +261,28 @@ final class TelemetryModel: NSObject {
             receivedAtEpoch: frame.receivedAtEpoch,
             receivedAtMonotonicNanos: frame.receivedAtMonotonicNanos
         )))
+    }
+
+    private func handleLiveFrame(_ frame: CANFrame, decoded: [LiveDecodedSignal]) {
+        guard let primary = decoded.first else { return }
+        adapterStatus = "Live adapter monitoring"
+        adapterSignalValue = primary.decoded.value
+        let idFormat = frame.isExtended ? "0x%08X  %@" : "0x%03X  %@"
+        rawCANText = String(format: idFormat, frame.canID,
+                            frame.payload.map { String(format: "%02X", $0) }.joined(separator: " "))
+        record(.can(frame: frame))
+        for item in decoded {
+            record(.signal(DecodedSignalSample(
+                signalID: item.definition.id,
+                value: item.decoded.value,
+                rawValue: item.decoded.rawValue,
+                enumName: item.decoded.enumName,
+                unit: item.definition.unit,
+                frameSequence: frame.sequence,
+                receivedAtEpoch: frame.receivedAtEpoch,
+                receivedAtMonotonicNanos: frame.receivedAtMonotonicNanos
+            )))
+        }
     }
 
     func startLocation() {

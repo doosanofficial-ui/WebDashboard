@@ -31,6 +31,8 @@ public enum ELM327Command: String, CaseIterable, Sendable {
 }
 
 public actor ELM327Session {
+    private static let connectionTimeoutNanoseconds: UInt64 = 10_000_000_000
+
     public private(set) var state: ELM327State = .disconnected
     public private(set) var lastError: ELM327SessionError?
 
@@ -67,7 +69,7 @@ public actor ELM327Session {
         lastError = nil
         state = .connecting
         do {
-            try await transport.connect()
+            try await connectWithTimeout()
             state = .initializing
             let incoming = await transport.incoming()
             readerTask = Task { [weak self] in
@@ -86,6 +88,11 @@ public actor ELM327Session {
             state = .ready
             try await transport.write(ELM327Command.monitorAll.data)
             state = .monitoring
+        } catch is CancellationError {
+            await transport.close()
+            state = .disconnected
+            frameContinuation.finish()
+            throw CancellationError()
         } catch let error as ELM327SessionError {
             transitionToRecovery(error)
             throw error
@@ -120,16 +127,25 @@ public actor ELM327Session {
             await self?.failPendingResponse(.timeout)
         }
         defer { timeoutTask.cancel() }
-        let response: String = try await withCheckedThrowingContinuation { continuation in
-            responseWaiter = continuation
-            Task { [weak self, transport] in
-                do {
-                    try await transport.write(command.data)
-                } catch {
-                    await self?.failPendingResponse(.transport)
+        let response: String = try await withTaskCancellationHandler(operation: {
+            try await withCheckedThrowingContinuation { continuation in
+                responseWaiter = continuation
+                if Task.isCancelled {
+                    responseWaiter = nil
+                    continuation.resume(throwing: ELM327SessionError.disconnected)
+                    return
+                }
+                Task { [weak self, transport] in
+                    do {
+                        try await transport.write(command.data)
+                    } catch {
+                        await self?.failPendingResponse(.transport)
+                    }
                 }
             }
-        }
+        }, onCancel: { [weak self] in
+            Task { await self?.failPendingResponse(.disconnected) }
+        })
         let normalized = response.uppercased().replacingOccurrences(of: " ", with: "")
         if normalized.contains("BUFFERFULL") {
             throw ELM327SessionError.bufferFull
@@ -143,6 +159,21 @@ public actor ELM327Session {
         guard let responseWaiter else { return }
         self.responseWaiter = nil
         responseWaiter.resume(throwing: error)
+    }
+
+    private func connectWithTimeout() async throws {
+        let transport = transport
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                try await transport.connect()
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: Self.connectionTimeoutNanoseconds)
+                throw ELM327SessionError.timeout
+            }
+            defer { group.cancelAll() }
+            try await group.next()!
+        }
     }
 
     private func ingest(_ chunk: Data) {
