@@ -80,11 +80,11 @@ CarPlay gates.
 
 The versioned `0.2.0` feature build was then installed and launched again:
 
-- Build artifact: `/tmp/telemetry-ios-device-v020.3ChbUq`
-- Install/launch artifacts: `/tmp/telemetry-ios-device-run.Fjq8oB/`
+- Latest pipeline build artifact: `/tmp/telemetry-ios-device-pipeline.yamYu4`
+- Install/launch artifacts: `/tmp/telemetry-ios-device-run.FIdDub/`
 - Bundle version: `0.2.0` build `1`
 - Result: **physical launch PASS**
-- Process observed: `Telemetry.app/Telemetry`, PID `20664`
+- Process observed: `Telemetry.app/Telemetry`, PID `20668`
 
 ## Limitations
 

@@ -66,6 +66,9 @@ Current native development version: `0.2.0` (build `1`).
 - Direct demo/live adapter decoded signals now share the validated CAN snapshot and
   chart buffer used by the cockpit, so native adapter data is visible in gauges and
   graphs instead of being recorder-only.
+- `CANSignalPipeline` is now the shared Core decoder boundary for live/replay paths;
+  it produces typed decoded samples and rejects duplicate signal catalogs before
+  monitoring starts.
 - Foreground GPS now starts with When In Use authorization; Always remains the
   explicit requirement for locked-screen collection. Native MapKit track rendering
   uses a bounded in-memory coordinate history.
@@ -78,8 +81,9 @@ Current native development version: `0.2.0` (build `1`).
 
 | Area | Result | Evidence |
 | --- | --- | --- |
-| Swift Core tests | PASS, 63 tests | `mobile-ios/scripts/verify.sh build`; `0.2.0` artifact `/tmp/telemetry-ios-verify.DLcTWQ` |
+| Swift Core tests | PASS, 66 tests | `mobile-ios/scripts/verify.sh build`; `0.2.0` artifact `/tmp/telemetry-ios-verify.akbc6g` |
 | Server CAN contract tests | PASS, 3 tests | `ServerCANFrameTests` in the same artifact |
+| CAN pipeline tests | PASS, 3 tests | `CANSignalPipelineTests` in the same artifact |
 | ELM327 DLC/recovery tests | PASS, 7 session tests | `ELM327SessionTests` in the same artifact |
 | Native app build after hardening | PASS | XcodeGen-generated `0.2.0` project, Xcode 26.3/iOS 26.2 Simulator SDK; `/tmp/telemetry-ios-verify.DLcTWQ` |
 | MapKit track widget compile | PASS | Native target includes `MapKit`, `MapPolyline`, and bounded GPS track model; runtime GPS fix not run |
@@ -94,9 +98,9 @@ Current native development version: `0.2.0` (build `1`).
 | UI runtime smoke | PASS | Direct install/launch on the iPhone 17 Pro **simulator** with iOS 26.2 showed non-overlapping migrated Speed/FR/RL/RR/Yaw/Ay grid widgets, local recorder, and Dashboard Editor controls; this is not the target physical iPhone 17/iOS 27 result, and XCTest runner remains unreliable |
 | SwiftUI cockpit visual smoke | PASS | Direct install/launch on the iPhone 17 Pro iOS 26.2 simulator; screenshot evidence is stored under docs/reports/evidence/ |
 | iOS 27 build | NOT RUN | Host has Xcode 26.3 / iOS 26.2 SDK |
-| iPhone 17 physical build | PASS (SDK boundary) | Fresh `0.2.0` Personal Team build `/tmp/telemetry-ios-device-v020.3ChbUq` with Xcode 26.3/iOS 26.2 SDK; not an iOS 27 SDK result |
+| iPhone 17 physical build | PASS (SDK boundary) | Fresh `0.2.0` Personal Team build `/tmp/telemetry-ios-device-pipeline.yamYu4` with Xcode 26.3/iOS 26.2 SDK; not an iOS 27 SDK result |
 | iPhone 17 physical install | PASS | `0.2.0` build `1` installed by `devicectl` |
-| iPhone 17 physical launch | PASS (launch boundary) | Fresh `verify_device.sh` run returned `Physical launch PASS`; process `Telemetry.app/Telemetry` observed at PID `20664`; artifacts `/tmp/telemetry-ios-device-run.Fjq8oB/` |
+| iPhone 17 physical launch | PASS (launch boundary) | Fresh `verify_device.sh` run returned `Physical launch PASS`; process `Telemetry.app/Telemetry` observed at PID `20668`; artifacts `/tmp/telemetry-ios-device-run.FIdDub/` |
 | Software ELM vertical slice | PASS | Direct simulator demo adapter start/monitor/stop; not a BT4N or vehicle result |
 | CarPlay external display host | PASS (display only) | Simulator `I/O > External Displays > CarPlay` opened the default CarPlay home screen; app rendering was not claimed |
 | BT4N live profile | NOT RUN | No observed GATT/serial profile or firmware capture |

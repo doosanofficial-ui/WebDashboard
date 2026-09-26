@@ -8,7 +8,7 @@ enum LiveAdapterError: Error {
     case invalidBLEProfile
 }
 
-typealias LiveDecodedSignal = (definition: SignalDefinition, decoded: DecodedSignal)
+typealias LiveDecodedSignal = DecodedCANSignal
 
 @MainActor
 final class LiveAdapterController {
@@ -21,6 +21,10 @@ final class LiveAdapterController {
     func start(profile: AdapterProfile) {
         stop()
         guard !profile.signals.isEmpty else {
+            onState?("Live adapter profile invalid")
+            return
+        }
+        guard let pipeline = try? CANSignalPipeline(definitions: profile.signals) else {
             onState?("Live adapter profile invalid")
             return
         }
@@ -46,10 +50,7 @@ final class LiveAdapterController {
                     let reader = Task { [weak self] in
                         for await frame in stream {
                             guard let self else { return }
-                            let decoded = profile.signals.compactMap { definition -> LiveDecodedSignal? in
-                                guard let value = try? SignalDecoder.decode(frame, definition: definition) else { return nil }
-                                return (definition: definition, decoded: value)
-                            }
+                            let decoded = pipeline.decode(frame)
                             guard self.generation == currentGeneration else { return }
                             // Raw frames are forwarded even when no configured
                             // signal matches; the model owns the logging policy.

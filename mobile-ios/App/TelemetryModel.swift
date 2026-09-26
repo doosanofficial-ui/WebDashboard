@@ -319,16 +319,7 @@ final class TelemetryModel: NSObject {
         // solely because signal decoding is unavailable.
         record(.can(frame: frame))
         for item in decoded {
-            record(.signal(DecodedSignalSample(
-                signalID: item.definition.id,
-                value: item.decoded.value,
-                rawValue: item.decoded.rawValue,
-                enumName: item.decoded.enumName,
-                unit: item.definition.unit,
-                frameSequence: frame.sequence,
-                receivedAtEpoch: frame.receivedAtEpoch,
-                receivedAtMonotonicNanos: frame.receivedAtMonotonicNanos
-            )))
+            record(.signal(item.sample))
         }
         publishCarPlayProjection()
     }
