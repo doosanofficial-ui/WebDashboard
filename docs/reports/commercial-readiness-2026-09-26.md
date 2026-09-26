@@ -20,6 +20,8 @@ This is an evidence checkpoint, not a release approval.
   connection fails closed until service/write/notify characteristics are known.
 - Compile-gated, status-only CarPlay projection. No entitlement key or CarPlay
   scene manifest was invented.
+- Versioned dashboard profile JSON with typed numeric widgets, persisted profile
+  loading, editor duplicate/delete/snap operations, and a SwiftUI editor view.
 - Windows/server CSV recording isolation, bounded queues, write receipts, fault
   health, and web/native recording-health UI.
 
@@ -27,12 +29,12 @@ This is an evidence checkpoint, not a release approval.
 
 | Area | Result | Evidence |
 | --- | --- | --- |
-| Swift Core tests | PASS, 45 tests | `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-path mobile-ios/TelemetryCore` |
+| Swift Core tests | PASS, 49 tests | `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-path mobile-ios/TelemetryCore` |
 | iOS application build | PASS | Xcode 26.3, iOS 26.2 Simulator SDK, `/tmp/telemetry-ios-verify.IFVJob` |
 | Server tests | PASS, 63 tests | `/tmp/webdashboard-verify-20260924.Z9wDKb/python/bin/python -m unittest discover -s server/tests -p 'test*.py'` |
 | GPS/web contract tests | PASS, 28 tests | `node --experimental-vm-modules --test scripts/tests/gps-data-integrity.test.mjs` |
 | Service worker tests | PASS, 8 tests | `node scripts/tests/service-worker.test.mjs` |
-| UI runtime smoke | PASS | Direct install/launch on iPhone 17 Pro iOS 26.2 showed `Local recorder ready`, profile-defined Speed/FR/RL/RR/Yaw/Ay widgets, and Dashboard Editor; XCTest runner remains unreliable |
+| UI runtime smoke | PASS | Direct install/launch on iPhone 17 Pro iOS 26.2 showed `Local recorder ready`, profile-defined Speed/FR/RL/RR/Yaw/Ay widgets, Dashboard Editor, and a duplicated Speed widget; XCTest runner remains unreliable |
 | iOS 27 build | NOT RUN | Host has Xcode 26.3 / iOS 26.2 SDK |
 | BT4N live profile | NOT RUN | No observed GATT/serial profile or firmware capture |
 | Santa Fe MX5 HEV vehicle capture | NOT RUN | Model year/market and raw CAN access remain unverified |
