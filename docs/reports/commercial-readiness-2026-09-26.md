@@ -35,6 +35,10 @@ This is an evidence checkpoint, not a release approval.
 - Dashboard widget rendering now distinguishes numeric/circular/semi-circular gauges,
   horizontal/vertical bars, LED/status, raw CAN/bit text, time-series, GPS and map
   information cards, including stale state and configured warning/critical colors.
+- SwiftUI cockpit redesign now adds a dark glanceable live shell, primary signal
+  hierarchy, adaptive wheel metric rail, chart/GPS/session cards, shared visual
+  tokens, and live-only 100 ms invalidation scope. Evidence:
+  docs/reports/swiftui-cockpit-redesign-2026-09-26.md.
 - Windows `start.ps1`/`start.cmd` bootstrap path with requirements hash tracking,
   and default-deny CORS with explicit `ALLOWED_ORIGINS` opt-in.
 - Simulator software vertical slice: `MockCANTransport -> ELM327Session ->
@@ -59,6 +63,7 @@ This is an evidence checkpoint, not a release approval.
 | GitHub smoke | PASS, server/client/mobile | PR #23 run `36242750253` |
 | Native Reliability | PASS, Core + Linux/Windows contracts | PR #23 run `36242749947` |
 | UI runtime smoke | PASS | Direct install/launch on the iPhone 17 Pro **simulator** with iOS 26.2 showed non-overlapping migrated Speed/FR/RL/RR/Yaw/Ay grid widgets, local recorder, and Dashboard Editor controls; this is not the target physical iPhone 17/iOS 27 result, and XCTest runner remains unreliable |
+| SwiftUI cockpit visual smoke | PASS | Direct install/launch on the iPhone 17 Pro iOS 26.2 simulator; screenshot evidence is stored under docs/reports/evidence/ |
 | iOS 27 build | NOT RUN | Host has Xcode 26.3 / iOS 26.2 SDK |
 | Software ELM vertical slice | PASS | Direct simulator demo adapter start/monitor/stop; not a BT4N or vehicle result |
 | CarPlay external display host | PASS (display only) | Simulator `I/O > External Displays > CarPlay` opened the default CarPlay home screen; app rendering was not claimed |

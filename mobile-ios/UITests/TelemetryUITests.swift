@@ -34,6 +34,16 @@ final class TelemetryUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["local-recording-status"].waitForExistence(timeout: 5))
     }
 
+    func testCockpitAnchorsAreVisible() {
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.otherElements["live-status-strip"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.otherElements["primary-metric"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.otherElements["session-mark"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.otherElements["location-card"].waitForExistence(timeout: 5))
+    }
+
     func testDashboardRendersProfileDefinedWidgetLabel() {
         let app = XCUIApplication()
         app.launch()
