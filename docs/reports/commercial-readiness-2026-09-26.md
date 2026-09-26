@@ -24,6 +24,10 @@ This is an evidence checkpoint, not a release approval.
   loading, editor duplicate/delete/snap operations, and a SwiftUI editor view.
 - Windows `start.ps1`/`start.cmd` bootstrap path with requirements hash tracking,
   and default-deny CORS with explicit `ALLOWED_ORIGINS` opt-in.
+- Simulator software vertical slice: `MockCANTransport -> ELM327Session ->
+  CANFrame -> SignalDecoder -> numeric UI -> local recorder`, with direct
+  accessibility evidence for `RAW 0x123`, decoded signal values, active recorder,
+  and explicit stop.
 - Windows/server CSV recording isolation, bounded queues, write receipts, fault
   health, and web/native recording-health UI.
 
@@ -39,6 +43,7 @@ This is an evidence checkpoint, not a release approval.
 | GitHub smoke | PASS, server/client/mobile | PR #23 run `36240489396` |
 | UI runtime smoke | PASS | Direct install/launch on iPhone 17 Pro iOS 26.2 showed `Local recorder ready`, profile-defined Speed/FR/RL/RR/Yaw/Ay widgets, Dashboard Editor, and a duplicated Speed widget; XCTest runner remains unreliable |
 | iOS 27 build | NOT RUN | Host has Xcode 26.3 / iOS 26.2 SDK |
+| Software ELM vertical slice | PASS | Direct simulator demo adapter path; not a BT4N or vehicle result |
 | BT4N live profile | NOT RUN | No observed GATT/serial profile or firmware capture |
 | Santa Fe MX5 HEV vehicle capture | NOT RUN | Model year/market and raw CAN access remain unverified |
 | CarPlay entitlement/runtime | NOT RUN | Apple entitlement not requested or granted |
