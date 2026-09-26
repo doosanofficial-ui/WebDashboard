@@ -373,7 +373,7 @@ struct LiveCockpitView: View {
     @ViewBuilder
     private func dashboardWidget(_ widget: DashboardWidgetDefinition, now: Date) -> some View {
         let value = widget.signalID.flatMap { model.frame?.sig[$0] }
-        let fresh = canDataIsFresh(at: now)
+        let fresh = signalDataIsFresh(widget.signalID, at: now, fallback: canDataIsFresh(at: now))
         switch widget.type {
         case .numericGauge:
             numericWidget(widget, value: value, fresh: fresh)
@@ -603,6 +603,19 @@ struct LiveCockpitView: View {
         guard (model.connection == "Connected" || adapterLive),
               let lastFrameAt = model.lastFrameAt else { return false }
         return now.timeIntervalSince(lastFrameAt) <= 1.5
+    }
+
+    private func signalDataIsFresh(_ signalID: String?, at now: Date, fallback: Bool) -> Bool {
+        guard let signalID,
+              let timeout = model.localSignalTimeouts[signalID],
+              let receivedAt = model.localSignalReceivedAt[signalID] else {
+            return fallback
+        }
+        guard model.adapterStatus.localizedCaseInsensitiveContains("monitoring") else {
+            return false
+        }
+        return now.timeIntervalSince1970 >= receivedAt
+            && now.timeIntervalSince1970 - receivedAt <= timeout
     }
 
     private func normalized(_ value: Double?, configuration: DashboardWidgetConfiguration) -> Double {

@@ -33,6 +33,8 @@ final class TelemetryModel: NSObject {
     var frame: CanFrame?
     var lastFrameAt: Date?
     var canSource = "Server"
+    var localSignalTimeouts: [String: Double] = [:]
+    var localSignalReceivedAt: [String: Double] = [:]
     var lastLocation: TelemetryEvent?
     var locationTrack: [CLLocationCoordinate2D] = []
     var points: [CanPoint] = []
@@ -247,11 +249,7 @@ final class TelemetryModel: NSObject {
             adapterStatus = "Live adapter not configured"
             return
         }
-        Task {
-            await telemetryStore.configureSignalTimeouts(
-                Dictionary(uniqueKeysWithValues: adapterProfile.signals.map { ($0.id, $0.timeout) })
-            )
-        }
+        configureLocalSignalTimeouts(adapterProfile.signals)
         liveAdapter.start(profile: adapterProfile)
     }
 
@@ -285,11 +283,7 @@ final class TelemetryModel: NSObject {
             let profile = try JSONDecoder().decode(AdapterProfile.self, from: data)
             adapterProfile = profile
             adapterProfileStatus = "Profile loaded: \(profile.name)"
-            Task {
-                await telemetryStore.configureSignalTimeouts(
-                    Dictionary(uniqueKeysWithValues: profile.signals.map { ($0.id, $0.timeout) })
-                )
-            }
+            configureLocalSignalTimeouts(profile.signals)
             if let adapterProfileURL {
                 try data.write(to: adapterProfileURL, options: .atomic)
             }
@@ -344,10 +338,19 @@ final class TelemetryModel: NSObject {
     }
 
     private func ingestLocal(frame: CANFrame, samples: [DecodedSignalSample]) {
+        for sample in samples {
+            localSignalReceivedAt[sample.signalID] = sample.receivedAtEpoch
+        }
         Task {
             await telemetryStore.ingest(frame: frame)
             for sample in samples { await telemetryStore.ingest(signal: sample) }
         }
+    }
+
+    private func configureLocalSignalTimeouts(_ definitions: [SignalDefinition]) {
+        let timeouts = Dictionary(uniqueKeysWithValues: definitions.map { ($0.id, $0.timeout) })
+        localSignalTimeouts = timeouts
+        Task { await telemetryStore.configureSignalTimeouts(timeouts) }
     }
 
     private func applyLocalSignals(_ frame: CANFrame, values: [String: Double], source: String) {

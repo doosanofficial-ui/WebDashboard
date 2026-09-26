@@ -102,6 +102,13 @@ launched:
 - Result: **physical launch PASS**
 - Process observed: `Telemetry.app/Telemetry`, PID `20673`
 
+The current signal-quality timeout build was then installed and launched:
+
+- Build artifact: `/tmp/telemetry-ios-device-quality.tAs6v6`
+- Install/launch artifacts: `/tmp/telemetry-ios-device-run.K5CPXX/`
+- Result: **physical launch PASS**
+- Process observed: `Telemetry.app/Telemetry`, PID `20677`
+
 ## Limitations
 
 - This build uses the installed iOS 26.2 SDK against an iOS 27 device. It is
