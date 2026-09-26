@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import csv
+from contextlib import ExitStack
 from datetime import datetime
 from pathlib import Path
 from threading import Lock
 from typing import Any
+from uuid import uuid4
+
+from csv_safety import csv_cell
 
 
 class SessionCsvLogger:
@@ -13,12 +17,21 @@ class SessionCsvLogger:
         self.log_dir = log_dir
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
-        self.session_id = session_id or datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.session_id = session_id or (
+            datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + uuid4().hex
+        )
 
         self.can_path = self.log_dir / f"can_{self.session_id}.csv"
         self.gps_path = self.log_dir / f"gps_{self.session_id}.csv"
         self.events_path = self.log_dir / f"events_{self.session_id}.csv"
+        self._files = ExitStack()
+        try:
+            self._initialize_writers()
+        except BaseException:
+            self._files.close()
+            raise
 
+    def _initialize_writers(self) -> None:
         self._can_file, self._can_writer = self._open_writer(
             self.can_path,
             [
@@ -56,9 +69,8 @@ class SessionCsvLogger:
             ["client_t", "type", "note"],
         )
 
-    @staticmethod
-    def _open_writer(path: Path, header: list[str]) -> tuple[Any, csv.writer]:
-        fp = path.open("w", newline="", encoding="utf-8")
+    def _open_writer(self, path: Path, header: list[str]) -> tuple[Any, csv.writer]:
+        fp = self._files.enter_context(path.open("x", newline="", encoding="utf-8"))
         writer = csv.writer(fp)
         writer.writerow(header)
         fp.flush()
@@ -95,22 +107,20 @@ class SessionCsvLogger:
                     row.get("hdg"),
                     row.get("acc"),
                     row.get("alt"),
-                    row.get("source"),
-                    row.get("bg_state"),
-                    row.get("os"),
-                    row.get("app_ver"),
-                    row.get("device"),
+                    csv_cell(row.get("source")),
+                    csv_cell(row.get("bg_state")),
+                    csv_cell(row.get("os")),
+                    csv_cell(row.get("app_ver")),
+                    csv_cell(row.get("device")),
                 ]
             )
             self._gps_file.flush()
 
     def log_event(self, row: dict[str, Any]) -> None:
         with self._lock:
-            self._events_writer.writerow([row.get("t"), row.get("type"), row.get("note", "")])
+            self._events_writer.writerow([row.get("t"), row.get("type"), csv_cell(row.get("note", ""))])
             self._events_file.flush()
 
     def close(self) -> None:
         with self._lock:
-            self._can_file.close()
-            self._gps_file.close()
-            self._events_file.close()
+            self._files.close()

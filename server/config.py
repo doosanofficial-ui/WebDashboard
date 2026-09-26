@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,6 +22,12 @@ class Settings:
     ssl_keyfile: str | None
     naver_maps_client_id: str | None
     naver_maps_client_secret: str | None
+    ingest_token: str | None
+    allowed_origins: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(self.can_hz) or self.can_hz <= 0:
+            raise ValueError("CAN_HZ must be a finite positive number")
 
 
 def _optional_env(name: str) -> str | None:
@@ -34,6 +41,11 @@ def load_settings() -> Settings:
         signals_config = Path(signals_config_raw).expanduser().resolve()
     else:
         signals_config = BASE_DIR / "signals.json"
+    allowed_origins = tuple(
+        origin.strip()
+        for origin in os.getenv("ALLOWED_ORIGINS", "").split(",")
+        if origin.strip()
+    )
 
     return Settings(
         # Conservative default: loopback only.
@@ -49,6 +61,8 @@ def load_settings() -> Settings:
         ssl_keyfile=_optional_env("SSL_KEYFILE"),
         naver_maps_client_id=_optional_env("NAVER_MAPS_CLIENT_ID"),
         naver_maps_client_secret=_optional_env("NAVER_MAPS_CLIENT_SECRET"),
+        ingest_token=_optional_env("INGEST_TOKEN"),
+        allowed_origins=allowed_origins,
     )
 
 

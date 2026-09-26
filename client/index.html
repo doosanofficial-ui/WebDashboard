@@ -29,12 +29,14 @@
           <option value="hold">GPS: Hold + EMA</option>
           <option value="lerp">GPS: Lerp + EMA</option>
         </select>
-        <input id="markNote" type="text" placeholder="MARK note (optional)" />
+        <input id="markNote" type="text" maxlength="500" placeholder="MARK note (optional)" />
         <button id="markBtn" class="warn">MARK</button>
       </div>
 
       <div class="status-strip">
         <span id="connState" class="pill disconnected">disconnected</span>
+        <span id="recordingState" class="pill neutral" role="status">CSV status unknown</span>
+        <span id="uplinkState" class="pill stale" role="status" hidden></span>
         <span class="pill">Frame age <b id="frameAge">-</b> ms</span>
         <span class="pill">SEQ <b id="seqValue">-</b></span>
         <span class="pill">DROP <b id="dropValue">0</b></span>

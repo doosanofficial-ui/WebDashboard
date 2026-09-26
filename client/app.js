@@ -2,7 +2,7 @@ import { ScrollingChart } from "./charts.js";
 import { GpsTracker } from "./gps.js";
 import { NaverMap } from "./naver-map.js";
 import { NaverRoadview } from "./naver-roadview.js";
-import { updateConnection, updateGauges, updateGps } from "./ui.js";
+import { clearUplinkError, showUplinkError, updateConnection, updateGauges, updateGps, updateRecording } from "./ui.js";
 import { JsonCodec, TelemetrySocket } from "./ws.js";
 
 const els = {
@@ -15,6 +15,8 @@ const els = {
   markBtn: document.getElementById("markBtn"),
   markNote: document.getElementById("markNote"),
   connState: document.getElementById("connState"),
+  uplinkState: document.getElementById("uplinkState"),
+  recordingState: document.getElementById("recordingState"),
   frameAge: document.getElementById("frameAge"),
   seqValue: document.getElementById("seqValue"),
   dropValue: document.getElementById("dropValue"),
@@ -324,6 +326,8 @@ function stopPing() {
 }
 
 function connectSocket() {
+  clearUplinkError(els.uplinkState);
+  updateRecording(els.recordingState, null);
   const base = normalizeHttpBase(els.serverUrl.value);
   const wsUrl = httpToWs(base);
 
@@ -345,14 +349,18 @@ function connectSocket() {
       }
       if (status.state === "disconnected") {
         stopPing();
+        updateRecording(els.recordingState, null);
       }
     },
     onMessage: (payload) => {
+      showUplinkError(els.uplinkState, payload);
+      if (payload?.type === "recording_status") updateRecording(els.recordingState, payload);
       if (payload?.type === "pong" && Number.isFinite(payload.t)) {
         rttMs = Math.max(0, Date.now() - payload.t * 1000);
       }
     },
     onFrame: (frame) => {
+      updateRecording(els.recordingState, frame);
       const seq = frame?.status?.seq;
       const serverDrop = Number.isFinite(frame?.status?.drop) ? frame.status.drop : 0;
 

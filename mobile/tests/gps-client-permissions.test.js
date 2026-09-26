@@ -44,7 +44,11 @@ describe("gps-client requestLocationPermission", () => {
     });
 
     jest.doMock("@react-native-community/geolocation", () => ({
-      requestAuthorization: jest.fn(async () => iosAuth),
+      setRNConfiguration: jest.fn(),
+      requestAuthorization: jest.fn((success, failure) => {
+        if (iosAuth === "granted") success();
+        else failure({ code: 1, message: "Permission denied" });
+      }),
       watchPosition: jest.fn(),
       clearWatch: jest.fn(),
     }));
@@ -102,5 +106,10 @@ describe("gps-client requestLocationPermission", () => {
 
     const ok = await requestLocationPermission();
     expect(ok).toBe(true);
+  });
+
+  test("returns false on iOS when authorization is denied", async () => {
+    const { requestLocationPermission } = loadModule({ os: "ios", iosAuth: "denied" });
+    expect(await requestLocationPermission()).toBe(false);
   });
 });

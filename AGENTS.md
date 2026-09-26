@@ -68,6 +68,12 @@ This file defines always-on, repository-level instructions for AI agents in this
 - VSCode workspace and Codex extension sessions must point to the same repository root so both read this single file.
 - If using multi-root workspace, include this same folder path (not a copied folder) to avoid instruction drift.
 
+## 9.5) Standing Execution Authorization
+- Treat routine, in-scope execution as pre-approved until the active user goal is achieved; do not ask for repeated confirmation before inspection, scoped edits, dependency installation, bounded builds/tests, simulator/browser validation, commits, or pushes to the verified project remote.
+- Continue automatically to the next in-scope step after each verified result and report the evidence instead of requesting an approval checkpoint.
+- Keep human handoff for passwords, MFA/OTP, passkeys, recovery codes, secret/token entry, paid actions, ambiguous destructive targets, irreversible production changes, and platform-mandated confirmations.
+- This authorization does not permit guessing credentials, widening scope, deleting user data, or claiming completion without the required test and runtime evidence.
+
 ## 10) Standard execution workflow (always use this unless explicitly overridden)
 1. Intake lock:
    - Restate objective, in-scope/out-of-scope, acceptance criteria.

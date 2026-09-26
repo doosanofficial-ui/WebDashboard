@@ -1,0 +1,56 @@
+name: Telemetry
+options:
+  deploymentTarget:
+    iOS: '17.0'
+packages:
+  TelemetryCore:
+    path: TelemetryCore
+settings:
+  base:
+    SWIFT_VERSION: '5.0'
+    MARKETING_VERSION: '0.10.1'
+    CURRENT_PROJECT_VERSION: '1'
+targets:
+  Telemetry:
+    type: application
+    platform: iOS
+    sources: [App]
+    dependencies:
+      - package: TelemetryCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.webdashboard.Telemetry
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: '1,2'
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Telemetry
+        CFBundleShortVersionString: '$(MARKETING_VERSION)'
+        CFBundleVersion: '$(CURRENT_PROJECT_VERSION)'
+        UILaunchScreen: {}
+        NSLocationWhenInUseUsageDescription: Record location alongside CAN measurements during an operator session.
+        NSLocationAlwaysAndWhenInUseUsageDescription: Continue the explicitly started measurement session while the screen is locked.
+        NSLocalNetworkUsageDescription: Connect to the operator's telemetry server on the local network.
+        NSBluetoothAlwaysUsageDescription: Connect to a user-selected CAN adapter after its transport profile is verified.
+        UIBackgroundModes: [location, bluetooth-central]
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        ITSAppUsesNonExemptEncryption: false
+  TelemetryUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    dependencies:
+      - target: Telemetry
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.webdashboard.Telemetry.UITests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Telemetry
+schemes:
+  Telemetry:
+    build:
+      targets:
+        Telemetry: all
+    test:
+      targets: [TelemetryUITests]

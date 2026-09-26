@@ -90,7 +90,7 @@ export class TelemetrySocket {
       try {
         const payload = this.codec.decode(event.data);
         this.onMessage(payload);
-        if (payload && payload.sig && payload.status) {
+        if (payload && payload.sig && payload.status && payload.type !== "recording_status") {
           this.onFrame(payload);
         }
       } catch {
@@ -98,9 +98,16 @@ export class TelemetrySocket {
       }
     });
 
-    ws.addEventListener("close", () => {
+    ws.addEventListener("close", (event) => {
       if (this.ws !== ws) {
         return;
+      }
+      if (event?.code === 1009) {
+        try {
+          this.onMessage({ v: 1, type: "error", error: { code: "payload_too_large" } });
+        } catch {
+          // A diagnostic consumer must not prevent reconnecting the data stream.
+        }
       }
       this._emitStatus("disconnected");
       this.ws = null;

@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Validate runtime input
         run: |
@@ -31,7 +31,7 @@ jobs:
 
       - name: Set up Python
         if: ${{ inputs.project == 'server' }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ inputs.python-version }}
 
@@ -42,6 +42,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           python -m py_compile $(find . -name '*.py')
+          python -m unittest discover -s tests -p 'test*.py'
 
       - name: Client smoke
         if: ${{ inputs.project == 'client' }}
@@ -50,6 +51,8 @@ jobs:
           test -f client/app.js
           test -f client/ws.js
           test -f client/styles.css
+          node --experimental-vm-modules --test scripts/tests/gps-data-integrity.test.mjs
+          node --test scripts/tests/service-worker.test.mjs
 
       - name: Mobile smoke
         if: ${{ inputs.project == 'mobile' }}
@@ -60,6 +63,8 @@ jobs:
           test -f mobile/src/telemetry/ws-client.js
           test -f mobile/src/telemetry/gps-client.js
           node mobile/scripts/validate-mobile-scaffold.js
+          test -f mobile-ios/project.yml
+          test -f mobile-ios/TelemetryCore/Package.swift
 
       - name: Runtime validation notes
         run: |

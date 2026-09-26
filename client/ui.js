@@ -2,6 +2,44 @@ function fmt(value, digits = 1, fallback = "-") {
   return Number.isFinite(value) ? value.toFixed(digits) : fallback;
 }
 
+export function showUplinkError(element, payload) {
+  if (!element || payload?.v !== 1 || payload?.type !== "error") return false;
+  const known = ["invalid_json", "invalid_payload", "unsupported_version", "payload_too_large",
+    "text_frame_required", "unsupported_media_type", "storage_unavailable"];
+  const code = known.includes(payload.error?.code) ? payload.error.code : "unknown_error";
+  const text = `Upload rejected: ${code}`;
+  if (element.textContent !== text) element.textContent = text;
+  element.className = "pill stale";
+  element.hidden = false;
+  return true;
+}
+
+export function clearUplinkError(element) {
+  if (!element) return;
+  element.textContent = "";
+  element.hidden = true;
+}
+
+export function updateRecording(element, payload) {
+  if (!element) return;
+  if (payload && payload.v !== 1) return;
+  const raw = payload?.type === "recording_status" ? payload.recording : payload?.status?.recording;
+  let text = "CSV status unknown";
+  let warning = false;
+  if (raw && ["pending", "unconfirmed", "rejected"].every(key => Number.isSafeInteger(raw[key]) && raw[key] >= 0)) {
+    const unresolved = raw.pending + raw.unconfirmed + raw.rejected;
+    if (Number.isSafeInteger(unresolved)) {
+      if (raw.state === "ready") text = `CSV: ${raw.pending} pending`;
+      if (raw.state === "delayed") { text = `CSV delayed: ${raw.pending} pending`; warning = true; }
+      if (raw.state === "failed") { text = `CSV failed: ${unresolved} unresolved`; warning = true; }
+      if (raw.state === "starting") text = "CSV starting";
+      if (raw.state === "closed") { text = "CSV closed"; warning = true; }
+    }
+  }
+  if (element.textContent !== text) element.textContent = text;
+  element.className = warning ? "pill stale" : "pill neutral";
+}
+
 export function updateConnection(elements, { connected, frameAgeMs, seq, drop, rttMs, stale }) {
   const { connState, frameAge, seqValue, dropValue, rttValue } = elements;
 
@@ -38,6 +76,7 @@ export function updateGps(elements, { fix, stale, ageMs }) {
     gpsAcc.textContent = "-";
     gpsAge.textContent = "-";
     headingArrow.style.transform = "rotate(0deg)";
+    headingArrow.style.visibility = "hidden";
     return;
   }
 
@@ -51,6 +90,7 @@ export function updateGps(elements, { fix, stale, ageMs }) {
   gpsAcc.textContent = Number.isFinite(fix.acc) ? `${fix.acc.toFixed(1)} m` : "-";
   gpsAge.textContent = Number.isFinite(ageMs) ? `${Math.round(ageMs)} ms` : "-";
 
+  headingArrow.style.visibility = Number.isFinite(fix.hdg) ? "visible" : "hidden";
   if (Number.isFinite(fix.hdg)) {
     headingArrow.style.transform = `rotate(${fix.hdg}deg)`;
   }
