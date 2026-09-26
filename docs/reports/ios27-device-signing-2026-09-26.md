@@ -61,6 +61,22 @@ This proves installation and process launch after trust. It does not yet prove
 first-run GPS permission handling, live CAN transport, recording endurance, or
 background execution.
 
+## Post-hardening device rerun
+
+After the native hardening changes (validated server CAN contract, ELM327 DLC
+handling, adapter reconnect loop, foreground GPS authorization path, MapKit track
+widget, and read-only BLE discovery), a fresh device build was produced with the
+same Personal Team and installed on the same phone:
+
+- Build artifact: `/tmp/telemetry-ios-device-current.MdU7LB`
+- Install/launch artifacts: `/tmp/telemetry-ios-device-run.Wn1dx9/`
+- Result: **device build PASS, physical launch PASS**
+- Process observed: `Telemetry.app/Telemetry`, PID `20655`
+
+This rerun is still an Xcode 26.3/iOS 26.2 SDK result against iOS 27.0; it does
+not promote the iOS 27 SDK, GPS permission, BT4N, vehicle CAN, background, or
+CarPlay gates.
+
 ## Limitations
 
 - This build uses the installed iOS 26.2 SDK against an iOS 27 device. It is

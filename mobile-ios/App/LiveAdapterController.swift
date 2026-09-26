@@ -20,57 +20,85 @@ final class LiveAdapterController {
 
     func start(profile: AdapterProfile) {
         stop()
-        do {
-            guard !profile.signals.isEmpty else { throw LiveAdapterError.noSignal }
-            let transport = try makeTransport(profile)
-            let session = ELM327Session(
-                transport: transport,
-                sourceAdapter: profile.name,
-                sourceTransport: profile.transport.rawValue
-            )
-            let currentGeneration = UUID()
-            generation = currentGeneration
-            onState?("Live adapter starting")
-            task = Task { [weak self] in
-                guard let self else { return }
-                let stream = await session.frames()
-                let reader = Task { [weak self] in
-                    for await frame in stream {
-                        guard let self else { continue }
-                        let decoded = profile.signals.compactMap { definition -> LiveDecodedSignal? in
-                            guard let value = try? SignalDecoder.decode(frame, definition: definition) else { return nil }
-                            return (definition: definition, decoded: value)
-                        }
-                        guard !decoded.isEmpty else { continue }
-                        guard self.generation == currentGeneration else { return }
-                        self.onFrame?(frame, decoded)
-                    }
-                }
-                var terminalState: String?
-                do {
-                    try await session.start()
-                    if self.generation == currentGeneration { self.onState?("Live adapter monitoring") }
-                    while !Task.isCancelled {
-                        try await Task.sleep(nanoseconds: 250_000_000)
-                        if await session.state == .recovering {
-                            terminalState = Self.errorState(await session.lastError)
-                            break
-                        }
-                    }
-                } catch is CancellationError {
-                    // Stop is an expected terminal path.
-                } catch {
-                    terminalState = "Live adapter error"
-                }
-                reader.cancel()
-                await reader.value
-                await session.stop()
-                guard self.generation == currentGeneration else { return }
-                if let terminalState { self.onState?(terminalState) }
-                else if !Task.isCancelled { self.onState?("Live adapter stopped") }
-            }
-        } catch {
+        guard !profile.signals.isEmpty else {
             onState?("Live adapter profile invalid")
+            return
+        }
+        let currentGeneration = UUID()
+        generation = currentGeneration
+        onState?("Live adapter starting")
+        task = Task { [weak self] in
+            guard let self else { return }
+            var backoff: UInt64 = 1
+
+            while !Task.isCancelled && self.generation == currentGeneration {
+                var reconnectState = "Live adapter reconnecting"
+                do {
+                    // A transport's stream is terminal after close. Recreate
+                    // both transport and session for every recovery attempt.
+                    let transport = try Self.makeTransport(profile)
+                    let session = ELM327Session(
+                        transport: transport,
+                        sourceAdapter: profile.name,
+                        sourceTransport: profile.transport.rawValue
+                    )
+                    let stream = await session.frames()
+                    let reader = Task { [weak self] in
+                        for await frame in stream {
+                            guard let self else { return }
+                            let decoded = profile.signals.compactMap { definition -> LiveDecodedSignal? in
+                                guard let value = try? SignalDecoder.decode(frame, definition: definition) else { return nil }
+                                return (definition: definition, decoded: value)
+                            }
+                            guard self.generation == currentGeneration else { return }
+                            // Raw frames are forwarded even when no configured
+                            // signal matches; the model owns the logging policy.
+                            self.onFrame?(frame, decoded)
+                        }
+                    }
+
+                    do {
+                        try await session.start()
+                        guard self.generation == currentGeneration else {
+                            reader.cancel()
+                            await session.stop()
+                            return
+                        }
+                        self.onState?("Live adapter monitoring")
+                        backoff = 1
+                        while !Task.isCancelled && self.generation == currentGeneration {
+                            try await Task.sleep(nanoseconds: 250_000_000)
+                            if await session.state == .recovering {
+                                reconnectState = Self.errorState(await session.lastError)
+                                break
+                            }
+                        }
+                    } catch is CancellationError {
+                        reader.cancel()
+                        await reader.value
+                        await session.stop()
+                        return
+                    } catch {
+                        reconnectState = "Live adapter error"
+                    }
+                    reader.cancel()
+                    await reader.value
+                    await session.stop()
+                } catch is CancellationError {
+                    return
+                } catch {
+                    reconnectState = "Live adapter profile or transport error"
+                }
+
+                guard !Task.isCancelled && self.generation == currentGeneration else { return }
+                self.onState?("\(reconnectState); retrying in \(backoff)s")
+                do {
+                    try await Task.sleep(nanoseconds: backoff * 1_000_000_000)
+                } catch {
+                    return
+                }
+                backoff = min(30, backoff * 2)
+            }
         }
     }
 
@@ -94,7 +122,7 @@ final class LiveAdapterController {
         }
     }
 
-    private func makeTransport(_ profile: AdapterProfile) throws -> any CANTransport {
+    private static func makeTransport(_ profile: AdapterProfile) throws -> any CANTransport {
         switch profile.transport {
         case .wifi:
             guard let host = profile.host, let port = profile.port else {

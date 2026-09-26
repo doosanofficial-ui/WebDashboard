@@ -17,6 +17,12 @@ struct TelemetryApp: App {
 }
 
 final class TelemetryAppDelegate: NSObject, UIApplicationDelegate {
+    func applicationWillTerminate(_ application: UIApplication) {
+        Task { @MainActor in
+            TelemetryModel.shared.finishLocalMeasurement()
+        }
+    }
+
     func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String,
                      completionHandler: @escaping () -> Void) {
         guard identifier == BackgroundUploader.identifier else { completionHandler(); return }

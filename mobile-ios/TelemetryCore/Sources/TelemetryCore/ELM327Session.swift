@@ -238,7 +238,15 @@ public actor ELM327Session {
             throw ELM327SessionError.malformedFrame
         }
         let isExtended = header.count == 8
-        let payloadTokens = tokens.dropFirst()
+        var payloadTokens = Array(tokens.dropFirst())
+        // With CAF0, many ELM327 implementations emit: ID DLC DATA...
+        // Accept that form only when the declared DLC exactly matches the
+        // remaining bytes; otherwise preserve the payload-only form.
+        if let declaredDLC = payloadTokens.first.flatMap({ UInt8($0, radix: 16) }),
+           declaredDLC <= 8,
+           payloadTokens.count == Int(declaredDLC) + 1 {
+            payloadTokens.removeFirst()
+        }
         guard !payloadTokens.isEmpty, payloadTokens.count <= 8 else {
             throw ELM327SessionError.malformedFrame
         }

@@ -11,12 +11,13 @@ validation and is not a released product. App Store/CarPlay approval is not impl
   rect layout, page selection, drag/resize editor controls, z-order and legacy-profile
   migration.
 - Widget rendering covers numeric/circular/bar/LED/status/raw/bit/time-series/GPS
-  representations with stale-state handling; map track/provider integration remains
-  a separate gate.
+  representations with stale-state handling. The native map widget renders a
+  bounded MapKit track; external map/roadview providers remain a separate gate.
 - The optional CarPlay scene is status-only and receives live projection state through
   an entitlement-gated bridge; no CarPlay entitlement or arbitrary gauge UI is assumed.
 - Original GPS capture timestamps; unknown speed/course stays unknown.
-- Core Location continuous updates after explicit Start and Always authorization.
+- Core Location foreground updates after explicit Start and When In Use authorization;
+  Always authorization is required for a locked-screen collection test.
 - Durable SQLite outbox: records survive process restart and remain until server ACK.
 - File-backed background URLSession upload to authenticated /api/v2/ingest.
 - OS-registered retries with earliestBeginDate, restored configuration on background
@@ -37,10 +38,13 @@ explicitly started session. This is a capability declaration, not a guarantee of
 continuous execution after suspension or termination.
 
 The current software boundary also includes a versioned `AdapterProfile` JSON,
-explicit observed-profile BLE and Wi-Fi transports, cancellation-safe ELM session
-startup, and a live adapter controller that decodes every matching signal in the
-profile and records the raw frame plus decoded samples. The demo adapter exercises
-the same session, decoder, recorder and UI path without radio hardware.
+explicit observed-profile BLE and Wi-Fi transports, a read-only BLE GATT discovery
+probe, cancellation-safe ELM session startup, and a live adapter controller that
+recreates transports with bounded exponential backoff after recoverable failures.
+The controller decodes every matching signal in the profile and records the raw
+frame plus decoded samples, even when a frame has no matching signal. The demo
+adapter exercises the same session, decoder, recorder and UI path without radio
+hardware.
 The existing v2 upload accepts GPS/MARK/STATE, not OBD frames.
 
 This is not BT4N compatibility proof. Profile discovery must precede Core Bluetooth
@@ -58,6 +62,12 @@ project. A binary-only copy without share/xcodegen/SettingPresets is insufficien
 ```bash
 # At the repository root, using your full Xcode installation:
 export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+
+# Generate the ignored Xcode project from the canonical spec before opening Xcode:
+cd mobile-ios
+xcodegen generate --spec project.yml
+cd ..
+
 ./mobile-ios/scripts/verify.sh build
 
 # UI checks on an available simulator (not an iPhone device identifier):
@@ -75,14 +85,14 @@ verification command and inspect the printed artifacts instead.
 
 ## Real device
 
-The current user-reported target is iPhone 17 / iOS 27 (2026-09-23).
-Verify its exact OS build after reconnecting. Use Xcode 27 with the iOS 27 SDK
-for this validation; Apple's [requirements](https://developer.apple.com/xcode/system-requirements/)
-list macOS 26.6 or later. The checked host runs macOS 26.6.2 but still has Xcode 26.3,
-and devicectl currently reports the iPhone unavailable. Prior iOS 26.2 simulator
-results do not establish iOS 27 compatibility. Rebuild, sign, install and repeat
-the locked-screen/recovery test on the updated device. This target update does not
-raise the app's minimum deployment version or constitute a release.
+The current physical target is iPhone 17 / iOS 27.0 build 24A437. Developer trust,
+Personal Team install, and process launch have passed with Xcode 26.3/iOS 26.2 SDK;
+this is not an iOS 27 SDK compatibility result. Use Xcode 27 with the iOS 27 SDK
+for the final validation; Apple's [requirements](https://developer.apple.com/xcode/system-requirements/)
+list macOS 26.6 or later. The host currently has macOS 26.6.2 but Xcode 26.3.
+Rebuild with Xcode 27, then repeat the locked-screen/recovery test on the device.
+This target update does not raise the app's minimum deployment version or constitute
+a release.
 
 Generate/open Telemetry.xcodeproj with XcodeGen, select the verified Apple team,
 then build for the connected device. The current native development version is 0.1.1 while
@@ -105,8 +115,13 @@ passwords, MFA, payment, or device passcodes.
 In the app, enter the trusted HTTPS server origin in Connection. Store the ingest
 credential in Keychain. The server needs INGEST_TOKEN configured; without it the
 v2 endpoint rejects requests. Never put credentials in source files or reports.
-Connect receives CAN; Start GPS begins native recording after Always authorization.
+Connect receives CAN; Start GPS begins foreground native recording after When In Use
+authorization and requests Always authorization for screen-lock collection.
 Stop ends collection. MARK is shown only after its local durable write completes.
+
+Use Connection > BLE discovery for a read-only GATT observation pass before creating
+an adapter profile. Copy the observed service/characteristic JSON and verify the
+write/notify properties and framing against the physical adapter documentation.
 
 For locked-screen operation, the native store uses file protection available after
 first unlock. Force-quit, reboot before first unlock, revoked permissions, and OS
@@ -131,8 +146,8 @@ status-only system template, not a copy of the high-frequency phone dashboard.
 
 ## Remaining release gates
 
-Real-device signing/install and 30-minute logs, automatic pairing/provisioning,
+Xcode 27/iOS 27 SDK build, real-device 30-minute logs, automatic pairing/provisioning,
 live BT4N profile capture, vehicle signal validation, full upload recovery fault
-testing, Naver map/roadview integration in the native UI, CarPlay templates/entitlement,
+testing, native Naver map/roadview integration if required, CarPlay templates/entitlement,
 Android parity, Windows packaging and real CAN adapter acceptance.
 See ../docs/production-plan.md for the full completion criteria.

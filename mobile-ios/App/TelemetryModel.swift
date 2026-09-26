@@ -4,13 +4,7 @@ import Observation
 import UIKit
 import TelemetryCore
 
-struct CanFrame: Decodable {
-    struct Status: Decodable { let seq: Int; let drop: Int }
-    let v: Int
-    let t: Double
-    let sig: [String: Double]
-    let status: Status
-}
+typealias CanFrame = ServerCANFrame
 struct CanPoint: Identifiable {
     let id = UUID()
     let time: Date
@@ -32,11 +26,14 @@ final class TelemetryModel: NSObject {
     var adapterProfile: AdapterProfile?
     var adapterStatus = "Adapter disconnected"
     var adapterProfileStatus = "No live adapter profile"
+    var bleDiscoveryStatus = "BLE discovery not started"
+    var bleDevices: [BLEDiscoveredDevice] = []
     var adapterSignalValue: Double?
     var rawCANText = "-"
     var frame: CanFrame?
     var lastFrameAt: Date?
     var lastLocation: TelemetryEvent?
+    var locationTrack: [CLLocationCoordinate2D] = []
     var points: [CanPoint] = []
     var queueDepth = 0
     var collecting = false
@@ -47,6 +44,7 @@ final class TelemetryModel: NSObject {
     @ObservationIgnored private let locationService: LocationService
     @ObservationIgnored private let demoAdapter: DemoAdapterController
     @ObservationIgnored private let liveAdapter: LiveAdapterController
+    @ObservationIgnored private let bleDiscovery: BLEDiscoveryController
     @ObservationIgnored private var outbox: DurableOutbox?
     @ObservationIgnored private var localRecorder: MeasurementRecorder?
     @ObservationIgnored private var dashboardURL: URL?
@@ -64,6 +62,7 @@ final class TelemetryModel: NSObject {
         locationService = LocationService()
         demoAdapter = DemoAdapterController()
         liveAdapter = LiveAdapterController()
+        bleDiscovery = BLEDiscoveryController()
         super.init()
         UserDefaults.standard.set(clientID, forKey: "clientID")
         locationService.onStatus = { [weak self] status in self?.locationStatus = status }
@@ -86,6 +85,10 @@ final class TelemetryModel: NSObject {
         }
         liveAdapter.onFrame = { [weak self] frame, decoded in
             self?.handleLiveFrame(frame, decoded: decoded)
+        }
+        bleDiscovery.onUpdate = { [weak self] devices, status in
+            self?.bleDevices = devices
+            self?.bleDiscoveryStatus = status
         }
         do {
             let root = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
@@ -248,6 +251,20 @@ final class TelemetryModel: NSObject {
         publishCarPlayProjection()
     }
 
+    func scanBLE() { bleDiscovery.start() }
+
+    func stopBLEScan() { bleDiscovery.stop() }
+
+    func copyBLEObservation() {
+        guard let data = bleDiscovery.observationData(),
+              let text = String(data: data, encoding: .utf8) else {
+            bleDiscoveryStatus = "No BLE observation to copy"
+            return
+        }
+        UIPasteboard.general.string = text
+        bleDiscoveryStatus = "BLE observation copied; no write was sent"
+    }
+
     func importAdapterProfile(_ data: Data) {
         do {
             let profile = try JSONDecoder().decode(AdapterProfile.self, from: data)
@@ -282,12 +299,14 @@ final class TelemetryModel: NSObject {
     }
 
     private func handleLiveFrame(_ frame: CANFrame, decoded: [LiveDecodedSignal]) {
-        guard let primary = decoded.first else { return }
         adapterStatus = "Live adapter monitoring"
-        adapterSignalValue = primary.decoded.value
+        adapterSignalValue = decoded.first?.decoded.value
         let idFormat = frame.isExtended ? "0x%08X  %@" : "0x%03X  %@"
         rawCANText = String(format: idFormat, frame.canID,
                             frame.payload.map { String(format: "%02X", $0) }.joined(separator: " "))
+        // Raw frames remain valuable even when the current signal catalog does
+        // not contain a matching definition. Never drop the source measurement
+        // solely because signal decoding is unavailable.
         record(.can(frame: frame))
         for item in decoded {
             record(.signal(DecodedSignalSample(
@@ -354,6 +373,10 @@ final class TelemetryModel: NSObject {
                 capturedAt: location.timestamp.timeIntervalSince1970, background: background) {
                 lastLocation = event
                 locationStatus = "Collecting"
+                locationTrack.append(location.coordinate)
+                if locationTrack.count > 1_000 {
+                    locationTrack = Array(locationTrack.suffix(1_000))
+                }
                 store(event)
                 record(.location(LocationSample(
                     originalTimestamp: location.timestamp.timeIntervalSince1970,
@@ -500,7 +523,18 @@ final class TelemetryModel: NSObject {
                     widget("ws-rl", "RL", "ws_rl", "km/h", x: 4, y: 0),
                     widget("ws-rr", "RR", "ws_rr", "km/h", x: 0, y: 1),
                     widget("yaw", "Yaw", "yaw", "deg/s", x: 2, y: 1),
-                    widget("ay", "Ay", "ay", "m/s2", x: 4, y: 1)
+                    widget("ay", "Ay", "ay", "m/s2", x: 4, y: 1),
+                    DashboardWidgetDefinition(
+                        id: "gps-map",
+                        type: .map,
+                        signalID: nil,
+                        rect: DashboardRect(x: 0, y: 2, width: 6, height: 3),
+                        zIndex: 10,
+                        configuration: DashboardWidgetConfiguration(
+                            label: "Route Track", unit: "", decimals: 1,
+                            minimum: nil, maximum: nil, warningThreshold: nil, criticalThreshold: nil
+                        )
+                    )
                 ]
             )]
         )
@@ -543,6 +577,19 @@ final class TelemetryModel: NSObject {
         } catch {
             exportStatus = "Measurement export failed"
             return nil
+        }
+    }
+
+    func finishLocalMeasurement() {
+        guard let localRecorder else { return }
+        let endedAt = Date().timeIntervalSince1970
+        Task {
+            do {
+                try await localRecorder.finish(endedAt: endedAt)
+                localRecordingStatus = "Local measurement session closed"
+            } catch {
+                localRecordingStatus = "Local recorder could not close cleanly"
+            }
         }
     }
 

@@ -47,6 +47,10 @@ public actor MeasurementRecorder {
         }
         db = connection
         self.sessionID = sessionID
+        try? FileManager.default.setAttributes(
+            [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+            ofItemAtPath: path.path
+        )
         sqlite3_busy_timeout(connection, 5_000)
         let schema = """
         PRAGMA journal_mode=WAL;

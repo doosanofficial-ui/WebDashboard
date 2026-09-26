@@ -32,7 +32,13 @@ final class LocationService: NSObject, @preconcurrency CLLocationManagerDelegate
             publish("Location permission required")
             manager.requestWhenInUseAuthorization()
         case .authorizedWhenInUse:
-            publish("Allow Always in Settings for locked-screen collection")
+            // Foreground collection must work even when the operator declines
+            // Always authorization. A later screen-lock test can still be
+            // upgraded to Always without sacrificing the primary GPS path.
+            manager.startUpdatingLocation()
+            collecting = true
+            onCollectingChanged?(true)
+            publish("Collecting in foreground; Always permission enables lock-screen capture")
             if !requestedAlways {
                 requestedAlways = true
                 manager.requestAlwaysAuthorization()

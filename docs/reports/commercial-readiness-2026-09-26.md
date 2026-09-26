@@ -1,6 +1,6 @@
 # Commercial Readiness Checkpoint: iOS CAN/GPS Dashboard
 
-Checked: 2026-09-26; physical launch follow-up: 2026-09-27. Branch: `codex/native-telemetry-productization`.
+Checked: 2026-09-26; engineering follow-up: 2026-09-27. Branch: `codex/native-telemetry-productization`.
 This is an evidence checkpoint, not a release approval.
 Current native development version: `0.1.1` (build `1`).
 
@@ -54,6 +54,20 @@ Current native development version: `0.1.1` (build `1`).
 - Versioned `AdapterProfile` JSON now validates transport-specific Wi-Fi endpoint
   or observed BLE peripheral/service/write/notify identifiers and rejects duplicate
   signal IDs before a live connection can start.
+- Read-only BLE discovery now records observed peripheral, service, characteristic,
+  RSSI, and GATT property data for profile creation without sending adapter writes.
+- Server CAN snapshots are validated at the JSON boundary for version, timestamp,
+  sequence/drop counters, signal key/value limits, and finite numeric values.
+- ELM327 Classical CAN monitor parsing accepts the common `ID DLC DATA...` form and
+  retains payload-only compatibility; raw frames are recorded even when no configured
+  signal matches.
+- Recoverable live adapter failures recreate the transport/session with bounded
+  exponential backoff instead of terminating the monitoring task.
+- Foreground GPS now starts with When In Use authorization; Always remains the
+  explicit requirement for locked-screen collection. Native MapKit track rendering
+  uses a bounded in-memory coordinate history.
+- SQLite measurement/outbox files use first-unlock file protection, and normal
+  application termination attempts to close the active measurement session.
 - Windows/server CSV recording isolation, bounded queues, write receipts, fault
   health, and web/native recording-health UI.
 
@@ -61,7 +75,12 @@ Current native development version: `0.1.1` (build `1`).
 
 | Area | Result | Evidence |
 | --- | --- | --- |
-| Swift Core tests | PASS, 59 tests | `mobile-ios/scripts/verify.sh build`; latest artifact `/tmp/telemetry-ios-verify.YgmE0Q` |
+| Swift Core tests | PASS, 63 tests | `mobile-ios/scripts/verify.sh build`; latest artifact `/tmp/telemetry-ios-verify.jp2EA5` |
+| Server CAN contract tests | PASS, 3 tests | `ServerCANFrameTests` in the same artifact |
+| ELM327 DLC/recovery tests | PASS, 7 session tests | `ELM327SessionTests` in the same artifact |
+| Native app build after hardening | PASS | XcodeGen-generated project, Xcode 26.3/iOS 26.2 Simulator SDK; `/tmp/telemetry-ios-verify.jp2EA5` |
+| MapKit track widget compile | PASS | Native target includes `MapKit`, `MapPolyline`, and bounded GPS track model; runtime GPS fix not run |
+| BLE discovery probe compile | PASS | Native target compile; physical BT4N GATT observation not run |
 | iOS application build | PASS | Xcode 26.3, iOS 26.2 Simulator SDK, `/tmp/telemetry-ios-verify.YgmE0Q`; bundle version `0.1.1 (1)` |
 | Server tests | PASS, 65 tests | `/tmp/webdashboard-verify-20260924.Z9wDKb/python/bin/python -m unittest discover -s server/tests -p 'test*.py'` |
 | GPS/web contract tests | PASS, 28 tests | `node --experimental-vm-modules --test scripts/tests/gps-data-integrity.test.mjs` |
@@ -71,9 +90,9 @@ Current native development version: `0.1.1` (build `1`).
 | UI runtime smoke | PASS | Direct install/launch on the iPhone 17 Pro **simulator** with iOS 26.2 showed non-overlapping migrated Speed/FR/RL/RR/Yaw/Ay grid widgets, local recorder, and Dashboard Editor controls; this is not the target physical iPhone 17/iOS 27 result, and XCTest runner remains unreliable |
 | SwiftUI cockpit visual smoke | PASS | Direct install/launch on the iPhone 17 Pro iOS 26.2 simulator; screenshot evidence is stored under docs/reports/evidence/ |
 | iOS 27 build | NOT RUN | Host has Xcode 26.3 / iOS 26.2 SDK |
-| iPhone 17 physical build | PASS (SDK boundary) | Personal Team signed device build with Xcode 26.3/iOS 26.2 SDK; not an iOS 27 SDK result |
-| iPhone 17 physical install | PASS | devicectl installed Telemetry 0.1.1 build 1 |
-| iPhone 17 physical launch | PASS (launch boundary) | After device-side trust was completed, `verify_device.sh` returned `Physical launch PASS`; process `Telemetry.app/Telemetry` observed at PID `20622`; artifacts `/tmp/telemetry-ios-device-run.tyM1je/` |
+| iPhone 17 physical build | PASS (SDK boundary) | Fresh Personal Team build `/tmp/telemetry-ios-device-current.MdU7LB` with Xcode 26.3/iOS 26.2 SDK; not an iOS 27 SDK result |
+| iPhone 17 physical install | PASS | Fresh build installed by `devicectl`; bundle `local.webdashboard.Telemetry`, version `0.1.1` build `1` |
+| iPhone 17 physical launch | PASS (launch boundary) | Fresh `verify_device.sh` run returned `Physical launch PASS`; process `Telemetry.app/Telemetry` observed at PID `20655`; artifacts `/tmp/telemetry-ios-device-run.Wn1dx9/` |
 | Software ELM vertical slice | PASS | Direct simulator demo adapter start/monitor/stop; not a BT4N or vehicle result |
 | CarPlay external display host | PASS (display only) | Simulator `I/O > External Displays > CarPlay` opened the default CarPlay home screen; app rendering was not claimed |
 | BT4N live profile | NOT RUN | No observed GATT/serial profile or firmware capture |
@@ -84,8 +103,9 @@ Current native development version: `0.1.1` (build `1`).
 
 - Install Xcode 27 and verify the exact iPhone 17 iOS 27 build on hardware; the current Personal Team build only proves signing/install with the 26.2 SDK.
 - Collect first-run physical runtime evidence for GPS permission handling, live CAN/adapter state, recording, and app lifecycle; launch alone does not establish those behaviors.
-- Discover and record the NANICAR ELM327-BT4N transport, services, characteristics,
-  framing, protocol, and supported commands without storing secrets or VIN data.
+- Run the new read-only BLE discovery probe against the NANICAR ELM327-BT4N and
+  record services, characteristics, framing, protocol, and supported commands
+  without storing secrets or VIN data.
 - Verify one stationary CAN ID and one signal against a trusted reference on the
   Hyundai Santa Fe MX5 HEV.
 - Run foreground, screen-lock, Bluetooth disconnect, network disconnect, and
@@ -97,9 +117,9 @@ Current native development version: `0.1.1` (build `1`).
 - Resolve the simulator UI runner issue and obtain a readable assertion result.
 - Finish Windows clean-machine packaging, rollback, and real Vector/CANoe bridge
   acceptance.
-- Complete full production editor acceptance and real MapKit/track rendering; the
-  current widget types render their safe local representations, while map provider,
-  track history and advanced widget configuration UI remain.
+- Complete full production editor acceptance and physical MapKit/track rendering;
+  the native MapKit track path now exists, while external map provider/roadview and
+  advanced widget configuration UI remain.
 
 ## Evidence boundary
 

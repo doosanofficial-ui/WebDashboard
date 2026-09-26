@@ -1,5 +1,6 @@
 import SwiftUI
 import Charts
+import MapKit
 import TelemetryCore
 
 struct LiveCockpitView: View {
@@ -549,24 +550,39 @@ struct LiveCockpitView: View {
         .accessibilityIdentifier("profile-widget-\(widget.id)")
     }
 
+    @ViewBuilder
     private func gpsWidget(_ widget: DashboardWidgetDefinition, map: Bool) -> some View {
         let fix = model.lastLocation
-        return VStack(alignment: .leading, spacing: 5) {
-            Label(widget.configuration.label, systemImage: map ? "map" : "location.fill")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white)
-            Text("\(number(fix?.data.lat, digits: 6)), \(number(fix?.data.lon, digits: 6))")
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(.white)
-            Text("Speed \(number(fix?.data.spd.map { $0 * 3.6 })) km/h · ±\(number(fix?.data.acc)) m")
-                .font(.caption)
-                .foregroundStyle(TelemetryTheme.mutedText)
-            Text(fix == nil ? "NO FIX" : "GPS FIX")
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(fix == nil ? TelemetryTheme.warning : TelemetryTheme.valid)
+        if map {
+            TrackMapView(
+                title: widget.configuration.label,
+                coordinate: fix.flatMap { coordinate(from: $0) },
+                track: model.locationTrack
+            )
+            .accessibilityIdentifier("profile-widget-\(widget.id)")
+        } else {
+            VStack(alignment: .leading, spacing: 5) {
+                Label(widget.configuration.label, systemImage: "location.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                Text("\(number(fix?.data.lat, digits: 6)), \(number(fix?.data.lon, digits: 6))")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.white)
+                Text("Speed \(number(fix?.data.spd.map { $0 * 3.6 })) km/h · ±\(number(fix?.data.acc)) m")
+                    .font(.caption)
+                    .foregroundStyle(TelemetryTheme.mutedText)
+                Text(fix == nil ? "NO FIX" : "GPS FIX")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(fix == nil ? TelemetryTheme.warning : TelemetryTheme.valid)
+            }
+            .telemetrySurface(.standard, padding: TelemetryTheme.Spacing.small)
+            .accessibilityIdentifier("profile-widget-\(widget.id)")
         }
-        .telemetrySurface(.standard, padding: TelemetryTheme.Spacing.small)
-        .accessibilityIdentifier("profile-widget-\(widget.id)")
+    }
+
+    private func coordinate(from event: TelemetryEvent) -> CLLocationCoordinate2D? {
+        guard let latitude = event.data.lat, let longitude = event.data.lon else { return nil }
+        return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
 
     private func widgetHeader(_ widget: DashboardWidgetDefinition, fresh: Bool) -> some View {
@@ -622,6 +638,65 @@ struct LiveCockpitView: View {
     private func number(_ value: Double?, digits: Int = 1) -> String {
         guard let value, value.isFinite else { return "-" }
         return String(format: "%.*f", digits, value)
+    }
+}
+
+private struct TrackMapView: View {
+    let title: String
+    let coordinate: CLLocationCoordinate2D?
+    let track: [CLLocationCoordinate2D]
+    @State private var position: MapCameraPosition
+
+    init(title: String, coordinate: CLLocationCoordinate2D?, track: [CLLocationCoordinate2D]) {
+        self.title = title
+        self.coordinate = coordinate
+        self.track = track
+        if let coordinate {
+            _position = State(initialValue: .region(MKCoordinateRegion(
+                center: coordinate,
+                latitudinalMeters: 600,
+                longitudinalMeters: 600
+            )))
+        } else {
+            _position = State(initialValue: .automatic)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Label(title, systemImage: "map")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+            if let coordinate {
+                Map(position: $position, interactionModes: [.pan, .zoom, .rotate]) {
+                    if track.count > 1 {
+                        MapPolyline(coordinates: track)
+                            .stroke(TelemetryTheme.accent, lineWidth: 4)
+                    }
+                    Marker("GPS", coordinate: coordinate)
+                        .tint(TelemetryTheme.warning)
+                }
+                .frame(minHeight: 170)
+                .clipShape(RoundedRectangle(cornerRadius: TelemetryTheme.Radius.small, style: .continuous))
+                .onChange(of: coordinate.latitude) { _, _ in follow(coordinate) }
+                .onChange(of: coordinate.longitude) { _, _ in follow(coordinate) }
+                Text("\(String(format: "%.6f", coordinate.latitude)), \(String(format: "%.6f", coordinate.longitude))")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(TelemetryTheme.mutedText)
+            } else {
+                ContentUnavailableView("No GPS fix", systemImage: "location.slash")
+                    .frame(minHeight: 170)
+            }
+        }
+        .telemetrySurface(.standard, padding: TelemetryTheme.Spacing.small)
+    }
+
+    private func follow(_ coordinate: CLLocationCoordinate2D) {
+        position = .region(MKCoordinateRegion(
+            center: coordinate,
+            latitudinalMeters: 600,
+            longitudinalMeters: 600
+        ))
     }
 }
 

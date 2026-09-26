@@ -124,6 +124,39 @@ private struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(TelemetryTheme.mutedText)
                 }
+                Section("BLE discovery (read-only probe)") {
+                    HStack {
+                        Button("Scan BLE", action: model.scanBLE)
+                            .accessibilityIdentifier("scan-ble-adapters")
+                        Button("Stop", action: model.stopBLEScan)
+                        Button("Copy observation", action: model.copyBLEObservation)
+                    }
+                    Text(model.bleDiscoveryStatus)
+                        .font(.caption)
+                        .foregroundStyle(TelemetryTheme.mutedText)
+                    ForEach(model.bleDevices) { device in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(device.name)
+                                .font(.subheadline.weight(.semibold))
+                            Text("\(device.id.uuidString) · RSSI \(device.rssi) · \(device.state)")
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(TelemetryTheme.mutedText)
+                            ForEach(device.services) { service in
+                                Text("Service \(service.id)")
+                                    .font(.caption2.monospaced())
+                                ForEach(service.characteristics) { characteristic in
+                                    Text("  \(characteristic.id) [\(characteristic.properties.joined(separator: ", "))]")
+                                        .font(.caption2.monospaced())
+                                        .foregroundStyle(TelemetryTheme.quietText)
+                                }
+                            }
+                        }
+                        .textSelection(.enabled)
+                    }
+                    Text("Discovery only observes GATT metadata. It does not write commands or assume ELM327 UUIDs.")
+                        .font(.caption)
+                        .foregroundStyle(TelemetryTheme.mutedText)
+                }
             }
             .scrollContentBackground(.hidden)
             .background(TelemetryTheme.background)
