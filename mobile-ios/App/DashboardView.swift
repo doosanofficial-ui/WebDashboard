@@ -44,6 +44,8 @@ private struct SettingsView: View {
     @Bindable var model: TelemetryModel
     @State private var credential = ""
     @State private var importingAdapterProfile = false
+    @State private var exportDocument: MeasurementExportDocument?
+    @State private var exportPresented = false
 
     var body: some View {
         NavigationStack {
@@ -89,6 +91,23 @@ private struct SettingsView: View {
                         }
                     }
                 }
+                Section("Local measurement export") {
+                    Button("Export measurement JSON") {
+                        Task {
+                            guard let data = await model.exportMeasurementJSON() else { return }
+                            exportDocument = MeasurementExportDocument(data: data)
+                            exportPresented = true
+                        }
+                    }
+                    .accessibilityIdentifier("export-measurement-json")
+                    Text(model.exportStatus)
+                        .font(.caption)
+                        .foregroundStyle(TelemetryTheme.mutedText)
+                        .accessibilityIdentifier("measurement-export-status")
+                    Text("Exports the current SQLite-backed session with original measurement and receive timestamps.")
+                        .font(.caption)
+                        .foregroundStyle(TelemetryTheme.mutedText)
+                }
                 Section("CAN adapter profile") {
                     Text(model.adapterProfileStatus)
                         .font(.caption)
@@ -118,6 +137,16 @@ private struct SettingsView: View {
                     return
                 }
                 model.importAdapterProfile(data)
+            }
+            .fileExporter(
+                isPresented: $exportPresented,
+                document: exportDocument,
+                contentType: .json,
+                defaultFilename: "telemetry-measurements"
+            ) { result in
+                if case .failure = result {
+                    model.exportStatus = "Measurement export failed"
+                }
             }
         }
     }

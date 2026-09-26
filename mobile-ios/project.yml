@@ -8,7 +8,7 @@ packages:
 settings:
   base:
     SWIFT_VERSION: '5.0'
-    MARKETING_VERSION: '0.1.0'
+    MARKETING_VERSION: '0.1.1'
     CURRENT_PROJECT_VERSION: '1'
 targets:
   Telemetry:
@@ -26,6 +26,8 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: Telemetry
+        CFBundleShortVersionString: '$(MARKETING_VERSION)'
+        CFBundleVersion: '$(CURRENT_PROJECT_VERSION)'
         UILaunchScreen: {}
         NSLocationWhenInUseUsageDescription: Record location alongside CAN measurements during an operator session.
         NSLocationAlwaysAndWhenInUseUsageDescription: Continue the explicitly started measurement session while the screen is locked.

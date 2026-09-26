@@ -27,6 +27,7 @@ final class TelemetryModel: NSObject {
     var uploadStatus = "Not paired"
     var storageStatus: String?
     var localRecordingStatus = "Local recorder unavailable"
+    var exportStatus = "No export generated"
     var dashboardProfile: DashboardProfile?
     var adapterProfile: AdapterProfile?
     var adapterStatus = "Adapter disconnected"
@@ -528,6 +529,21 @@ final class TelemetryModel: NSObject {
     func flush(force: Bool = false) async {
         guard let endpoint = try? endpoint(), let credential = CredentialStore.read() else { return }
         await uploader?.flush(to: endpoint, credential: credential, force: force)
+    }
+
+    func exportMeasurementJSON() async -> Data? {
+        guard let localRecorder else {
+            exportStatus = "Local recorder unavailable"
+            return nil
+        }
+        do {
+            let data = try await localRecorder.exportJSON()
+            exportStatus = "Export ready: \(data.count) bytes"
+            return data
+        } catch {
+            exportStatus = "Measurement export failed"
+            return nil
+        }
     }
 
     func restoreBackgroundSession() {

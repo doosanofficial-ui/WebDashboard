@@ -2,6 +2,7 @@
 
 Checked: 2026-09-26. Branch: `codex/native-telemetry-productization`.
 This is an evidence checkpoint, not a release approval.
+Current native development version: `0.1.1` (build `1`).
 
 ## Implemented in this checkpoint
 
@@ -15,6 +16,8 @@ This is an evidence checkpoint, not a release approval.
   `DISCONNECTED` state handling.
 - SQLite WAL measurement recorder preserving source time, phone receive time,
   monotonic time, event order, and JSON export.
+- In-app JSON export through SwiftUI FileDocument, backed by the same
+  SQLite-backed measurement session.
 - iOS `LocationService` extraction and local measurement recorder status.
 - Explicit BLE and Wi-Fi transport adapters. BT4N UUIDs are not guessed; BLE
   connection fails closed until service/write/notify characteristics are known.
@@ -55,8 +58,8 @@ This is an evidence checkpoint, not a release approval.
 
 | Area | Result | Evidence |
 | --- | --- | --- |
-| Swift Core tests | PASS, 59 tests | `swift test --package-path mobile-ios/TelemetryCore` |
-| iOS application build | PASS | Xcode 26.3, iOS 26.2 Simulator SDK, `/tmp/telemetry-ios-verify.mmFJlr` |
+| Swift Core tests | PASS, 59 tests | `mobile-ios/scripts/verify.sh build`; latest artifact `/tmp/telemetry-ios-verify.YgmE0Q` |
+| iOS application build | PASS | Xcode 26.3, iOS 26.2 Simulator SDK, `/tmp/telemetry-ios-verify.YgmE0Q`; bundle version `0.1.1 (1)` |
 | Server tests | PASS, 65 tests | `/tmp/webdashboard-verify-20260924.Z9wDKb/python/bin/python -m unittest discover -s server/tests -p 'test*.py'` |
 | GPS/web contract tests | PASS, 28 tests | `node --experimental-vm-modules --test scripts/tests/gps-data-integrity.test.mjs` |
 | Service worker tests | PASS, 8 tests | `node scripts/tests/service-worker.test.mjs` |

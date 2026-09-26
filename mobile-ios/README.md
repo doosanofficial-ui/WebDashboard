@@ -22,6 +22,7 @@ validation and is not a released product. App Store/CarPlay approval is not impl
 - OS-registered retries with earliestBeginDate, restored configuration on background
   relaunch, and serial preparation that finishes before releasing background callbacks.
 - Keychain credential storage, HTTPS validation, explicit Stop, and persisted MARK events.
+- In-app JSON export of the local SQLite-backed measurement session for offline analysis.
 
 ## OBD work in progress
 
@@ -81,7 +82,7 @@ the locked-screen/recovery test on the updated device. This target update does n
 raise the app's minimum deployment version or constitute a release.
 
 Generate/open Telemetry.xcodeproj with XcodeGen, select the verified Apple team,
-then build for the connected device. The initial native version remains 0.1.0 while
+then build for the connected device. The current native development version is 0.1.1 while
 Git integration and release verification are incomplete. Use the original source
 path only if it has no NBSP; otherwise use the verification snapshot for a trial build
 and make edits back in the canonical source.
