@@ -492,17 +492,29 @@ struct LiveCockpitView: View {
 
     private func ledWidget(_ widget: DashboardWidgetDefinition,
                            value: Double?, fresh: Bool) -> some View {
-        let color = valueColor(value, configuration: widget.configuration, fresh: fresh)
+        let conditionActive = widget.configuration.condition != nil
+            ? model.conditionStates[widget.id] ?? false
+            : false
+        let color: Color
+        if !fresh {
+            color = TelemetryTheme.quietText
+        } else if widget.configuration.condition != nil {
+            color = conditionActive ? TelemetryTheme.warning : TelemetryTheme.valid
+        } else {
+            color = valueColor(value, configuration: widget.configuration, fresh: fresh)
+        }
         return HStack(spacing: 10) {
             Circle()
-                .fill(fresh ? color : TelemetryTheme.quietText)
+                .fill(color)
                 .frame(width: 22, height: 22)
                 .shadow(color: color.opacity(0.5), radius: 8)
             VStack(alignment: .leading, spacing: 3) {
                 Text(widget.configuration.label)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
-                Text(fresh ? format(value, decimals: widget.configuration.decimals) : "STALE")
+                Text(!fresh ? "STALE" : widget.configuration.condition != nil
+                     ? (conditionActive ? "ACTIVE" : "CLEAR")
+                     : format(value, decimals: widget.configuration.decimals))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(TelemetryTheme.mutedText)
             }

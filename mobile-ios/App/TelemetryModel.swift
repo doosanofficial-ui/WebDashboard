@@ -36,6 +36,7 @@ final class TelemetryModel: NSObject {
     var canSource = "Server"
     var localSignalTimeouts: [String: Double] = [:]
     var localSignalReceivedAt: [String: Double] = [:]
+    var conditionStates: [String: Bool] = [:]
     var lastLocation: TelemetryEvent?
     var locationTrack: [CLLocationCoordinate2D] = []
     var points: [CanPoint] = []
@@ -50,6 +51,7 @@ final class TelemetryModel: NSObject {
     @ObservationIgnored private let liveAdapter: LiveAdapterController
     @ObservationIgnored private let bleDiscovery: BLEDiscoveryController
     @ObservationIgnored private let telemetryStore: TelemetryStore
+    @ObservationIgnored private var conditionRuntimes: [String: DashboardConditionRuntime] = [:]
     @ObservationIgnored private var outbox: DurableOutbox?
     @ObservationIgnored private var localRecorder: MeasurementRecorder?
     @ObservationIgnored private var completedRecorder: MeasurementRecorder?
@@ -212,6 +214,7 @@ final class TelemetryModel: NSObject {
                             previousSequence = frame.status.seq
                             self.frame = frame; self.lastFrameAt = Date(); self.connection = "Connected"
                             self.canSource = "Server"
+                            self.updateDashboardConditions(values: frame.sig, now: frame.t)
                             backoff = 1
                             if !frame.sig.isEmpty {
                                 self.points.append(CanPoint(time: Date(), signals: frame.sig))
@@ -351,7 +354,12 @@ final class TelemetryModel: NSObject {
             receivedAtMonotonicNanos: frame.receivedAtMonotonicNanos
         )
         ingestLocal(frame: frame, samples: [sample])
-        applyLocalSignals(frame, values: ["demo.signal": decoded.value], source: "Demo")
+        applyLocalSignals(
+            frame,
+            values: ["demo.signal": decoded.value],
+            rawValues: ["demo.signal": decoded.rawValue],
+            source: "Demo"
+        )
         record(.can(frame: frame))
         record(.signal(sample))
         publishCarPlayProjection()
@@ -374,6 +382,7 @@ final class TelemetryModel: NSObject {
         applyLocalSignals(
             frame,
             values: Dictionary(uniqueKeysWithValues: decoded.map { ($0.definition.id, $0.decoded.value) }),
+            rawValues: Dictionary(uniqueKeysWithValues: decoded.map { ($0.definition.id, $0.decoded.rawValue) }),
             source: "Adapter"
         )
         ingestLocal(frame: frame, samples: decoded.map(\.sample))
@@ -403,7 +412,12 @@ final class TelemetryModel: NSObject {
         Task { await telemetryStore.configureSignalTimeouts(timeouts) }
     }
 
-    private func applyLocalSignals(_ frame: CANFrame, values: [String: Double], source: String) {
+    private func applyLocalSignals(
+        _ frame: CANFrame,
+        values: [String: Double],
+        rawValues: [String: UInt64] = [:],
+        source: String
+    ) {
         guard !values.isEmpty,
               frame.sequence <= UInt64(Int.max),
               let snapshot = try? ServerCANFrame(
@@ -416,9 +430,33 @@ final class TelemetryModel: NSObject {
         self.frame = snapshot
         lastFrameAt = now
         canSource = source
+        updateDashboardConditions(values: values, rawValues: rawValues, now: frame.receivedAtEpoch)
         points.append(CanPoint(time: now, signals: values))
         points.removeAll { $0.time < now.addingTimeInterval(-60) }
         if points.count > 600 { points.removeFirst(points.count - 600) }
+    }
+
+    private func updateDashboardConditions(
+        values: [String: Double],
+        rawValues: [String: UInt64] = [:],
+        now: Double
+    ) {
+        guard let pages = dashboardProfile?.pages else { return }
+        for widget in pages.flatMap(\.widgets) {
+            guard let condition = widget.configuration.condition,
+                  let signalID = widget.signalID,
+                  let value = values[signalID] else { continue }
+            var runtime = conditionRuntimes[widget.id] ?? DashboardConditionRuntime()
+            let active = runtime.update(
+                condition: condition,
+                value: value,
+                rawValue: rawValues[signalID],
+                stale: false,
+                now: now
+            )
+            conditionRuntimes[widget.id] = runtime
+            conditionStates[widget.id] = active
+        }
     }
 
     private func publishCarPlayProjection() {
@@ -539,6 +577,8 @@ final class TelemetryModel: NSObject {
         guard var profile = dashboardProfile,
               profile.deleteWidget(pageID: pageID, widgetID: widgetID) else { return }
         dashboardProfile = profile
+        conditionRuntimes.removeValue(forKey: widgetID)
+        conditionStates.removeValue(forKey: widgetID)
         persistDashboardProfile()
     }
 
@@ -622,6 +662,8 @@ final class TelemetryModel: NSObject {
                 configuration: configuration
               )) != nil else { return }
         dashboardProfile = profile
+        conditionRuntimes.removeValue(forKey: widgetID)
+        conditionStates.removeValue(forKey: widgetID)
         persistDashboardProfile()
     }
 
