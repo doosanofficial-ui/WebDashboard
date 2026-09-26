@@ -20,6 +20,26 @@ export function clearUplinkError(element) {
   element.hidden = true;
 }
 
+export function updateRecording(element, payload) {
+  if (!element) return;
+  if (payload && payload.v !== 1) return;
+  const raw = payload?.type === "recording_status" ? payload.recording : payload?.status?.recording;
+  let text = "CSV status unknown";
+  let warning = false;
+  if (raw && ["pending", "unconfirmed", "rejected"].every(key => Number.isSafeInteger(raw[key]) && raw[key] >= 0)) {
+    const unresolved = raw.pending + raw.unconfirmed + raw.rejected;
+    if (Number.isSafeInteger(unresolved)) {
+      if (raw.state === "ready") text = `CSV: ${raw.pending} pending`;
+      if (raw.state === "delayed") { text = `CSV delayed: ${raw.pending} pending`; warning = true; }
+      if (raw.state === "failed") { text = `CSV failed: ${unresolved} unresolved`; warning = true; }
+      if (raw.state === "starting") text = "CSV starting";
+      if (raw.state === "closed") { text = "CSV closed"; warning = true; }
+    }
+  }
+  if (element.textContent !== text) element.textContent = text;
+  element.className = warning ? "pill stale" : "pill neutral";
+}
+
 export function updateConnection(elements, { connected, frameAgeMs, seq, drop, rttMs, stale }) {
   const { connState, frameAge, seqValue, dropValue, rttValue } = elements;
 

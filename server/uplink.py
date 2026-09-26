@@ -13,7 +13,7 @@ ERRORS = {
     "payload_too_large": (413, "Telemetry message exceeds the size limit"),
     "text_frame_required": (422, "Send JSON in a WebSocket text frame"),
     "unsupported_media_type": (415, "Content-Type must be application/json"),
-    "storage_unavailable": (503, "CSV write failed; this message was not confirmed"),
+    "storage_unavailable": (503, "CSV write could not be confirmed"),
 }
 
 

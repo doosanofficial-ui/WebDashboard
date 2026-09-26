@@ -85,6 +85,34 @@ async function mobile({ bridge = false, backgroundRequested = bridge, os = 'ios'
 
 const valid = { latitude: 37, longitude: 127, speed: 12, heading: 90, accuracy: 5, altitude: 20 };
 
+test('recording health distinguishes queued data from confirmed writes without leaking server errors', async () => {
+  const ui = await load('client/ui.js');
+  const element = { textContent: '', className: '' };
+  ui.updateRecording(element, { v: 1, status: { recording: { state: 'delayed', pending: 3, unconfirmed: 0, rejected: 0 } } });
+  assert.equal(element.textContent, 'CSV delayed: 3 pending');
+  ui.updateRecording(element, { v: 1, type: 'recording_status', recording: {
+    state: 'failed', pending: 2, unconfirmed: 3, rejected: 1, error: 'private-canary',
+  } });
+  assert.equal(element.textContent, 'CSV failed: 6 unresolved');
+  assert.equal(element.className, 'pill stale');
+  ui.updateRecording(element, { v: 1, type: 'recording_status', recording: { state: 'ready', pending: -1 } });
+  assert.equal(element.textContent, 'CSV status unknown');
+});
+
+test('a recording control message never becomes a fresh CAN frame', async () => {
+  const handlers = {};
+  class Socket {
+    static OPEN = 1;
+    constructor() { this.readyState = 1; }
+    addEventListener(name, fn) { handlers[name] = fn; }
+  }
+  const ws = await load('client/ws.js', {}, { WebSocket: Socket });
+  let frames = 0;
+  new ws.TelemetrySocket({ url: 'ws://localhost/ws', onFrame: () => frames++ }).connect();
+  handlers.message({ data: JSON.stringify({ v: 1, type: 'recording_status', recording: { state: 'failed' }, sig: { ws_fl: 99 }, status: { seq: 1 } }) });
+  assert.equal(frames, 0);
+});
+
 test('a serialized WS upload rejection reaches the UI without reflecting server text', async () => {
   const ui = await load('client/ui.js');
   const handlers = {};

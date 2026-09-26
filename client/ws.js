@@ -90,7 +90,7 @@ export class TelemetrySocket {
       try {
         const payload = this.codec.decode(event.data);
         this.onMessage(payload);
-        if (payload && payload.sig && payload.status) {
+        if (payload && payload.sig && payload.status && payload.type !== "recording_status") {
           this.onFrame(payload);
         }
       } catch {
