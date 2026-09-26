@@ -15,6 +15,15 @@ public enum DashboardOrientation: String, Codable, Equatable, Sendable {
     case landscape
 }
 
+public enum DashboardAlignment: String, CaseIterable, Equatable, Sendable {
+    case left
+    case centerHorizontal
+    case right
+    case top
+    case centerVertical
+    case bottom
+}
+
 public enum DashboardWidgetType: String, Codable, Equatable, Hashable, CaseIterable, Sendable {
     case numericGauge
     case circularGauge
@@ -153,6 +162,35 @@ public struct DashboardPage: Codable, Equatable, Identifiable, Sendable {
         widgets[index].rect = rect
     }
 
+    public mutating func alignWidget(id: String, alignment: DashboardAlignment, columns: Int) throws {
+        guard let index = widgets.firstIndex(where: { $0.id == id }) else {
+            throw DashboardModelError.missingWidgetID(id)
+        }
+        let widget = widgets[index]
+        let canvasColumns = max(columns, widget.rect.width)
+        let maxRow = widgets.map { $0.rect.y + $0.rect.height }.max() ?? widget.rect.height
+        let newRect: DashboardRect
+        switch alignment {
+        case .left:
+            newRect = DashboardRect(x: 0, y: widget.rect.y, width: widget.rect.width, height: widget.rect.height)
+        case .centerHorizontal:
+            newRect = DashboardRect(x: (canvasColumns - widget.rect.width) / 2, y: widget.rect.y,
+                                    width: widget.rect.width, height: widget.rect.height)
+        case .right:
+            newRect = DashboardRect(x: canvasColumns - widget.rect.width, y: widget.rect.y,
+                                    width: widget.rect.width, height: widget.rect.height)
+        case .top:
+            newRect = DashboardRect(x: widget.rect.x, y: 0, width: widget.rect.width, height: widget.rect.height)
+        case .centerVertical:
+            newRect = DashboardRect(x: widget.rect.x, y: max(0, (maxRow - widget.rect.height) / 2),
+                                    width: widget.rect.width, height: widget.rect.height)
+        case .bottom:
+            newRect = DashboardRect(x: widget.rect.x, y: max(0, maxRow - widget.rect.height),
+                                    width: widget.rect.width, height: widget.rect.height)
+        }
+        widgets[index].rect = newRect
+    }
+
     public mutating func updateWidgetBinding(
         id: String,
         signalID: String?,
@@ -288,6 +326,18 @@ public struct DashboardProfile: Codable, Equatable, Identifiable, Sendable {
             throw DashboardModelError.missingPageID(pageID)
         }
         try pages[index].updateWidgetRect(id: widgetID, rect: rect)
+    }
+
+    public mutating func alignWidget(
+        pageID: String,
+        widgetID: String,
+        alignment: DashboardAlignment,
+        columns: Int
+    ) throws {
+        guard let index = pages.firstIndex(where: { $0.id == pageID }) else {
+            throw DashboardModelError.missingPageID(pageID)
+        }
+        try pages[index].alignWidget(id: widgetID, alignment: alignment, columns: columns)
     }
 
     public mutating func updateWidgetBinding(

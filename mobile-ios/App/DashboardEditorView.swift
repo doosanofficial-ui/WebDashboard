@@ -130,6 +130,19 @@ struct DashboardEditorView: View {
                     Button("Duplicate") {
                         model.duplicateDashboardWidget(pageID: page.id, widgetID: widget.id)
                     }
+                    Menu("Align") {
+                        ForEach(DashboardAlignment.allCases, id: \.self) { alignment in
+                            Button(alignmentLabel(alignment)) {
+                                let columns = page.orientation == .portrait ? 4 : 6
+                                model.alignDashboardWidget(
+                                    pageID: page.id,
+                                    widgetID: widget.id,
+                                    alignment: alignment,
+                                    columns: columns
+                                )
+                            }
+                        }
+                    }
                     Button("Delete", role: .destructive) {
                         model.deleteDashboardWidget(pageID: page.id, widgetID: widget.id)
                         self.selectedWidgetID = nil
@@ -206,6 +219,17 @@ struct DashboardEditorView: View {
     private func optionalDouble(_ text: String) -> Double? {
         let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return value.isEmpty ? nil : Double(value)
+    }
+
+    private func alignmentLabel(_ alignment: DashboardAlignment) -> String {
+        switch alignment {
+        case .left: return "Left"
+        case .centerHorizontal: return "Center horizontally"
+        case .right: return "Right"
+        case .top: return "Top"
+        case .centerVertical: return "Center vertically"
+        case .bottom: return "Bottom"
+        }
     }
 }
 

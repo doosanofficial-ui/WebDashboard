@@ -584,6 +584,23 @@ final class TelemetryModel: NSObject {
         persistDashboardProfile()
     }
 
+    func alignDashboardWidget(
+        pageID: String,
+        widgetID: String,
+        alignment: DashboardAlignment,
+        columns: Int
+    ) {
+        guard var profile = dashboardProfile,
+              (try? profile.alignWidget(
+                pageID: pageID,
+                widgetID: widgetID,
+                alignment: alignment,
+                columns: columns
+              )) != nil else { return }
+        dashboardProfile = profile
+        persistDashboardProfile()
+    }
+
     func updateDashboardWidgetRect(pageID: String, widgetID: String, rect: DashboardRect) {
         guard var profile = dashboardProfile,
               (try? profile.updateWidgetRect(pageID: pageID, widgetID: widgetID, rect: rect)) != nil else { return }

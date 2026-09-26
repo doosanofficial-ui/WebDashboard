@@ -107,6 +107,29 @@ final class DashboardModelTests: XCTestCase {
         XCTAssertEqual(widget.configuration, configuration)
     }
 
+    func testWidgetCanAlignWithinCanvasBounds() throws {
+        var page = DashboardPage(
+            id: "main",
+            name: "Main",
+            orientation: .landscape,
+            widgets: [DashboardWidgetDefinition(
+                id: "speed",
+                type: .numericGauge,
+                signalID: "ws_fl",
+                rect: DashboardRect(x: 1, y: 4, width: 2, height: 1),
+                zIndex: 1,
+                configuration: DashboardWidgetConfiguration(
+                    label: "Speed", unit: "km/h", decimals: 1,
+                    minimum: 0, maximum: 240, warningThreshold: nil, criticalThreshold: nil
+                )
+            )]
+        )
+        try page.alignWidget(id: "speed", alignment: .right, columns: 6)
+        XCTAssertEqual(page.widgets[0].rect, DashboardRect(x: 4, y: 4, width: 2, height: 1))
+        try page.alignWidget(id: "speed", alignment: .top, columns: 6)
+        XCTAssertEqual(page.widgets[0].rect.y, 0)
+    }
+
     func testProfilePageLifecycleProtectsLastPage() throws {
         var profile = try profile()
         try profile.addPage(DashboardPage(id: "debug", name: "Debug", orientation: .portrait, widgets: []))
