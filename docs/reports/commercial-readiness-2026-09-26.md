@@ -69,6 +69,8 @@ Current native development version: `0.4.0` (build `1`).
 - `CANSignalPipeline` is now the shared Core decoder boundary for live/replay paths;
   it produces typed decoded samples and rejects duplicate signal catalogs before
   monitoring starts.
+- `CANMeasurementPipeline` now has an end-to-end MockCANTransport test covering
+  ELM327 session parsing, signal decode, TelemetryStore ingestion, and SQLite rows.
 - `TelemetryStore` is now fed by native demo/live CAN frames and GPS samples; profile
   timeouts are configured at runtime and disconnect transitions are explicit.
 - BLE discovery permission is deferred until the scan action; scanning only lists
@@ -93,11 +95,12 @@ Current native development version: `0.4.0` (build `1`).
 
 | Area | Result | Evidence |
 | --- | --- | --- |
-| Swift Core tests | PASS, 68 tests | `mobile-ios/scripts/verify.sh build`; `0.4.0` artifact `/tmp/telemetry-ios-verify.5iGwT4` |
+| Swift Core tests | PASS, 69 tests | `mobile-ios/scripts/verify.sh build`; `0.4.0` artifact `/tmp/telemetry-ios-verify.WQVzdn` |
 | Server CAN contract tests | PASS, 3 tests | `ServerCANFrameTests` in the same artifact |
 | CAN pipeline tests | PASS, 3 tests | `CANSignalPipelineTests` in the same artifact |
+| End-to-end CAN measurement pipeline | PASS, 1 test | `CANMeasurementPipelineTests` covers MockCANTransport -> ELM327Session -> Store -> SQLite |
 | ELM327 DLC/recovery tests | PASS, 7 session tests | `ELM327SessionTests` in the same artifact |
-| Native app build after hardening | PASS | XcodeGen-generated `0.4.0` project, Xcode 26.3/iOS 26.2 Simulator SDK; `/tmp/telemetry-ios-verify.5iGwT4` |
+| Native app build after hardening | PASS | XcodeGen-generated `0.4.0` project, Xcode 26.3/iOS 26.2 Simulator SDK; `/tmp/telemetry-ios-verify.WQVzdn` |
 | MapKit track widget compile | PASS | Native target includes `MapKit`, `MapPolyline`, and bounded GPS track model; runtime GPS fix not run |
 | BLE discovery probe compile | PASS | Native target compile; physical BT4N GATT observation not run |
 | Current cockpit visual smoke | PASS (simulator render) | `0.3.1` iPhone 17 Pro simulator screenshot: `docs/reports/evidence/swiftui-cockpit-v031-2026-09-27.png`; disconnected/stale state rendered safely |
