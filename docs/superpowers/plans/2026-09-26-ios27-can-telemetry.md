@@ -130,6 +130,40 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-pa
 - [ ] **Step 4: Run Xcode 27/iOS 27 build, CarPlay Simulator, and real BT4N/vehicle acceptance only when hardware is available**
 - [ ] **Step 5: Commit:** `feat: add entitlement-gated carplay status projection`
 
+### Task 6: Versioned dashboard profile and editor model
+
+**Files:**
+- Create: `mobile-ios/TelemetryCore/Sources/TelemetryCore/DashboardModel.swift`
+- Create: `mobile-ios/TelemetryCore/Tests/TelemetryCoreTests/DashboardModelTests.swift`
+
+**Interfaces:**
+- Consumes: `SignalDefinition` identifiers and `CarPlayProjectionState` naming conventions.
+- Produces: versioned `DashboardProfile`, `DashboardPage`, `DashboardWidgetDefinition`, typed widget configuration, and pure editor operations for duplicate/delete/snap/grid alignment.
+
+- [ ] **Step 1: Write failing tests** for JSON round-trip, unsupported schema version rejection, widget binding, duplicate/delete, and snap-to-grid.
+- [ ] **Step 2: Run focused tests and verify the expected missing-symbol failure**
+- [ ] **Step 3: Implement the pure versioned dashboard model and editor operations**
+- [ ] **Step 4: Run focused and full Core tests**
+- [ ] **Step 5: Commit:** `feat: add versioned dashboard profile model`
+
+### Task 7: SwiftUI configurable dashboard integration
+
+**Files:**
+- Modify: `mobile-ios/App/TelemetryModel.swift`
+- Modify: `mobile-ios/App/DashboardView.swift`
+- Create: `mobile-ios/App/DashboardEditorView.swift`
+- Modify: `mobile-ios/project.yml` only for profile resources if needed
+
+**Interfaces:**
+- Consumes: `DashboardProfile` and editor operations from Task 6 plus existing latest server signal values.
+- Produces: profile selection, numeric widget rendering from configuration, edit mode for add/delete/duplicate, and clear unavailable/stale states.
+
+- [ ] **Step 1: Add a failing UI assertion** that a profile-defined widget label/value appears independently of the old hard-coded gauge list.
+- [ ] **Step 2: Run the focused UI test and record simulator-harness status**
+- [ ] **Step 3: Implement profile loading/saving and the minimal editor UI**
+- [ ] **Step 4: Run Core tests and an iOS build; rerun UI only when the simulator worker is healthy**
+- [ ] **Step 5: Commit:** `feat: render configurable dashboard profiles`
+
 ## Verification gate
 
 Every task must run its focused tests and then the complete applicable suite.
