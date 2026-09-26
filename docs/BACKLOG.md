@@ -110,12 +110,19 @@
 ## P4 (Projection)
 - [ ] **P4-1 CarPlay/Android Auto 정책/자격 요건 체크**
   - 산출물: 요구사항 매트릭스(엔타이틀먼트/카테고리/심사 조건)
+  - 진행: CarPlay Simulator 외부 디스플레이 실행은 확인했다. Apple Developer
+    팀/멤버십/App ID와 CarPlay managed capability 신청은 계정 로그인 및
+    Account Holder 확인 후 진행한다. 실행 증거는
+    `docs/reports/carplay-simulator-and-account-gates-2026-09-26.md`에 기록한다.
   - 완료 기준:
     - iOS/Android 투영 진입 요건을 문서화하고 블로커 식별
     - 구현 가능 범위와 불가 범위를 팀 합의
 
 - [ ] **P4-2 투영 전용 UI 템플릿 설계 및 PoC**
   - 산출물: 투영 UI 와이어/프로토타입, 데이터 바인딩 규격
+  - 진행: iPhone용 status-only CarPlay template/bridge는 컴파일 경계까지
+    구현했다. 승인된 entitlement와 scene manifest가 생기기 전에는 런타임
+    CarPlay 앱 표시를 완료로 처리하지 않는다.
   - 완료 기준:
     - 핵심 텔레메트리 카드 렌더링 검증(속도/yaw/경고/연결상태)
     - 운전 중 가독성 및 조작 최소화 기준 충족

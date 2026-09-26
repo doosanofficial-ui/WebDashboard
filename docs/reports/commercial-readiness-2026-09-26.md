@@ -61,6 +61,7 @@ This is an evidence checkpoint, not a release approval.
 | UI runtime smoke | PASS | Direct install/launch on the iPhone 17 Pro **simulator** with iOS 26.2 showed non-overlapping migrated Speed/FR/RL/RR/Yaw/Ay grid widgets, local recorder, and Dashboard Editor controls; this is not the target physical iPhone 17/iOS 27 result, and XCTest runner remains unreliable |
 | iOS 27 build | NOT RUN | Host has Xcode 26.3 / iOS 26.2 SDK |
 | Software ELM vertical slice | PASS | Direct simulator demo adapter start/monitor/stop; not a BT4N or vehicle result |
+| CarPlay external display host | PASS (display only) | Simulator `I/O > External Displays > CarPlay` opened the default CarPlay home screen; app rendering was not claimed |
 | BT4N live profile | NOT RUN | No observed GATT/serial profile or firmware capture |
 | Santa Fe MX5 HEV vehicle capture | NOT RUN | Model year/market and raw CAN access remain unverified |
 | CarPlay entitlement/runtime | NOT RUN | Apple entitlement not requested or granted |
@@ -74,8 +75,10 @@ This is an evidence checkpoint, not a release approval.
   Hyundai Santa Fe MX5 HEV.
 - Run foreground, screen-lock, Bluetooth disconnect, network disconnect, and
   30-minute recorder/ACK tests on the same signed build.
-- Request the Apple CarPlay category entitlement and only then register the
-  approved scene configuration.
+- Verify Apple Developer membership/team/App ID, request the applicable CarPlay
+  category entitlement as Account Holder, and only then register the approved
+  scene configuration. The simulator display-only check is already recorded;
+  entitlement approval and app rendering remain open.
 - Resolve the simulator UI runner issue and obtain a readable assertion result.
 - Finish Windows clean-machine packaging, rollback, and real Vector/CANoe bridge
   acceptance.

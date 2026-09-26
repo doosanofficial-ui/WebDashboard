@@ -83,6 +83,11 @@ Windows 브리지 대안이며 실물 호환은 아직 미검증이다.
 ## 4. 필수 후속 플랫폼과 배포 승인
 
 - [ ] **C15 CarPlay**: 실제 용도에 맞는 카테고리/entitlement 확인, 지원 템플릿/복귀 구현.
+  진행: 현재 Xcode Simulator에서 `I/O > External Displays > CarPlay` 외부
+  화면을 열 수 있음을 확인했다. 계정/라이선스/신청/런타임 증거는
+  [CarPlay 게이트 체크포인트](reports/carplay-simulator-and-account-gates-2026-09-26.md)에
+  분리 기록한다. Apple이 승인한 entitlement 키를 확인하기 전에는 임의
+  capability나 scene manifest를 추가하지 않는다.
   완료: 시뮬레이터와 지원 기기/차량 검증 및 필요한 권한 증거.
   불허 시 별도 결정 필요. 웹 UI나 위젯만으로 전체 CarPlay 요구 완료를 대신하지 않는다.
 - [ ] **C16 Android**: FGS/권한/네이티브 저장, 에뮬레이터 후 실기기 검증.

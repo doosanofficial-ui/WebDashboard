@@ -97,6 +97,22 @@ first unlock. Force-quit, reboot before first unlock, revoked permissions, and O
 resource policy can still interrupt collection or transmission. Test and report each
 case; a healthy display or simulator is not a 30-minute background pass.
 
+## CarPlay simulator and account gates
+
+The current Xcode Simulator can open a CarPlay external display. With a booted
+simulator, select `I/O > External Displays > CarPlay`. This verifies the host
+display only. The app is intentionally not registered with a guessed CarPlay
+entitlement or scene manifest, so an app appearing in that window is not yet an
+acceptance criterion. See the dated execution checkpoint at
+`../docs/reports/carplay-simulator-and-account-gates-2026-09-26.md`.
+
+CarPlay app display requires an Apple-approved category entitlement and the
+corresponding App ID/Xcode configuration. The Account Holder submits the managed
+capability request in Certificates, Identifiers & Profiles; membership, signing,
+and physical-device provisioning are separate gates. Do not add an entitlement
+key until Apple assigns the exact capability. The first planned surface is a
+status-only system template, not a copy of the high-frequency phone dashboard.
+
 ## Remaining release gates
 
 Real-device signing/install and 30-minute logs, automatic pairing/provisioning,
