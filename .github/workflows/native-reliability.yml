@@ -50,3 +50,26 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: swift test --package-path mobile-ios/TelemetryCore
+
+  native-app:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install XcodeGen
+        run: |
+          if ! brew list xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+      - name: Generate Xcode project
+        working-directory: mobile-ios
+        run: xcodegen generate --spec project.yml
+      - name: Build iOS application
+        working-directory: mobile-ios
+        run: |
+          xcodebuild -project Telemetry.xcodeproj \
+            -scheme Telemetry \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGNING_ALLOWED=YES \
+            build
