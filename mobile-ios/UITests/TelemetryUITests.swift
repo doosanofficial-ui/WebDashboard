@@ -40,4 +40,11 @@ final class TelemetryUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Speed"].waitForExistence(timeout: 5))
     }
+
+    func testDemoAdapterControlIsExplicitlyAvailable() {
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["start-adapter-demo"].waitForExistence(timeout: 5))
+    }
 }

@@ -12,6 +12,7 @@ struct DashboardView: View {
                     ScrollView {
                         VStack(spacing: 16) {
                             connectionSummary(at: timeline.date)
+                            adapterCard()
                             if let page = model.dashboardProfile?.pages.first {
                                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 145))], spacing: 12) {
                                     ForEach(page.widgets.sorted { $0.zIndex < $1.zIndex }) { widget in
@@ -78,6 +79,36 @@ struct DashboardView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
         }.padding().background(.background, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func adapterCard() -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("CAN adapter", systemImage: "cable.connector")
+                    .font(.headline)
+                Spacer()
+                Text(model.adapterStatus)
+                    .font(.caption)
+                    .foregroundStyle(model.adapterStatus.contains("error") ? .red : .secondary)
+                    .accessibilityIdentifier("adapter-status")
+            }
+            Text("RAW \(model.rawCANText)")
+                .font(.system(.caption, design: .monospaced))
+                .textSelection(.enabled)
+            Text("Demo signal: \(model.adapterSignalValue.map { String(format: "%.1f", $0) } ?? "-") demo")
+                .monospacedDigit()
+            Text("Demo only. Live BLE/Wi-Fi requires an observed adapter profile.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            HStack {
+                Button("Start demo adapter", action: model.startDemoAdapter)
+                    .accessibilityIdentifier("start-adapter-demo")
+                Button("Stop adapter", role: .destructive, action: model.stopDemoAdapter)
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding()
+        .background(.background, in: RoundedRectangle(cornerRadius: 16))
     }
 
     private func gauge(_ title: String, key: String, unit: String) -> some View {

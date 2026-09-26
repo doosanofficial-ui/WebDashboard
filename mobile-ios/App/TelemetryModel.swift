@@ -28,6 +28,9 @@ final class TelemetryModel: NSObject {
     var storageStatus: String?
     var localRecordingStatus = "Local recorder unavailable"
     var dashboardProfile: DashboardProfile?
+    var adapterStatus = "Adapter disconnected"
+    var adapterSignalValue: Double?
+    var rawCANText = "-"
     var frame: CanFrame?
     var lastFrameAt: Date?
     var lastLocation: TelemetryEvent?
@@ -39,6 +42,7 @@ final class TelemetryModel: NSObject {
     var lastMarkAt: Date?
     // Core Location delivers delegate events on this manager's main run loop.
     @ObservationIgnored private let locationService: LocationService
+    @ObservationIgnored private let demoAdapter: DemoAdapterController
     @ObservationIgnored private var outbox: DurableOutbox?
     @ObservationIgnored private var localRecorder: MeasurementRecorder?
     @ObservationIgnored private var dashboardURL: URL?
@@ -52,6 +56,7 @@ final class TelemetryModel: NSObject {
         let existing = UserDefaults.standard.string(forKey: "clientID")
         clientID = existing ?? UUID().uuidString.lowercased()
         locationService = LocationService()
+        demoAdapter = DemoAdapterController()
         super.init()
         UserDefaults.standard.set(clientID, forKey: "clientID")
         locationService.onStatus = { [weak self] status in self?.locationStatus = status }
@@ -60,6 +65,10 @@ final class TelemetryModel: NSObject {
         }
         locationService.onLocations = { [weak self] locations in
             self?.handleLocations(locations)
+        }
+        demoAdapter.onState = { [weak self] state in self?.adapterStatus = state }
+        demoAdapter.onFrame = { [weak self] frame, decoded in
+            self?.handleDemoFrame(frame, decoded: decoded)
         }
         do {
             let root = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
@@ -179,6 +188,34 @@ final class TelemetryModel: NSObject {
         socket?.cancel(with: .normalClosure, reason: nil); socket = nil
         connection = "Disconnected"
         serverRecording = nil
+    }
+
+    func startDemoAdapter() {
+        demoAdapter.start()
+    }
+
+    func stopDemoAdapter() {
+        demoAdapter.stop()
+        adapterSignalValue = nil
+        rawCANText = "-"
+    }
+
+    private func handleDemoFrame(_ frame: CANFrame, decoded: DecodedSignal) {
+        adapterStatus = "Demo adapter monitoring"
+        adapterSignalValue = decoded.value
+        rawCANText = String(format: "0x%03X  %@", frame.canID,
+                            frame.payload.map { String(format: "%02X", $0) }.joined(separator: " "))
+        record(.can(frame: frame))
+        record(.signal(DecodedSignalSample(
+            signalID: "demo.signal",
+            value: decoded.value,
+            rawValue: decoded.rawValue,
+            enumName: decoded.enumName,
+            unit: "demo",
+            frameSequence: frame.sequence,
+            receivedAtEpoch: frame.receivedAtEpoch,
+            receivedAtMonotonicNanos: frame.receivedAtMonotonicNanos
+        )))
     }
 
     func startLocation() {
