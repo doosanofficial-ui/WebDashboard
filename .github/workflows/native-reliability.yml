@@ -31,6 +31,19 @@ jobs:
       - run: npm ci --prefix mobile --ignore-scripts --no-audit --no-fund
       - run: npm test --prefix mobile -- --runInBand --silent
       - run: python scripts/validate_platform_docs.py
+      - name: Validate Windows bootstrap syntax
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            "$PWD/server/start.ps1", [ref]$tokens, [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | Format-List | Out-String | Write-Error
+            exit 1
+          }
   native-core:
     runs-on: macos-15
     timeout-minutes: 10
