@@ -73,6 +73,23 @@ final class ELM327SessionTests: XCTestCase {
         XCTAssertEqual(frame?.payload, [0x11, 0x22, 0x33])
     }
 
+    func testMonitoringAcceptsZeroLengthClassicalCANFrame() async throws {
+        let transport = MockCANTransport()
+        let session = ELM327Session(transport: transport)
+        try await startMonitoring(session, transport: transport)
+        let stream = await session.frames()
+        let received = Task<CANFrame?, Never> {
+            for await frame in stream { return frame }
+            return nil
+        }
+
+        await transport.push(Data("7E8 0\r".utf8))
+        let frame = await received.value
+        XCTAssertEqual(frame?.canID, 0x7E8)
+        XCTAssertEqual(frame?.dlc, 0)
+        XCTAssertEqual(frame?.payload, [])
+    }
+
     func testFragmentedPromptRepliesAreReassembledBeforeNextCommand() async throws {
         let transport = MockCANTransport()
         let session = ELM327Session(transport: transport)

@@ -20,9 +20,9 @@ final class TelemetryModel: NSObject {
     var locationStatus = "Not collecting"
     var uploadStatus = "Not paired"
     var storageStatus: String?
-    var localRecordingStatus = "Local recorder unavailable"
+    var localRecordingStatus = "Preparing local recorder"
     var exportStatus = "No export generated"
-    var localRecordingEnabled = true
+    var localRecordingEnabled = false
     var dashboardProfile: DashboardProfile?
     var adapterProfile: AdapterProfile?
     var adapterStatus = "Adapter disconnected"
@@ -44,6 +44,8 @@ final class TelemetryModel: NSObject {
     var collecting = false
     var credentialSaved = CredentialStore.read() != nil
     var clientDrops = 0
+    var invalidFrameCount = 0
+    var reconnectAttempt = 0
     var lastMarkAt: Date?
     // Core Location delivers delegate events on this manager's main run loop.
     @ObservationIgnored private let locationService: LocationService
@@ -55,6 +57,8 @@ final class TelemetryModel: NSObject {
     @ObservationIgnored private var outbox: DurableOutbox?
     @ObservationIgnored private var localRecorder: MeasurementRecorder?
     @ObservationIgnored private var completedRecorder: MeasurementRecorder?
+    @ObservationIgnored private var recordingLifecycle = RecordingLifecycle()
+    @ObservationIgnored private var recordingStartedAt: Date?
     @ObservationIgnored private var measurementDBURL: URL?
     @ObservationIgnored private var dashboardURL: URL?
     @ObservationIgnored private var adapterProfileURL: URL?
@@ -62,8 +66,10 @@ final class TelemetryModel: NSObject {
     @ObservationIgnored private var socket: URLSessionWebSocketTask?
     @ObservationIgnored private var socketLoop: Task<Void, Never>?
     @ObservationIgnored private var connectionGeneration = UUID()
+    @ObservationIgnored private var frameSequenceTracker = FrameSequenceTracker()
+    @ObservationIgnored private var serverBackoff = ReconnectBackoff()
+    @ObservationIgnored private var connectionStableSince: Date?
     @ObservationIgnored private let clientID: String
-    @ObservationIgnored private let measurementStartedAt = Date()
 
     private override init() {
         let existing = UserDefaults.standard.string(forKey: "clientID")
@@ -145,13 +151,7 @@ final class TelemetryModel: NSObject {
             let box = try DurableOutbox(path: root.appendingPathComponent("outbox.sqlite3"))
             outbox = box
             measurementDBURL = root.appendingPathComponent("measurements.sqlite3")
-            let sessionID = "ios-\(Int(Date().timeIntervalSince1970))-\(clientID)"
-            localRecorder = try MeasurementRecorder(
-                path: measurementDBURL!,
-                sessionID: sessionID,
-                startedAt: Date().timeIntervalSince1970
-            )
-            localRecordingStatus = "Local recorder ready"
+            localRecordingStatus = "Ready to record"
             publishCarPlayProjection()
             uploader = try BackgroundUploader(outbox: box, clientID: clientID,
                 directory: root.appendingPathComponent("uploads"))
@@ -187,15 +187,21 @@ final class TelemetryModel: NSObject {
     }
 
     func connect() {
+        demoAdapter.stop()
+        liveAdapter.stop()
         disconnect()
         do {
             let base = try endpoint()
             UserDefaults.standard.set(base.absoluteString, forKey: "serverURL")
+            frameSequenceTracker.reset()
+            clientDrops = 0
+            invalidFrameCount = 0
+            reconnectAttempt = 0
+            serverBackoff.reset()
             let generation = UUID()
             connectionGeneration = generation
             socketLoop = Task { [weak self] in
                 guard let self else { return }
-                var backoff: UInt64 = 1
                 while !Task.isCancelled && self.connectionGeneration == generation {
                     guard var components = URLComponents(url: base, resolvingAgainstBaseURL: false) else {
                         self.connection = "Invalid server URL"
@@ -210,7 +216,7 @@ final class TelemetryModel: NSObject {
                     self.socket = task
                     self.connection = "Connecting"
                     task.resume()
-                    var previousSequence: Int?
+                    self.connectionStableSince = nil
                     do {
                         while !Task.isCancelled {
                             let message = try await task.receive()
@@ -226,15 +232,24 @@ final class TelemetryModel: NSObject {
                                 if update.isControl { continue }
                             }
                             guard data.count <= 256 * 1024,
-                                  let frame = try? JSONDecoder().decode(CanFrame.self, from: data), frame.v == 1 else { continue }
-                            if let previousSequence, frame.status.seq > previousSequence + 1 {
-                                self.clientDrops += frame.status.seq - previousSequence - 1
+                                  let frame = try? JSONDecoder().decode(CanFrame.self, from: data),
+                                  frame.v == 1 else {
+                                self.invalidFrameCount = self.invalidFrameCount == Int.max
+                                    ? Int.max : self.invalidFrameCount + 1
+                                continue
                             }
-                            previousSequence = frame.status.seq
+                            _ = self.frameSequenceTracker.accept(sequence: frame.status.seq)
+                            self.clientDrops = self.frameSequenceTracker.dropCount
                             self.frame = frame; self.lastFrameAt = Date(); self.connection = "Connected"
                             self.canSource = "Server"
                             self.updateDashboardConditions(values: frame.sig, now: frame.t)
-                            backoff = 1
+                            if self.connectionStableSince == nil {
+                                self.connectionStableSince = Date()
+                            } else if let stableSince = self.connectionStableSince,
+                                      Date().timeIntervalSince(stableSince) >= 10 {
+                                self.serverBackoff.reset()
+                                self.reconnectAttempt = 0
+                            }
                             if !frame.sig.isEmpty {
                                 self.points.append(CanPoint(time: Date(), signals: frame.sig))
                                 self.points.removeAll { $0.time < Date().addingTimeInterval(-60) }
@@ -246,8 +261,12 @@ final class TelemetryModel: NSObject {
                         self.connection = "Reconnecting"
                         self.serverRecording = nil
                         task.cancel(with: .goingAway, reason: nil)
-                        try? await Task.sleep(nanoseconds: backoff * 1_000_000_000)
-                        backoff = min(15, backoff * 2)
+                        self.connectionStableSince = nil
+                        self.frameSequenceTracker.reset()
+                        self.clientDrops = 0
+                        let delay = self.serverBackoff.nextDelaySeconds()
+                        self.reconnectAttempt = min(Int.max, self.reconnectAttempt + 1)
+                        try? await Task.sleep(nanoseconds: delay * 1_000_000_000)
                     }
                 }
             }
@@ -259,17 +278,23 @@ final class TelemetryModel: NSObject {
         connectionGeneration = UUID()
         socketLoop?.cancel(); socketLoop = nil
         socket?.cancel(with: .normalClosure, reason: nil); socket = nil
+        connectionStableSince = nil
+        serverBackoff.reset()
+        reconnectAttempt = 0
         connection = "Disconnected"
         serverRecording = nil
         publishCarPlayProjection()
     }
 
     func startDemoAdapter() {
+        disconnect()
+        liveAdapter.stop()
         demoAdapter.start()
     }
 
     func stopDemoAdapter() {
         demoAdapter.stop()
+        liveAdapter.stop()
         Task { await telemetryStore.disconnect() }
         adapterSignalValue = nil
         canSource = "None"
@@ -278,6 +303,8 @@ final class TelemetryModel: NSObject {
     }
 
     func startLiveAdapter() {
+        disconnect()
+        demoAdapter.stop()
         guard let adapterProfile else {
             adapterProfileStatus = "No live adapter profile"
             adapterStatus = "Live adapter not configured"
@@ -288,12 +315,7 @@ final class TelemetryModel: NSObject {
     }
 
     func stopLiveAdapter() {
-        liveAdapter.stop()
-        Task { await telemetryStore.disconnect() }
-        adapterSignalValue = nil
-        canSource = "None"
-        rawCANText = "-"
-        publishCarPlayProjection()
+        stopDemoAdapter()
     }
 
     func scanBLE() { bleDiscovery.start() }
@@ -480,23 +502,18 @@ final class TelemetryModel: NSObject {
 
     private func publishCarPlayProjection() {
         #if canImport(CarPlay)
-        let recordingState: String
-        if storageStatus != nil {
-            recordingState = "failed"
-        } else if localRecordingStatus.contains("active") || localRecordingStatus.contains("Writing") {
-            recordingState = "recording"
-        } else if localRecordingStatus.contains("ready") {
-            recordingState = "ready"
-        } else {
-            recordingState = "idle"
-        }
+        let recordingState: String = storageStatus != nil
+            ? "failed"
+            : recordingLifecycle.state.rawValue
         var values = frame?.sig ?? [:]
         if let adapterSignalValue { values["adapter"] = adapterSignalValue }
         CarPlayProjectionBridge.shared.update(CarPlayProjectionState(
             adapterState: adapterStatus,
             recordingState: recordingState,
             profileName: dashboardProfile?.name ?? "Unselected",
-            elapsedSeconds: Int(max(0, Date().timeIntervalSince(measurementStartedAt))),
+            elapsedSeconds: recordingStartedAt.map {
+                Int(max(0, Date().timeIntervalSince($0)))
+            } ?? 0,
             primaryValues: values
         ))
         #endif
@@ -569,7 +586,6 @@ final class TelemetryModel: NSObject {
 
     private func record(_ event: MeasurementEvent) {
         guard let localRecorder else {
-            localRecordingStatus = "Recording off"
             return
         }
         localRecordingStatus = "Writing local measurements"
@@ -856,6 +872,8 @@ final class TelemetryModel: NSObject {
                 self.completedRecorder = localRecorder
                 self.localRecorder = nil
                 self.localRecordingEnabled = false
+                self.recordingLifecycle.stop()
+                self.recordingStartedAt = nil
                 localRecordingStatus = "Local measurement session closed"
             } catch {
                 localRecordingStatus = "Local recorder could not close cleanly"
@@ -864,7 +882,8 @@ final class TelemetryModel: NSObject {
     }
 
     func startRecording() {
-        guard localRecorder == nil, let measurementDBURL else { return }
+        guard localRecorder == nil, let measurementDBURL,
+              recordingLifecycle.start() else { return }
         do {
             let now = Date().timeIntervalSince1970
             let sessionID = "ios-\(Int(now))-\(clientID)"
@@ -872,16 +891,30 @@ final class TelemetryModel: NSObject {
             localRecorder = recorder
             completedRecorder = nil
             localRecordingEnabled = true
+            recordingStartedAt = Date(timeIntervalSince1970: now)
             localRecordingStatus = "Local recorder ready"
             Task {
-                try? await recorder.append(.system(
-                    name: "recording_started",
-                    timestamp: now,
-                    monotonicNanos: DispatchTime.now().uptimeNanoseconds
-                ))
+                do {
+                    try await recorder.append(.system(
+                        name: "recording_started",
+                        timestamp: now,
+                        monotonicNanos: DispatchTime.now().uptimeNanoseconds
+                    ))
+                } catch {
+                    self.recordingLifecycle.fail()
+                    self.localRecordingEnabled = false
+                    self.localRecordingStatus = "Local recorder failed"
+                    if self.localRecorder === recorder {
+                        try? await recorder.finish(endedAt: Date().timeIntervalSince1970)
+                        self.localRecorder = nil
+                        self.recordingStartedAt = nil
+                        self.publishCarPlayProjection()
+                    }
+                }
             }
             publishCarPlayProjection()
         } catch {
+            recordingLifecycle.fail()
             localRecordingStatus = "Local recorder unavailable"
         }
     }
@@ -906,8 +939,11 @@ final class TelemetryModel: NSObject {
                 completedRecorder = recorder
                 localRecorder = nil
                 localRecordingStatus = "Recording off"
+                recordingLifecycle.stop()
+                recordingStartedAt = nil
                 publishCarPlayProjection()
             } catch {
+                localRecordingEnabled = true
                 localRecordingStatus = "Local recorder close failed"
             }
         }

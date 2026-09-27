@@ -247,7 +247,7 @@ public actor ELM327Session {
            payloadTokens.count == Int(declaredDLC) + 1 {
             payloadTokens.removeFirst()
         }
-        guard !payloadTokens.isEmpty, payloadTokens.count <= 8 else {
+        guard payloadTokens.count <= 8 else {
             throw ELM327SessionError.malformedFrame
         }
         var payload: [UInt8] = []

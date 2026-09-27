@@ -66,7 +66,7 @@ struct LiveCockpitView: View {
                 Text((adapterLive ? "ADAPTER LIVE" : model.connection).uppercased())
                     .font(.headline.weight(.bold))
                     .foregroundStyle(.white)
-                Text("SEQ \(model.frame?.status.seq.description ?? "-")  ·  DROP \(model.clientDrops + (model.frame?.status.drop ?? 0))")
+                Text("SEQ \(model.frame?.status.seq.description ?? "-")  ·  DROP \(model.clientDrops + (model.frame?.status.drop ?? 0))  ·  BAD \(model.invalidFrameCount)")
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(TelemetryTheme.quietText)
                 Text(model.localRecordingStatus)

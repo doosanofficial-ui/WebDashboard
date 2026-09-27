@@ -2,7 +2,7 @@
 
 Checked: 2026-09-26; engineering follow-up: 2026-09-27. Branch: `codex/native-telemetry-productization`.
 This is an evidence checkpoint, not a release approval.
-Current native development version: `0.10.1` (build `1`).
+Current native development version: `0.11.0` (build `2`).
 
 ## Implemented in this checkpoint
 
@@ -109,6 +109,10 @@ Current native development version: `0.10.1` (build `1`).
   tap completes Bluetooth manager initialization.
 - Recording can be explicitly stopped and restarted from the cockpit; a completed
   session remains exportable while a new recording session gets a new session ID.
+- Recording now starts idle and opens SQLite only after `REC`; the lifecycle is
+  explicit and close failures remain retryable. Server sequence tracking ignores
+  delayed/duplicate frames, caps reconnect backoff, and exposes malformed-frame
+  counts in the cockpit.
 - Windows/server CSV recording isolation, bounded queues, write receipts, fault
   health, and web/native recording-health UI.
 
@@ -116,12 +120,12 @@ Current native development version: `0.10.1` (build `1`).
 
 | Area | Result | Evidence |
 | --- | --- | --- |
-| Swift Core tests | PASS, 75 tests | `mobile-ios/scripts/verify.sh build`; `0.10.1` artifact `/tmp/telemetry-ios-verify.fQxL90` |
+| Swift Core tests | PASS, 82 tests | `mobile-ios/scripts/verify.sh build`; `0.11.0` artifact `/tmp/telemetry-ios-verify.f7TDmY` |
 | Server CAN contract tests | PASS, 3 tests | `ServerCANFrameTests` in the same artifact |
 | CAN pipeline tests | PASS, 3 tests | `CANSignalPipelineTests` in the same artifact |
 | End-to-end CAN measurement pipeline | PASS, 1 test | `CANMeasurementPipelineTests` covers MockCANTransport -> ELM327Session -> Store -> SQLite |
-| ELM327 DLC/recovery tests | PASS, 7 session tests | `ELM327SessionTests` in the same artifact |
-| Native app build after hardening | PASS | XcodeGen-generated `0.10.1` project, Xcode 26.3/iOS 26.2 Simulator SDK; `/tmp/telemetry-ios-verify.fQxL90` |
+| ELM327 DLC/recovery tests | PASS, 8 session tests | `ELM327SessionTests` in the same artifact, including zero-DLC frames |
+| Native app build after hardening | PASS | XcodeGen-generated `0.11.0 (2)` project, Xcode 26.3/iOS 26.2 Simulator SDK; `/tmp/telemetry-ios-verify.f7TDmY` |
 | MapKit track widget compile | PASS | Native target includes `MapKit`, `MapPolyline`, and bounded GPS track model; runtime GPS fix not run |
 | BLE discovery probe compile | PASS | Native target compile; physical BT4N GATT observation not run |
 | Current cockpit visual smoke | PASS (simulator render) | `0.4.0` iPhone 17 Pro simulator screenshot: `docs/reports/evidence/swiftui-cockpit-v040-2026-09-27.png`; disconnected/stale state rendered safely |
@@ -137,6 +141,9 @@ Current native development version: `0.10.1` (build `1`).
 | iPhone 17 physical build | PASS (SDK boundary) | Fresh `0.10.1` Personal Team build `/tmp/telemetry-ios-device-gpsevents.hfoJcU` with Xcode 26.3/iOS 26.2 SDK; not an iOS 27 SDK result |
 | iPhone 17 physical install | PASS | `0.10.1` build `1` installed by `devicectl` |
 | iPhone 17 physical launch | BLOCKED BY DEVICE LOCK | `verify_device.sh` returned exit `12`; log `/tmp/telemetry-v101-device-check.log`; unlock the iPhone and rerun |
+| iPhone 17 physical build `0.11.0 (2)` | PASS (SDK boundary) | Xcode 26.3/iOS 26.2 SDK, Apple Development signing, artifact `/tmp/telemetry-ios-device-v0110-final.VVXEgZ` |
+| iPhone 17 physical install `0.11.0 (2)` | PASS | `devicectl` installed `local.webdashboard.Telemetry`, version `0.11.0`, build `2` |
+| iPhone 17 physical launch `0.11.0 (2)` | PASS | `verify_device.sh` exit `0`; logs `/tmp/telemetry-ios-device-v0110-final.VVXEgZ/device-run`; process remained after launch |
 | Software ELM vertical slice | PASS | Direct simulator demo adapter start/monitor/stop; not a BT4N or vehicle result |
 | CarPlay external display host | PASS (display only) | Simulator `I/O > External Displays > CarPlay` opened the default CarPlay home screen; app rendering was not claimed |
 | BT4N live profile | NOT RUN | No observed GATT/serial profile or firmware capture |

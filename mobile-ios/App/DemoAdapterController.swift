@@ -9,9 +9,12 @@ final class DemoAdapterController {
     private var transport: MockCANTransport?
     private var session: ELM327Session?
     private var task: Task<Void, Never>?
+    private var generation = UUID()
 
     func start() {
         stop()
+        let currentGeneration = UUID()
+        generation = currentGeneration
         let transport = MockCANTransport()
         let session = ELM327Session(transport: transport, sourceAdapter: "demo", sourceTransport: "mock")
         self.transport = transport
@@ -42,7 +45,8 @@ final class DemoAdapterController {
             let stream = await session.frames()
             let reader = Task { [weak self] in
                 for await frame in stream {
-                    guard let self, let item = pipeline.decode(frame).first else { continue }
+                    guard let self, self.generation == currentGeneration,
+                          let item = pipeline.decode(frame).first else { continue }
                     self.onFrame?(frame, item.decoded)
                 }
             }
@@ -55,10 +59,11 @@ final class DemoAdapterController {
                 try await waitForWrites(3, transport: transport)
                 await transport.push(Data("OK\r>".utf8))
                 try await start.value
+                guard self.generation == currentGeneration else { return }
                 onState?("Demo adapter monitoring")
 
                 var tick = 0
-                while !Task.isCancelled {
+                while !Task.isCancelled && self.generation == currentGeneration {
                     let raw = UInt16(1_000 + (tick % 300) * 5)
                     let high = UInt8(raw >> 8)
                     let low = UInt8(raw & 0xFF)
@@ -73,11 +78,12 @@ final class DemoAdapterController {
             }
             reader.cancel()
             await session.stop()
-            onState?("Demo adapter stopped")
+            if self.generation == currentGeneration { onState?("Demo adapter stopped") }
         }
     }
 
     func stop() {
+        generation = UUID()
         task?.cancel()
         task = nil
         session = nil

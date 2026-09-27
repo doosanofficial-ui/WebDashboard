@@ -192,6 +192,7 @@ final class BLETransport: NSObject, CANTransport, @preconcurrency CBCentralManag
     func peripheral(_ peripheral: CBPeripheral,
                     didUpdateValueFor characteristic: CBCharacteristic,
                     error: Error?) {
+        guard characteristic.uuid == notifyUUID else { return }
         if let error { continuation.finish(throwing: error); return }
         if let value = characteristic.value { continuation.yield(value) }
     }

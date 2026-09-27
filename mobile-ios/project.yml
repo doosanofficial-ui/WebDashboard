@@ -8,8 +8,8 @@ packages:
 settings:
   base:
     SWIFT_VERSION: '5.0'
-    MARKETING_VERSION: '0.10.1'
-    CURRENT_PROJECT_VERSION: '1'
+    MARKETING_VERSION: '0.11.0'
+    CURRENT_PROJECT_VERSION: '2'
 targets:
   Telemetry:
     type: application
@@ -34,7 +34,7 @@ targets:
         NSLocalNetworkUsageDescription: Connect to the operator's telemetry server on the local network.
         NSBluetoothAlwaysUsageDescription: Connect to a user-selected CAN adapter after its transport profile is verified.
         UIBackgroundModes: [location, bluetooth-central]
-        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         ITSAppUsesNonExemptEncryption: false
   TelemetryUITests:
     type: bundle.ui-testing

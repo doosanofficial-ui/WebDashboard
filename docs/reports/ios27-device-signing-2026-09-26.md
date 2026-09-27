@@ -24,6 +24,7 @@ compatibility or release approval.
 - Previous feature build: 0.9.0, build 1
 - Previous feature build: 0.10.0, build 1
 - Current feature build: 0.10.1, build 1
+- Current feature build: 0.11.0, build 2
 
 ## Evidence
 
@@ -210,6 +211,22 @@ The v0.10.1 GPS system-event build was built and installed:
 
 A later v0.10.1 rerun installed successfully but the device re-locked before
 SpringBoard launch; latest verifier output is `/tmp/telemetry-ios-device-run.e3BLol/`.
+
+The current `0.11.0` build (build `2`) was then built and installed after the
+operator unlocked the iPhone:
+
+- Build artifact: `/tmp/telemetry-ios-device-v0110-final.VVXEgZ`
+- Bundle: `local.webdashboard.Telemetry`, version `0.11.0`, build `2`
+- SDK boundary: Xcode 26.3 / iOS 26.2 SDK against iOS 27.0 device
+- Install: **PASS**
+- Launch: **PASS**, `verify_device.sh` exit `0`
+- Process: `Telemetry.app/Telemetry`, observed after launch and again after 5 seconds
+- Verification artifacts: `/tmp/telemetry-ios-device-v0110-final.VVXEgZ/device-run/`
+
+This establishes trust, signing, install, and process launch for the current
+build. It does not establish GPS permission behavior, BT4N GATT compatibility,
+vehicle CAN visibility, recording interaction, background endurance, or CarPlay
+entitlement/runtime.
 
 ## Limitations
 
