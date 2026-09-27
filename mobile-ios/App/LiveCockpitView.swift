@@ -18,8 +18,6 @@ struct LiveCockpitView: View {
                     wheelSpeedRail(at: timeline.date)
                     dynamicsCharts(at: timeline.date)
                     locationCard(at: timeline.date)
-                    sessionBar()
-                    adapterCard()
                     profileSection(at: timeline.date)
 
                     if let error = model.storageStatus {
@@ -41,6 +39,13 @@ struct LiveCockpitView: View {
                 )
                 .ignoresSafeArea()
             )
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                sessionBar()
+                    .padding(.horizontal, TelemetryTheme.Spacing.small)
+                    .padding(.top, TelemetryTheme.Spacing.xSmall)
+                    .padding(.bottom, TelemetryTheme.Spacing.xSmall)
+                    .background(.ultraThinMaterial)
+            }
         }
     }
 
@@ -285,40 +290,6 @@ struct LiveCockpitView: View {
         .accessibilityIdentifier("session-mark")
     }
 
-    private func adapterCard() -> some View {
-        HStack(spacing: TelemetryTheme.Spacing.small) {
-            Image(systemName: "cable.connector.horizontal")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(TelemetryTheme.accent)
-                .frame(width: 34, height: 34)
-                .background(TelemetryTheme.accent.opacity(0.13), in: Circle())
-            VStack(alignment: .leading, spacing: 3) {
-                Text("CAN ADAPTER")
-                    .font(.caption.weight(.bold))
-                    .tracking(0.9)
-                    .foregroundStyle(TelemetryTheme.mutedText)
-                Text(model.adapterStatus)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                Text("RAW \(model.rawCANText)  ·  \(model.adapterSignalValue.map { String(format: "%.1f", $0) } ?? "-")")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(TelemetryTheme.quietText)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: TelemetryTheme.Spacing.xSmall)
-            VStack(alignment: .trailing, spacing: TelemetryTheme.Spacing.xSmall) {
-                Button("Demo adapter", action: model.startDemoAdapter)
-                    .font(.caption.weight(.bold))
-                    .buttonStyle(.bordered)
-                    .tint(TelemetryTheme.accent)
-                    .accessibilityIdentifier("start-adapter-demo")
-                Button("Stop", role: .destructive, action: model.stopDemoAdapter)
-                    .font(.caption2.weight(.semibold))
-            }
-        }
-        .telemetrySurface(.standard)
-        .accessibilityIdentifier("adapter-status")
-    }
 
     @ViewBuilder
     private func profileSection(at now: Date) -> some View {

@@ -49,6 +49,10 @@ final class TelemetryModel: NSObject {
     var serverRTTMilliseconds: Double?
     var serverPingFailures = 0
     var lastMarkAt: Date?
+    var recordingElapsedSeconds: Int? {
+        guard localRecordingEnabled, let recordingStartedAt else { return nil }
+        return Int(max(0, Date().timeIntervalSince(recordingStartedAt)))
+    }
     // Core Location delivers delegate events on this manager's main run loop.
     @ObservationIgnored private let locationService: LocationService
     @ObservationIgnored private let demoAdapter: DemoAdapterController

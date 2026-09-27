@@ -6,6 +6,7 @@ validation and is not a released product. App Store/CarPlay approval is not impl
 
 ## Implemented
 
+- Four-tab operator shell: Live, Signals, Sessions, and Setup, with a fixed Live MARK/REC action rail.
 - Six CAN gauges and two bounded, 60-second Charts views over the existing v1 WS stream.
 - Versioned dashboard pages with persisted portrait/landscape orientation, grid-based
   rect layout, page selection, drag/resize editor controls, z-order and legacy-profile
@@ -108,7 +109,7 @@ This target update does not raise the app's minimum deployment version or consti
 a release.
 
 Generate/open Telemetry.xcodeproj with XcodeGen, select the verified Apple team,
-then build for the connected device. The current native development version is 0.13.0 while
+then build for the connected device. The current native development version is 0.14.0 while
 Git integration and release verification are incomplete. Use the original source
 path only if it has no NBSP; otherwise use the verification snapshot for a trial build
 and make edits back in the canonical source.
@@ -125,14 +126,14 @@ The script records device, install, launch, and process evidence. A trust error
 returns exit code 10 and prints the exact iPhone Settings path; a locked device
 returns exit code 12. It never handles passwords, MFA, payment, or device passcodes.
 
-In the app, enter the trusted HTTPS server origin in Connection. Store the ingest
+In the app, enter the trusted HTTPS server origin in Setup. Store the ingest
 credential in Keychain. The server needs INGEST_TOKEN configured; without it the
 v2 endpoint rejects requests. Never put credentials in source files or reports.
 Connect receives CAN; Start GPS begins foreground native recording after When In Use
 authorization and requests Always authorization for screen-lock collection.
 Stop ends collection. MARK is shown only after its local durable write completes.
 
-Use Connection > BLE discovery for a read-only GATT observation pass before creating
+Use Setup > BLE discovery for a read-only GATT observation pass before creating
 an adapter profile. Scanning lists advertisements without connecting; tap Inspect
 GATT for the selected peripheral only. Copy the observed service/characteristic JSON
 and verify the write/notify properties and framing against the physical adapter

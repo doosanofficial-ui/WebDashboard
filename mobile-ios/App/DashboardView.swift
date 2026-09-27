@@ -32,15 +32,21 @@ struct DashboardView: View {
             }
             .tabItem { Label("Live", systemImage: "gauge.with.dots.needle.67percent") }
 
-            SettingsView(model: model)
-                .tabItem { Label("Connection", systemImage: "network") }
+            SignalsView(model: model)
+                .tabItem { Label("Signals", systemImage: "waveform.path.ecg") }
+
+            SessionsView(model: model)
+                .tabItem { Label("Sessions", systemImage: "record.circle") }
+
+            SetupView(model: model)
+                .tabItem { Label("Setup", systemImage: "slider.horizontal.3") }
         }
         .tint(TelemetryTheme.accent)
         .preferredColorScheme(.dark)
     }
 }
 
-private struct SettingsView: View {
+private struct SetupView: View {
     @Bindable var model: TelemetryModel
     @State private var credential = ""
     @State private var importingAdapterProfile = false
@@ -180,7 +186,7 @@ private struct SettingsView: View {
             }
             .scrollContentBackground(.hidden)
             .background(TelemetryTheme.background)
-            .navigationTitle("Connection")
+            .navigationTitle("Setup")
             .fileImporter(isPresented: $importingAdapterProfile, allowedContentTypes: [.json]) { result in
                 guard case .success(let url) = result else { return }
                 let accessed = url.startAccessingSecurityScopedResource()
