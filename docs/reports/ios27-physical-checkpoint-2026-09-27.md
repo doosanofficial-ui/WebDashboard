@@ -38,6 +38,8 @@ evidence, not an iOS 27 SDK build claim.
 | Physical background SQLite continuity | PASS | `/tmp/telemetry-ios-physical-background-data.gz8ERD`; latest session records `background` at `1790516884.85912`, `foreground` at `1790516899.6472` (14.788 s), and 4 GPS rows during that interval |
 | Physical 30-minute background recording | PASS (background, screen not locked) | Temporary physical XCUITest ran Home/background for 1,800 s and passed; `/tmp/telemetry-ios-30min-background.jqHbbd/` result reports 1 passed test |
 | Physical 30-minute GPS durability | PASS | `/tmp/telemetry-ios-30min-closed.WGzXNG`; latest session duration `1883.171 s`, 1,809 GPS rows, GPS source span `1816.504 s`, and a durable `recording_interrupted` close event |
+| Physical one-hour background recording | PASS (background, screen not locked) | Temporary physical XCUITest ran Home/background for 3,600 s and passed; `/tmp/telemetry-ios-1h-endurance.YGXqC9/result.xcresult` reports 1 passed test |
+| Physical one-hour GPS durability | PASS | `/tmp/telemetry-ios-1h-closed.G3sqat`; latest session duration `3664.657 s`, 3,613 GPS rows, GPS source span `3618.376 s`, and a durable `recording_interrupted` close event |
 | iOS 27 SDK | BLOCKED | Mac has Xcode 26.3 / iOS 26.2 SDK; `iphoneos27` is not installed |
 | P1 GPS storage contract | PASS (software) | `LocationSample` preserves source timestamp, app epoch/monotonic receive times, coordinates, altitude, speed, course, and horizontal/vertical accuracy; `TelemetryStore` and `MeasurementRecorder` retain the same sample |
 | Foreground GPS/recording | PASS | Physical UI automation started REC/GPS and the app stored GPS samples in SQLite; CAN remains disconnected without vehicle hardware |
@@ -46,7 +48,7 @@ evidence, not an iOS 27 SDK build claim.
 | BT4N GATT profile | BLOCKED: PHYSICAL HARDWARE REQUIRED | The iPhone scan found 54 UUID/RSSI entries with no human-readable adapter identity, no `NANICAR`, `ELM327`, or `BT4N` match, and no verified adapter GATT profile; the app correctly keeps the adapter profile `NOT CONFIGURED` |
 | Vehicle raw CAN | BLOCKED: PHYSICAL HARDWARE REQUIRED | No ELM327-to-vehicle capture |
 | Raw-to-decode-to-dashboard recording E2E | BLOCKED: PHYSICAL HARDWARE REQUIRED | Real frame and GPS are required |
-| One-hour endurance | NOT TESTED | Depends on physical E2E |
+| One-hour endurance | PASS (background recording only) | GPS/SQLite continuity passed for one hour without real CAN input; CPU, memory, thermal, battery, disk-growth, and CAN→UI latency metrics remain NOT TESTED |
 | CarPlay scene manifest wiring | PASS (software) | Built `Info.plist` contains `CPTemplateApplicationSceneSessionRoleApplication`, `CPTemplateApplicationScene`, and `Telemetry.CarPlaySceneDelegate`; build 15 physical test passed in `/tmp/telemetry-ios-carplay-manifest-build15.i5E1hA/result.xcresult` |
 | CarPlay compile | PASS | CarPlay sources compiled in the native build |
 | CarPlay simulator rendering | NOT TESTED | No CarPlay head-unit simulator/runtime was present in the installed Xcode or `simctl` device inventory; iPhone simulator rendering is not a CarPlay runtime result |
