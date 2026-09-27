@@ -15,6 +15,12 @@ This file defines always-on, repository-level instructions for AI agents in this
 - Before committing or pushing, verify `git branch --show-current` is `main` and preserve unrelated user changes; stage only files in the active task.
 - If a hosting rule mandates a pull request, treat the temporary transport ref as a platform constraint, return the canonical checkout to `main`, and remove the temporary ref after integration when safe.
 
+## 1.2) Active platform scope
+- The active mobile product scope is native iOS telemetry and CarPlay.
+- Android implementation, integration, build, device validation, UI, and background execution are deferred and out of scope until the user explicitly reactivates Android.
+- Existing Android source, generated folders, and Android-related documentation may remain for reference, but they are not acceptance criteria or release evidence and must not be modified, deleted, or promoted as completed work while Android is deferred.
+- Prioritize iPhone physical-device validation, Core Location, BLE/ELM327 transport, durable recording, and entitlement-gated CarPlay behavior. Report CarPlay entitlement or simulator limitations explicitly.
+
 ## 2) Current project workflow (observed)
 - Main CI entry: `.github/workflows/smoke.yml`
   - Runs on `pull_request` and `push` to `main`.
@@ -25,6 +31,7 @@ This file defines always-on, repository-level instructions for AI agents in this
   - `server`: Python setup, dependencies, `py_compile` smoke check.
   - `client`: verifies key runtime files exist.
   - `mobile`: verifies RN scaffold files + `validate-mobile-scaffold.js`.
+- The `mobile` matrix job is legacy/shared scaffold validation only; it is not Android acceptance evidence while Android is deferred.
 
 ## 3) Session continuity rules (official behavior aligned)
 - New session is independent by default (no automatic carry-over).
@@ -99,7 +106,9 @@ This file defines always-on, repository-level instructions for AI agents in this
      - `python3 scripts/validate_platform_docs.py`
      - `mobile` tests when touched: `npm test -- --runInBand --silent`
      - `server` Python sanity when touched: compile/import smoke.
-   - Contract/schema consistency check against existing runtime/log formats.
+     - iOS changes: run the applicable Swift/Xcode build or test and record physical-device or simulator evidence separately.
+     - CarPlay changes: verify the applicable simulator/template/entitlement boundary; do not substitute Android checks.
+     - Contract/schema consistency check against existing runtime/log formats.
 5. Integration:
    - Commit verified changes directly on `main` in explicit dependency order (lowest-risk/foundation first).
    - After each commit: verify local `main` and `origin/main` are synchronized and re-check the next change for drift.
