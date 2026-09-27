@@ -31,10 +31,12 @@ evidence, not an iOS 27 SDK build claim.
 | Physical session UI screenshot | PASS | XCUITest attachment `/tmp/telemetry-ios-physical-ui-attachments.cMmlG8/14676355-EFAB-470C-99D0-D473716A3638.png` visibly shows `RECORDING` and `GPS ON`; CAN remains honestly `DISCONNECTED/STALE` without vehicle input |
 | Physical SQLite GPS recording | PASS (foreground) | `devicectl` app-container copy `/tmp/telemetry-ios-physical-data.Jsd74N`; 16 `LOCATION` rows over 172.579 s preserve original/received epoch, monotonic time, coordinates, altitude, speed, course, and horizontal/vertical accuracy |
 | Physical restart recovery | PASS | After relaunch, `/tmp/telemetry-ios-physical-data-recovery.3OJQ4h` shows `recording_interrupted` and `ended_at` for the previously open session; outbox remains durable with 18 pending events |
+| Physical background transition automation | PASS | XCUITest on physical iPhone 17 pressed Home, waited 15 s, and reactivated the app; `/tmp/telemetry-ios-physical-background-smoke3.rEyR63/result.xcresult` reports 1 passed test |
+| Physical background SQLite continuity | PASS | `/tmp/telemetry-ios-physical-background-data.gz8ERD`; latest session records `background` at `1790516884.85912`, `foreground` at `1790516899.6472` (14.788 s), and 4 GPS rows during that interval |
 | iOS 27 SDK | BLOCKED | Mac has Xcode 26.3 / iOS 26.2 SDK; `iphoneos27` is not installed |
 | P1 GPS storage contract | PASS (software) | `LocationSample` preserves source timestamp, app epoch/monotonic receive times, coordinates, altitude, speed, course, and horizontal/vertical accuracy; `TelemetryStore` and `MeasurementRecorder` retain the same sample |
-| Foreground GPS/recording | NOT TESTED | A physical measurement session has not been started |
-| Screen-lock/background GPS/recording | NOT TESTED | Requires a started physical session and operator action |
+| Foreground GPS/recording | PASS | Physical UI automation started REC/GPS and the app stored GPS samples in SQLite; CAN remains disconnected without vehicle hardware |
+| Screen-lock GPS/recording | NOT TESTED | Public XCUITest APIs exposed here can press Home but cannot press the physical lock button; a manual lock/unlock run is still required |
 | BT4N GATT profile | BLOCKED: PHYSICAL HARDWARE REQUIRED | No observed BT4N capture fixture |
 | Vehicle raw CAN | BLOCKED: PHYSICAL HARDWARE REQUIRED | No ELM327-to-vehicle capture |
 | Raw-to-decode-to-dashboard recording E2E | BLOCKED: PHYSICAL HARDWARE REQUIRED | Real frame and GPS are required |
@@ -71,8 +73,8 @@ architecture.
 
 ## Next Human Action
 
-On the unlocked physical iPhone, start one measurement session, enable GPS and
-recording, then lock the screen and return to the app. Separately connect the
-NANICAR BT4N to the Santa Fe MX5 HEV and provide the observed BLE/GATT and raw
+On the physical iPhone, perform one manual screen-lock/unlock run while REC and
+GPS are active. Separately connect the NANICAR BT4N to the Santa Fe MX5 HEV and
+provide the observed BLE/GATT and raw
 ELM327 response evidence. Do not treat the current software or simulator PASS
 results as vehicle CAN or BT4N compatibility proof.

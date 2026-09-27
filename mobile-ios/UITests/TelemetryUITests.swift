@@ -88,6 +88,52 @@ final class TelemetryUITests: XCTestCase {
         add(attachment)
     }
 
+    func testBackgroundTransitionReturnsToLiveCockpit() {
+        let app = XCUIApplication()
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let locationPermission = addUIInterruptionMonitor(withDescription: "Location permission") { alert in
+            for label in ["Allow While Using App", "Allow Once", "Change to Always Allow", "Allow"] {
+                let button = alert.buttons[label]
+                if button.exists {
+                    button.tap()
+                    return true
+                }
+            }
+            return false
+        }
+        defer { _ = locationPermission }
+
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
+
+        let recordingState = app.staticTexts.matching(NSPredicate(format: "label == %@", "RECORDING")).firstMatch
+        if !recordingState.exists {
+            XCTAssertTrue(app.buttons["toggle-recording"].waitForExistence(timeout: 5))
+            app.buttons["toggle-recording"].tap()
+        }
+        XCTAssertTrue(recordingState.waitForExistence(timeout: 5))
+
+        let gpsState = app.staticTexts.matching(NSPredicate(format: "label == %@", "GPS ON")).firstMatch
+        if !gpsState.exists {
+            XCTAssertTrue(app.buttons["toggle-gps"].waitForExistence(timeout: 5))
+            app.buttons["toggle-gps"].tap()
+            app.tap()
+            let always = springboard.buttons["Change to Always Allow"]
+            if always.waitForExistence(timeout: 5) {
+                always.tap()
+            }
+        }
+        XCTAssertTrue(gpsState.waitForExistence(timeout: 15))
+
+        XCUIDevice.shared.press(.home)
+        sleep(10)
+        app.activate()
+
+        XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
+        XCTAssertTrue(recordingState.waitForExistence(timeout: 5))
+        XCTAssertTrue(gpsState.waitForExistence(timeout: 5))
+    }
+
     func testCockpitAnchorsAreVisible() {
         let app = XCUIApplication()
         app.launch()
