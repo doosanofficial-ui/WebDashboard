@@ -286,6 +286,9 @@ private struct SetupView: View {
                                 .buttonStyle(.bordered)
                             Button("Copy", action: model.copyBLEObservation)
                                 .buttonStyle(.bordered)
+                            Button("Save", action: model.saveBLEObservation)
+                                .buttonStyle(.bordered)
+                                .accessibilityIdentifier("save-ble-observation")
                         }
                         Text(model.bleDiscoveryStatus)
                             .font(.caption)

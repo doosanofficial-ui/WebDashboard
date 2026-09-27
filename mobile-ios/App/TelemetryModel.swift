@@ -380,6 +380,22 @@ final class TelemetryModel: NSObject {
         bleDiscoveryStatus = "BLE observation copied; no write was sent"
     }
 
+    func saveBLEObservation() {
+        guard let data = bleDiscovery.observationData(), let adapterProfileURL else {
+            bleDiscoveryStatus = "No BLE observation to save"
+            return
+        }
+        let stamp = Int(Date().timeIntervalSince1970)
+        let url = adapterProfileURL.deletingLastPathComponent()
+            .appendingPathComponent("ble-observation-\(stamp).json")
+        do {
+            try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            bleDiscoveryStatus = "BLE observation saved: \(url.lastPathComponent)"
+        } catch {
+            bleDiscoveryStatus = "BLE observation could not be saved"
+        }
+    }
+
     func importAdapterProfile(_ data: Data) {
         do {
             let profile = try JSONDecoder().decode(AdapterProfile.self, from: data)
