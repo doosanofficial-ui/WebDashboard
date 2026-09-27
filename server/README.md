@@ -105,6 +105,8 @@ OS/커널 전체 고착이나 실제 저장장치 장애의 모든 복구를 검
 - `SSL_CERTFILE`, `SSL_KEYFILE` (선택, HTTPS 실행)
 - `NAVER_MAPS_CLIENT_ID` (선택, NAVER 로드뷰/지도 JS 로드)
 - `NAVER_MAPS_CLIENT_SECRET` (선택, 서버 reverse-geocode 호출용)
+- `INGEST_TOKEN` (선택, native v2 및 legacy uplink Bearer token)
+- `REQUIRE_LEGACY_UPLINK_AUTH` (기본 `false`; 운영 모드에서는 `true` 권장)
 - `ALLOWED_ORIGINS` (선택, 쉼표로 구분한 명시적 CORS origin; 기본값은 CORS 비활성)
 
 예시:
@@ -112,6 +114,18 @@ OS/커널 전체 고착이나 실제 저장장치 장애의 모든 복구를 검
 $env:SIM_DROP_EVERY = "20"
 python app.py
 ```
+
+상용/사내 LAN 운영에서 기존 v1 GPS/MARK uplink까지 보호하려면 v2와 같은
+`INGEST_TOKEN`을 설정하고 legacy auth를 활성화합니다.
+```powershell
+$env:INGEST_TOKEN = "<device-token>"
+$env:REQUIRE_LEGACY_UPLINK_AUTH = "1"
+python app.py
+```
+HTTP uplink는 Bearer 인증을 요구하고, WebSocket은 첫 text frame의
+`{"v":1,"type":"auth","token":"..."}` handshake를 요구합니다. 브라우저
+dashboard의 Session token은 URL/localStorage가 아닌 현재 세션에만 보관됩니다.
+기본값은 기존 로컬 MVP 호환을 위해 비활성입니다.
 
 CANoe/MATLAB에서 decoded `sig`와 선택적 `raw`를 UDP로 받을 때:
 ```powershell
@@ -198,7 +212,8 @@ iPhone/iPad에서 HTTPS 위치 권한이 필요하면, `make_dev_cert_mac.sh`가
   다른 내용으로 ID를 재사용하면 batch 전체를 409로 거부합니다.
   상세 계약: `docs/adr/0003-native-ios-reliable-ingest.md`.
   저장 파일: `server/logs/telemetry.sqlite3`; CSV는 `TelemetryJournal.export_csv`로 추출합니다.
-  기존 v1 경로 전체의 페어링/인증 강화는 아직 별도 출시 과제입니다.
+  `REQUIRE_LEGACY_UPLINK_AUTH=1`이면 기존 v1 경로도 Bearer/WebSocket handshake로 보호됩니다.
+  운영 릴리스에서는 이를 활성화하고 HTTPS/WSS를 함께 사용하세요.
 - `GET /api/ping`
 - `GET /api/public-config`
 - `GET /api/naver/reverse-geocode?lat=<lat>&lon=<lon>`

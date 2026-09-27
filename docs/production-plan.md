@@ -9,7 +9,7 @@
 Windows 브리지 대안이며 실물 호환은 아직 미검증이다.
 단계 하나의 통과를 전체 목표 달성으로 처리하지 않는다.
 
-최신 구현/검증 증거: [v0.18 상용화 hardening 체크포인트](reports/commercial-hardening-v018-2026-09-27.md), [v0.17 raw CAN 계약 체크포인트](reports/raw-can-contract-v017-2026-09-27.md), [v0.16 UI 제품화 체크포인트](reports/ui-productization-v016-2026-09-27.md), [네이티브 체크포인트](reports/native-milestone-2026-09-23.md),
+최신 구현/검증 증거: [v0.19 상용화 hardening 체크포인트](reports/commercial-hardening-v019-2026-09-27.md), [v0.18 상용화 hardening 체크포인트](reports/commercial-hardening-v018-2026-09-27.md), [v0.17 raw CAN 계약 체크포인트](reports/raw-can-contract-v017-2026-09-27.md), [v0.16 UI 제품화 체크포인트](reports/ui-productization-v016-2026-09-27.md), [네이티브 체크포인트](reports/native-milestone-2026-09-23.md),
 [서버 장애 복구](reports/server-fault-recovery-2026-09-23.md),
 [OBD 후보 실제 평가](reports/obd-candidate-qualification-2026-09-23.md).
 시뮬레이터/ARM64 빌드와 Core 검사는 통과했지만 실기기 및 전체 출시 판정은 미완료다.
@@ -26,7 +26,7 @@ Windows 브리지 대안이며 실물 호환은 아직 미검증이다.
 - [x] **C02 GPS 무결성 검사**: null/0/범위/콜백/브리지 누락 회귀 검사.
   증거: scripts/tests/gps-data-integrity.test.mjs 19 PASS. 소스 검사만 완료이며 실기기/배포 완료가 아님.
 - [ ] **C03 모바일 빌드**: iOS는 Swift/Core Location 네이티브 앱으로 전환한다.
-  진행: v0.18.0 build 9의 simulator 검증 준비와 iPhone 17/iOS 27.0용 arm64 서명 경계를 준비했다. 잠금 상태로 최신 launch verifier exit 12.
+  진행: v0.19.0 build 10의 simulator 검증 준비와 iPhone 17/iOS 27.0용 arm64 서명 경계를 준비했다. 잠금 상태로 최신 launch verifier exit 12.
   실제 네이티브 GPS 수집과 Xcode 27/iOS 27 SDK 빌드는 아직 남아 있다.
   완료: 깨끗한 환경의 Debug/Release 빌드, iPhone 설치 및 실제 네이티브 위치 수집.
 - [ ] **C04 계측 시각·품질**: 측정/수신 시각 분리, 모름·정지·stale 구별.
@@ -64,7 +64,7 @@ Windows 브리지 대안이며 실물 호환은 아직 미검증이다.
   명시적 LAN 바인딩을 제공한다. Windows clean-machine/재부팅/방화벽/롤백 실측 전에는 완료 처리하지 않는다.
   완료: 깨끗한 Windows에서 설치 후 1분 내 더미 접속, 재부팅/업데이트 후 설정·로그 보존.
 - [ ] **C10 연결 보안**: 페어링, TLS/Origin, 키 비공개 보관, 위치 기록 보존·삭제.
-  진행: 서버 기본 CORS wildcard를 제거하고 `ALLOWED_ORIGINS` 명시 목록만 허용하도록 고정했다.
+  진행: 서버 기본 CORS wildcard를 제거하고 `ALLOWED_ORIGINS` 명시 목록만 허용하도록 고정했다. v0.19.0에서 `REQUIRE_LEGACY_UPLINK_AUTH=1` 운영 모드의 HTTP Bearer/WebSocket handshake 인증을 추가했다.
   기본 정적 dashboard는 same-origin으로 동작하며, 실제 LAN TLS/기기 차단/보존·삭제 정책은 별도 gate다.
   완료: 비허용 기기 차단과 허용 기기의 정상 동작.
 - [ ] **C11 의존성**: 취약점 영향/수정/예외 사유, SBOM/라이선스 정리.

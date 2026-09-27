@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import secrets
 import logging
 import math
 import time
@@ -24,7 +25,7 @@ from reliable_api import router as reliable_router
 from release import load_release_metadata
 from signal_mapper import SignalMapper
 from stream import StreamPeer
-from uplink import MAX_UPLINK_BYTES, UplinkError, decode_uplink
+from uplink import MAX_UPLINK_BYTES, UplinkError, decode_auth, decode_uplink
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(message)s")
 log = logging.getLogger("telemetry-server")
@@ -48,6 +49,28 @@ def _fail_stream(code: str) -> None:
     if stream_ready:
         stream_ready.set()
     log.error("CAN capture stopped: %s", code)
+
+
+def _valid_bearer(headers: Any) -> bool:
+    token = settings.ingest_token
+    if not token:
+        return False
+    scheme, _, supplied = headers.get("authorization", "").partition(" ")
+    if scheme.lower() != "bearer" or not supplied or len(supplied) > 512:
+        return False
+    try:
+        return secrets.compare_digest(supplied.encode("utf-8"), token.encode("utf-8"))
+    except UnicodeError:
+        return False
+
+
+def _require_legacy_auth(headers: Any) -> None:
+    if not settings.require_legacy_uplink_auth:
+        return
+    if not settings.ingest_token:
+        raise UplinkError("auth_unconfigured")
+    if not _valid_bearer(headers):
+        raise UplinkError("unauthorized")
 
 
 async def _sleep_until(target: float) -> None:
@@ -459,6 +482,7 @@ async def _record_uplink(kind: str, row: dict[str, Any]) -> None:
 
 async def _legacy_http(request: Request, expected: str) -> JSONResponse:
     try:
+        _require_legacy_auth(request.headers)
         if request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "application/json":
             raise UplinkError("unsupported_media_type")
         body = bytearray()
@@ -490,11 +514,20 @@ async def api_event(request: Request) -> JSONResponse:
 async def ws_endpoint(ws: WebSocket) -> None:
     await ws.accept()
     peer = StreamPeer(ws)
-    clients.add(peer)
+    authenticated = not settings.require_legacy_uplink_auth or _valid_bearer(ws.headers)
+    if authenticated:
+        clients.add(peer)
+    elif not settings.ingest_token:
+        peer.control({"v": 1, "type": "error", "error": {
+            "code": "auth_unconfigured", "message": "Legacy uplink authentication is not configured"
+        }})
+    else:
+        peer.control({"v": 1, "type": "auth_required"})
     if logger and logger.snapshot()["state"] != "ready":
         peer.control({"v": 1, "type": "recording_status", "recording": logger.snapshot()})
 
     async def receive() -> None:
+        nonlocal authenticated
         while True:
             message = await ws.receive()
             if message["type"] == "websocket.disconnect":
@@ -503,6 +536,29 @@ async def ws_endpoint(ws: WebSocket) -> None:
                 raw = message.get("text")
                 if raw is None:
                     raise UplinkError("text_frame_required")
+                auth_token = decode_auth(raw)
+                if auth_token is not None:
+                    if settings.require_legacy_uplink_auth and not settings.ingest_token:
+                        peer.control({"v": 1, "type": "error", **UplinkError("auth_unconfigured").payload()})
+                        return
+                    if settings.ingest_token:
+                        try:
+                            authenticated = secrets.compare_digest(
+                                auth_token.encode("utf-8"), settings.ingest_token.encode("utf-8")
+                            )
+                        except UnicodeError:
+                            authenticated = False
+                    else:
+                        authenticated = True
+                    if not authenticated:
+                        peer.control({"v": 1, "type": "error", **UplinkError("unauthorized").payload()})
+                        return
+                    clients.add(peer)
+                    peer.control({"v": 1, "type": "auth_ok"})
+                    continue
+                if not authenticated:
+                    peer.control({"v": 1, "type": "error", **UplinkError("unauthorized").payload()})
+                    return
                 kind, row = decode_uplink(raw)
                 if kind == "ping":
                     peer.control({"v": 1, "type": "pong", "t": row["t"], "server_t": time.time()})

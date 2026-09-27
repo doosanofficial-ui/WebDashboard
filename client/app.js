@@ -7,6 +7,7 @@ import { JsonCodec, TelemetrySocket } from "./ws.js";
 
 const els = {
   serverUrl: document.getElementById("serverUrl"),
+  authToken: document.getElementById("authToken"),
   connectBtn: document.getElementById("connectBtn"),
   disconnectBtn: document.getElementById("disconnectBtn"),
   startGpsBtn: document.getElementById("startGpsBtn"),
@@ -109,6 +110,9 @@ const FRAME_STALENESS_THRESHOLD_MS = 1500;
 const THEME_STORAGE_KEY = "telemetry-theme";
 
 els.serverUrl.value = `${window.location.protocol}//${window.location.host}`;
+if (els.authToken) {
+  els.authToken.value = sessionStorage.getItem("telemetry.authToken") || "";
+}
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -330,6 +334,9 @@ function connectSocket() {
   updateRecording(els.recordingState, null);
   const base = normalizeHttpBase(els.serverUrl.value);
   const wsUrl = httpToWs(base);
+  const authToken = els.authToken?.value.trim() || "";
+  if (authToken) sessionStorage.setItem("telemetry.authToken", authToken);
+  else sessionStorage.removeItem("telemetry.authToken");
 
   if (socket) {
     socket.disconnect();
@@ -337,15 +344,24 @@ function connectSocket() {
 
   socket = new TelemetrySocket({
     url: wsUrl,
+    authToken,
     codec: new JsonCodec(),
     onStatus: (status) => {
       socketState = status.state;
-      const connected = status.state === "connected";
+      const connected = status.state === "connected" || status.state === "authenticated";
       els.connectBtn.disabled = connected;
       els.disconnectBtn.disabled = !connected && status.state !== "reconnecting";
 
-      if (connected) {
+      if (connected && (status.state === "authenticated" || !authToken)) {
         startPing();
+      }
+      if (status.state === "auth_required" || status.state === "auth_failed") {
+        stopPing();
+        els.uplinkState.textContent = status.state === "auth_required"
+          ? "Authentication required"
+          : "Authentication failed";
+        els.uplinkState.className = "pill stale";
+        els.uplinkState.hidden = false;
       }
       if (status.state === "disconnected") {
         stopPing();

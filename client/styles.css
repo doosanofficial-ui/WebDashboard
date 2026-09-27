@@ -137,6 +137,10 @@ select {
   min-width: 165px;
 }
 
+#authToken {
+  min-width: 180px;
+}
+
 button {
   cursor: pointer;
 }

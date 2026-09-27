@@ -23,6 +23,7 @@ class Settings:
     naver_maps_client_id: str | None
     naver_maps_client_secret: str | None
     ingest_token: str | None
+    require_legacy_uplink_auth: bool
     allowed_origins: tuple[str, ...]
 
     def __post_init__(self) -> None:
@@ -33,6 +34,18 @@ class Settings:
 def _optional_env(name: str) -> str | None:
     value = os.getenv(name)
     return value if value else None
+
+
+def _bool_env(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{name} must be a boolean")
 
 
 def load_settings() -> Settings:
@@ -62,6 +75,7 @@ def load_settings() -> Settings:
         naver_maps_client_id=_optional_env("NAVER_MAPS_CLIENT_ID"),
         naver_maps_client_secret=_optional_env("NAVER_MAPS_CLIENT_SECRET"),
         ingest_token=_optional_env("INGEST_TOKEN"),
+        require_legacy_uplink_auth=_bool_env("REQUIRE_LEGACY_UPLINK_AUTH"),
         allowed_origins=allowed_origins,
     )
 

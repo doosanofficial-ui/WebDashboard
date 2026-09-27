@@ -11,6 +11,7 @@ export class JsonCodec {
 export class TelemetrySocket {
   constructor({
     url,
+    authToken = "",
     codec = new JsonCodec(),
     onStatus = () => {},
     onMessage = () => {},
@@ -19,6 +20,7 @@ export class TelemetrySocket {
     maxBackoffMs = 8000,
   }) {
     this.url = url;
+    this.authToken = authToken;
     this.codec = codec;
     this.onStatus = onStatus;
     this.onMessage = onMessage;
@@ -30,6 +32,7 @@ export class TelemetrySocket {
     this.manualClose = false;
     this.reconnectAttempt = 0;
     this.reconnectTimer = null;
+    this.authenticated = !authToken;
   }
 
   connect() {
@@ -39,6 +42,7 @@ export class TelemetrySocket {
       this.reconnectTimer = null;
     }
     this.reconnectAttempt = 0;
+    this.authenticated = !this.authToken;
     this._open();
   }
 
@@ -51,6 +55,7 @@ export class TelemetrySocket {
     if (this.ws) {
       this.ws.close(1000, "manual close");
     }
+    this.authenticated = !this.authToken;
     this._emitStatus("disconnected");
   }
 
@@ -59,7 +64,7 @@ export class TelemetrySocket {
   }
 
   send(payload) {
-    if (!this.isOpen()) {
+    if (!this.isOpen() || !this.authenticated) {
       return false;
     }
     this.ws.send(this.codec.encode(payload));
@@ -81,6 +86,9 @@ export class TelemetrySocket {
       }
       this.reconnectAttempt = 0;
       this._emitStatus("connected");
+      if (this.authToken) {
+        ws.send(this.codec.encode({ v: 1, type: "auth", token: this.authToken }));
+      }
     });
 
     ws.addEventListener("message", (event) => {
@@ -89,6 +97,19 @@ export class TelemetrySocket {
       }
       try {
         const payload = this.codec.decode(event.data);
+        if (payload?.type === "auth_ok") {
+          this.authenticated = true;
+          this._emitStatus("authenticated");
+        }
+        if (payload?.type === "auth_required") {
+          this.manualClose = true;
+          this._emitStatus("auth_required");
+          ws.close(1008, "authentication required");
+        }
+        if (payload?.type === "error" && ["unauthorized", "auth_unconfigured"].includes(payload.error?.code)) {
+          this.manualClose = true;
+          this._emitStatus("auth_failed");
+        }
         this.onMessage(payload);
         if (payload && payload.sig && payload.status && payload.type !== "recording_status") {
           this.onFrame(payload);
@@ -111,6 +132,7 @@ export class TelemetrySocket {
       }
       this._emitStatus("disconnected");
       this.ws = null;
+      this.authenticated = !this.authToken;
       if (!this.manualClose) {
         this._scheduleReconnect();
       }

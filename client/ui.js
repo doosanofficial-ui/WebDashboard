@@ -5,7 +5,8 @@ function fmt(value, digits = 1, fallback = "-") {
 export function showUplinkError(element, payload) {
   if (!element || payload?.v !== 1 || payload?.type !== "error") return false;
   const known = ["invalid_json", "invalid_payload", "unsupported_version", "payload_too_large",
-    "text_frame_required", "unsupported_media_type", "storage_unavailable"];
+    "text_frame_required", "unsupported_media_type", "storage_unavailable", "unauthorized",
+    "auth_unconfigured"];
   const code = known.includes(payload.error?.code) ? payload.error.code : "unknown_error";
   const text = `Upload rejected: ${code}`;
   if (element.textContent !== text) element.textContent = text;

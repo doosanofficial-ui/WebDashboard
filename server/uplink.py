@@ -14,6 +14,8 @@ ERRORS = {
     "text_frame_required": (422, "Send JSON in a WebSocket text frame"),
     "unsupported_media_type": (415, "Content-Type must be application/json"),
     "storage_unavailable": (503, "CSV write could not be confirmed"),
+    "unauthorized": (401, "Valid device authorization is required"),
+    "auth_unconfigured": (503, "Legacy uplink authentication is not configured"),
 }
 
 
@@ -129,3 +131,21 @@ def decode_uplink(raw: str | bytes | bytearray) -> tuple[str, dict[str, Any]]:
     except (ValueError, UnicodeError, RecursionError):
         raise UplinkError("invalid_json") from None
     return validate_uplink(payload)
+
+
+def decode_auth(raw: str | bytes | bytearray) -> str | None:
+    """Decode the optional WebSocket auth handshake without reflecting its token."""
+    try:
+        encoded = raw.encode("utf-8") if isinstance(raw, str) else raw
+        if len(encoded) > MAX_UPLINK_BYTES:
+            return None
+        payload = json.loads(encoded.decode("utf-8"), object_pairs_hook=_unique_fields,
+                             parse_constant=_reject_constant)
+    except (ValueError, UnicodeError, RecursionError):
+        return None
+    if not isinstance(payload, dict) or payload.get("v") != 1 or payload.get("type") != "auth":
+        return None
+    token = payload.get("token")
+    if not isinstance(token, str) or not token or len(token) > 512 or "\x00" in token:
+        return None
+    return token

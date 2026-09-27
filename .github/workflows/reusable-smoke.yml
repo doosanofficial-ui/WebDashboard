@@ -53,6 +53,7 @@ jobs:
           test -f client/styles.css
           node --experimental-vm-modules --test scripts/tests/gps-data-integrity.test.mjs
           node --test scripts/tests/service-worker.test.mjs
+          node --test scripts/tests/ws-auth.test.mjs
 
       - name: Mobile smoke
         if: ${{ inputs.project == 'mobile' }}
