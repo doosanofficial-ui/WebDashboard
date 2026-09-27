@@ -2,14 +2,14 @@
 
 기준일: 2026-09-19. 근거: [현재 진단](reports/commercial-readiness-2026-09-19.md).
 사용자 확정: Windows 계측 서버 + iPhone/iPad, 우선 iPhone 17 / iOS 27
-(2026-09-23 사용자 업데이트). 정확한 OS 빌드 번호는 다음 실기기 연결에서 확인한다.
+(2026-09-23 사용자 업데이트). iOS 27.0 build 24A437 was confirmed by devicectl on 2026-09-27.
 기존 PRD와 추가 요구인 백그라운드·CarPlay를 전체 목표로 유지한다.
 2026-09-23 추가 목표: 보유 NANICAR ELM327-BT4N OBD-II 스캐너를
 현대 싼타페 MX5 HEV(연식 미확인)에 연동한다. iPhone BLE 직접 연결 우선,
 Windows 브리지 대안이며 실물 호환은 아직 미검증이다.
 단계 하나의 통과를 전체 목표 달성으로 처리하지 않는다.
 
-최신 구현/검증 증거: [네이티브 체크포인트](reports/native-milestone-2026-09-23.md),
+최신 구현/검증 증거: [v0.16 UI 제품화 체크포인트](reports/ui-productization-v016-2026-09-27.md), [네이티브 체크포인트](reports/native-milestone-2026-09-23.md),
 [서버 장애 복구](reports/server-fault-recovery-2026-09-23.md),
 [OBD 후보 실제 평가](reports/obd-candidate-qualification-2026-09-23.md).
 시뮬레이터/ARM64 빌드와 Core 검사는 통과했지만 실기기 및 전체 출시 판정은 미완료다.
@@ -26,7 +26,8 @@ Windows 브리지 대안이며 실물 호환은 아직 미검증이다.
 - [x] **C02 GPS 무결성 검사**: null/0/범위/콜백/브리지 누락 회귀 검사.
   증거: scripts/tests/gps-data-integrity.test.mjs 19 PASS. 소스 검사만 완료이며 실기기/배포 완료가 아님.
 - [ ] **C03 모바일 빌드**: iOS는 Swift/Core Location 네이티브 앱으로 전환한다.
-  기존 구현 교체에 대한 사용자 승인(2026-09-19)에 따른 결정: [ADR-0003](adr/0003-native-ios-reliable-ingest.md).
+  진행: v0.16.0 build 7의 simulator 검증, iPhone 17/iOS 27.0 설치 및 arm64 서명 빌드는 PASS. 잠금 상태로 최신 launch verifier exit 12.
+  실제 네이티브 GPS 수집과 Xcode 27/iOS 27 SDK 빌드는 아직 남아 있다.
   완료: 깨끗한 환경의 Debug/Release 빌드, iPhone 설치 및 실제 네이티브 위치 수집.
 - [ ] **C04 계측 시각·품질**: 측정/수신 시각 분리, 모름·정지·stale 구별.
   완료: 오래된 위치/재전송이 fresh로 둔갑하지 않는 native/web/CSV 회귀 검사.
@@ -69,7 +70,7 @@ Windows 브리지 대안이며 실물 호환은 아직 미검증이다.
 - [ ] **C11 의존성**: 취약점 영향/수정/예외 사유, SBOM/라이선스 정리.
   완료: 배포 경로에 미해결 중대 취약점이 없고 호환 업그레이드 빌드·회귀 통과.
 - [ ] **C12 UI/PWA/지도**: 더미/실차 모드 명시, 가독성/분할 조절, 정적 캐시 업데이트, 네이버 동기화.
-  진행: native dashboard profile에 legacy grid migration, page/orientation lifecycle,
+  진행: v0.16.0에서 Live/Signals/Setup 제품화 UI와 편집기 삭제 확인/입력 개선을 적용했고, simulator 접근성·렌더 검증을 통과했다. 기존 native dashboard profile에 legacy grid migration, page/orientation lifecycle,
   rect drag/resize, z-order, duplicate/delete/snap과 live page selection을 연결했다.
   numeric/circular/bar/LED/status/raw/bit/time-series/GPS widget의 stale/threshold
   표시도 연결했으며, 실제 MapKit track/provider와 전체 편집기 acceptance는 남아 있다.
