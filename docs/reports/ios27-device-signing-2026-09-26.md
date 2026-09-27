@@ -196,8 +196,9 @@ The v0.10.0 condition runtime integration build was built and installed:
 - Build artifact: `/tmp/telemetry-ios-device-condition-live2.wI9BNU`
 - Bundle version: `0.10.0` build `1`
 - Install: **PASS**
-- Launch: **BLOCKED BY DEVICE LOCK**, verifier exit `12`
-- Exact verifier log: `/tmp/telemetry-v100-device-check.log`
+- Launch: **PASS** during an unlocked-device window
+- Install/launch artifacts: `/tmp/telemetry-ios-device-run.nc1cKA/`
+- Process observed: `Telemetry.app/Telemetry`, PID `22293`
 
 The v0.10.1 GPS system-event build was built and installed:
 
@@ -206,6 +207,9 @@ The v0.10.1 GPS system-event build was built and installed:
 - Install: **PASS**
 - Launch: **BLOCKED BY DEVICE LOCK**, verifier exit `12`
 - Exact verifier log: `/tmp/telemetry-v101-device-check.log`
+
+A later v0.10.1 rerun installed successfully but the device re-locked before
+SpringBoard launch; latest verifier output is `/tmp/telemetry-ios-device-run.e3BLol/`.
 
 ## Limitations
 
