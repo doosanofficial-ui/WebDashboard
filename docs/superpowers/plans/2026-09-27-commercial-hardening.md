@@ -86,6 +86,8 @@
 - [x] Add `CAN_SOURCE=udp_json`, `CAN_UDP_HOST`, `CAN_UDP_PORT`, and `CAN_SOURCE_STALE_AFTER` configuration and factory wiring.
 - [x] Make `/api/ping` distinguish server-up/source-not-ready/source-stale without publishing fake zeros.
 - [x] Document the CANoe/MATLAB envelope and Windows firewall scope.
+- [x] Add the optional `python-can` Vector backend and pure signal decoder for
+  11/29-bit, Intel/Motorola, signed, and CAN-FD fixture coverage.
 
 ### Task 4: Native Runtime Reliability and Release QA
 

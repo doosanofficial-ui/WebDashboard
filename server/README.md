@@ -97,6 +97,14 @@ OS/커널 전체 고착이나 실제 저장장치 장애의 모든 복구를 검
 - `CAN_HZ` (기본 `10`, 유한한 양수만 허용)
 - `SIM_DROP_EVERY` (기본 `0`, 예: `25`면 25프레임마다 1회 누락 시뮬레이션)
 - `CAN_SOURCE` (기본 `dummy`)
+- `CAN_SOURCE=vector` 사용 시 `server/requirements-vector.txt`를 추가 설치하고
+  Vector Windows driver/CANoe channel 설정을 준비합니다.
+- `VECTOR_CHANNEL` (기본 `0`)
+- `VECTOR_APP_NAME` (기본 `TelemetryDashboard`)
+- `VECTOR_BITRATE` (기본 `500000`)
+- `VECTOR_FD` (기본 `false`)
+- `VECTOR_DATA_BITRATE` (기본 `2000000`, FD data phase)
+- `VECTOR_STALE_AFTER` (기본 `2.0`)
 - `CAN_UDP_HOST` (기본 `127.0.0.1`, `CAN_SOURCE=udp_json` 수신 주소)
 - `CAN_UDP_PORT` (기본 `29999`, CANoe/MATLAB bridge UDP 포트)
 - `CAN_SOURCE_STALE_AFTER` (기본 `2.0`, 초 단위 source freshness limit)
@@ -134,6 +142,18 @@ $env:CAN_UDP_HOST = "127.0.0.1"
 $env:CAN_UDP_PORT = "29999"
 python app.py
 ```
+
+VN1640A를 직접 읽는 선택적 Vector backend:
+```powershell
+pip install -r requirements-vector.txt
+$env:CAN_SOURCE = "vector"
+$env:VECTOR_CHANNEL = "0"
+python app.py
+```
+직접 Vector 경로는 `signals.json`에 `can_id`, `extended`, `start_bit`,
+`bit_length`, `byte_order`, `signed` 필드를 추가한 signal만 decode합니다.
+물리 factor/offset/min/max는 기존 `SignalMapper` 설정을 적용합니다. 실제
+driver/channel/bitrate/CAN-FD 설정은 Windows VN1640A에서 별도 검증해야 합니다.
 유효한 datagram이 도착하기 전에는 `/api/ping`이 `source_not_ready`를 반환하며,
 마지막 샘플이 freshness limit을 넘으면 `source_stale`로 내려갑니다. 빈 신호나
 잘못된 JSON을 0 값으로 바꾸지 않습니다.

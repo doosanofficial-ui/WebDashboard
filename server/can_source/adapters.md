@@ -69,6 +69,33 @@ decoded snapshot을 수신합니다. datagram은 최소 다음 형태입니다.
 decoded signal bridge를 바로 연결하는 경로이고, VN1640A를 직접 여는 Vector
 `python-can` backend는 별도 하드웨어 검증 단계입니다.
 
+### Vector `python-can` backend
+
+`CAN_SOURCE=vector`는 optional `python-can`의 Vector interface를 lazy import하고
+VN1640A에서 raw Classical CAN/CAN-FD frame을 받습니다. 기본 설치에는 포함하지
+않아 더미 MVP가 추가 native dependency를 요구하지 않습니다. direct Vector
+source의 decoded signal rule 예시는 다음과 같습니다.
+
+```json
+{
+  "ws_fl": {
+    "source": "ws_fl",
+    "can_id": 801,
+    "extended": false,
+    "start_bit": 0,
+    "bit_length": 16,
+    "byte_order": "intel",
+    "signed": false,
+    "scale": 0.01,
+    "offset": 0.0,
+    "enabled": true
+  }
+}
+```
+
+This is a software/backend compatibility path, not evidence that the local
+Vector driver, channel, database, bitrate, or vehicle signal mapping is valid.
+
 ## 확장 옵션
 
 ### A) CANoe -> UDP/TCP bridge -> server adapter
