@@ -5,9 +5,38 @@ Scope: iPhone telemetry dashboard, BLE/ELM327, GPS, recording, CarPlay
 
 ## Evidence Boundary
 
-The physical iPhone is connected for this project, but the developer-visible app inventory contains only the installed Telemetry development app and test runner. iPhone Mirroring is not usable on this Mac because it is showing an iCloud synchronization error. Therefore, no claim is made that Pelican or MATLAB Mobile was physically opened on the iPhone in this run.
+The physical iPhone is connected for this project. The initial developer-only app listing hid third-party apps, so the complete `devicectl --include-all-apps` inventory was used. It confirmed:
 
-The benchmark combines direct exploration of the official product sites and App Store listings with official documentation. Site layouts and product claims were read from the live pages; app-level runtime behavior remains unverified without the apps being installed and accessible on the physical iPhone.
+- Pelican: `com.featherless.apps.electricsidecar`, version `5.0.3`.
+- MATLAB Mobile: `com.mathworks.matlab`, version `9.12`.
+
+Xcode Device Hub was then used to launch each bundle with `devicectl` and capture the actual iPhone display. iPhone Mirroring remains unavailable on this Mac because it shows an iCloud synchronization error, and Device Hub exposes capture but not touch automation. Therefore the physical evidence covers launch/initial UI states; deeper in-app navigation remains explicitly `NOT TESTED`.
+
+The benchmark combines direct physical screenshots, live official product sites, App Store listings, and official documentation. Physical app behavior and published product claims are kept as separate evidence classes.
+
+## Physical iPhone Evidence
+
+### Pelican launch screen
+
+![Pelican physical iPhone launch screen](evidence/pelican-physical-home-2026-09-28.png)
+
+Observed on the connected iPhone after launching `com.featherless.apps.electricsidecar`:
+
+- Welcome screen with a full-bleed vehicle/road hero image.
+- Large primary CTAs: `Add a vehicle / account` and `Connect an OBD scanner`.
+- Persistent bottom navigation: `Garage`, `Logbook`, `Map`, `Settings`.
+- This directly confirms the official site's onboarding and logbook/navigation claims at the initial screen level.
+
+### MATLAB Mobile launch state
+
+![MATLAB Mobile physical iPhone cloud connection screen](evidence/matlab-mobile-physical-cloud-2026-09-28.png)
+
+Observed on the connected iPhone after launching `com.mathworks.matlab`:
+
+- Top bar with hamburger menu, history, figure/results, and app/grid controls.
+- Centered `Connecting to MathWorks Cloud` state with spinner and `Cancel`.
+- Bottom command entry field is present but disabled while the cloud connection is pending.
+- The capture is a real runtime state, not a product-page mockup; it also confirms the Cloud/account dependency described in the official documentation.
 
 ## Pelican
 
@@ -22,6 +51,8 @@ The benchmark combines direct exploration of the official product sites and App 
 - App Store listing: https://apps.apple.com/us/app/pelican-automotive-assistant/id1663683832
 
 The App Store listing identifies Pelican as a Navigation app named “Pelican: Automotive assistant”. It presents CarPlay, navigation, OBD, and vehicle widgets as the primary product surfaces. The live listing exposed an iPhone screenshot carousel, 4.0/5 from 82 ratings, iOS 18 or later compatibility, and in-app ScanPlan/ScanPass subscriptions. These values are time-sensitive App Store metadata, not compatibility guarantees for this project.
+
+The physical launch screenshot confirms that the initial UX prioritizes vehicle/account setup and scanner connection before exposing Garage, Logbook, Map, and Settings.
 
 ### Functional inventory
 
@@ -72,6 +103,8 @@ The table is useful as a product benchmark, not as a protocol specification. The
 - App Store listing: https://apps.apple.com/us/app/matlab-mobile/id370976661
 
 The App Store listing identifies MATLAB Mobile as a free Business app from MathWorks, compatible with iOS 17 or later, with iPhone/iPad support. The live listing exposed 3.2/5 from 179 ratings, 28.1 MB size, and version 9.12 metadata. This is App Store metadata, not a quality or performance verdict.
+
+The physical screenshot confirms that the app opens into a Cloud connection state with command input disabled until the session is available.
 
 ### Functional inventory
 
@@ -127,7 +160,7 @@ The App Store listing identifies MATLAB Mobile as a free Business app from MathW
 - The current native dashboard already has the main cockpit, stale/disconnected states, GPS/recording controls, sessions/export, and read-only BLE discovery.
 - Physical iPhone BLE scan is proven, but the real BT4N identity/GATT profile is not present in the observed environment.
 - CarPlay scene wiring is now present and validator-checked, but entitlement approval and head-unit runtime remain separate gates.
-- Pelican and MATLAB Mobile physical app UI exploration remains `NOT TESTED` because neither app was accessible through the connected developer device inventory or iPhone Mirroring session.
+- Pelican and MATLAB Mobile physical launch/initial UI exploration: `PASS`, with screenshots above. Full in-app workflow exploration is `NOT TESTED` because iPhone Mirroring is unavailable and Device Hub provides capture but not touch control in this environment.
 
 ## Recommendation
 
