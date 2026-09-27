@@ -29,14 +29,15 @@ Observed on the connected iPhone after launching `com.featherless.apps.electrics
 
 ### MATLAB Mobile launch state
 
-![MATLAB Mobile physical iPhone cloud connection screen](evidence/matlab-mobile-physical-cloud-2026-09-28.png)
+![MATLAB Mobile physical iPhone cloud connection screen](evidence/matlab-mobile-physical-connecting-2026-09-28.png)
+
+![MATLAB Mobile physical iPhone command workspace](evidence/matlab-mobile-physical-cloud-2026-09-28.png)
 
 Observed on the connected iPhone after launching `com.mathworks.matlab`:
 
-- Top bar with hamburger menu, history, figure/results, and app/grid controls.
-- Centered `Connecting to MathWorks Cloud` state with spinner and `Cancel`.
-- Bottom command entry field is present but disabled while the cloud connection is pending.
-- The capture is a real runtime state, not a product-page mockup; it also confirms the Cloud/account dependency described in the official documentation.
+- First capture: centered `Connecting to MathWorks Cloud` state with spinner and `Cancel`.
+- Follow-up capture: blue top bar with hamburger menu, history, figure/results, and app/grid controls, plus the bottom `>> Enter command here` field.
+- The captures are real runtime states, not product-page mockups; they confirm the Cloud/session dependency and the command-oriented layout described in the official documentation.
 
 ## Pelican
 
