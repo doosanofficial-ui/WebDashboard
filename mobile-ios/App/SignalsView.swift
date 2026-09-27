@@ -5,6 +5,9 @@ import TelemetryCore
 struct SignalsView: View {
     @Bindable var model: TelemetryModel
     @State private var signalEditorPresented = false
+    @State private var searchText = ""
+    @State private var showStaleOnly = false
+    @State private var showDeveloperControls = false
 
     var body: some View {
         NavigationStack {
@@ -12,9 +15,10 @@ struct SignalsView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: TelemetryTheme.Spacing.medium) {
                         healthCard(at: timeline.date)
+                        filterBar()
                         signalCatalog(at: timeline.date)
                         rawCANCard()
-                        adapterControls()
+                        developerControls()
                     }
                     .padding(.horizontal, TelemetryTheme.Spacing.medium)
                     .padding(.vertical, TelemetryTheme.Spacing.small)
@@ -47,10 +51,11 @@ struct SignalsView: View {
         let live = serverLive || adapterLive
         let color = live ? TelemetryTheme.valid : TelemetryTheme.warning
         return VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
-            HStack {
+            HStack(spacing: TelemetryTheme.Spacing.small) {
                 Label("ACQUISITION HEALTH", systemImage: "waveform.path.ecg")
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(.white)
+                    .font(.caption.weight(.bold))
+                    .tracking(1.0)
+                    .foregroundStyle(TelemetryTheme.accent)
                 Spacer()
                 TelemetryStatusBadge(
                     title: live ? "Live" : "Idle",
@@ -58,34 +63,40 @@ struct SignalsView: View {
                     symbol: live ? "checkmark.circle.fill" : "pause.circle.fill"
                 )
             }
-            HStack(spacing: TelemetryTheme.Spacing.small) {
-                healthValue("SOURCE", adapterLive ? "ADAPTER" : model.canSource.uppercased())
-                healthValue("FRAME AGE", frameAge(at: now))
-                healthValue("BAD", String(model.invalidFrameCount))
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(adapterLive ? "Local adapter" : model.canSource.uppercased())
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.white)
+                    Text("Server \(model.connection) · Adapter \(model.adapterStatus)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(TelemetryTheme.mutedText)
+                        .lineLimit(2)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text(frameAge(at: now))
+                        .font(.headline.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(.white)
+                    Text("FRAME AGE")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(TelemetryTheme.quietText)
+                }
             }
-            Text("Server \(model.connection) · Adapter \(model.adapterStatus)")
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(TelemetryTheme.mutedText)
-                .lineLimit(2)
-            if let profile = model.adapterProfile {
-                Text("Profile \(profile.name) · \(profile.transport.rawValue.uppercased()) · \(profile.signals.count) signals")
-                    .font(.caption2.monospaced())
-                    .foregroundStyle(TelemetryTheme.quietText)
-            } else {
-                Text("No local adapter profile loaded; server snapshots remain visible below.")
-                    .font(.caption2)
-                    .foregroundStyle(TelemetryTheme.quietText)
+            HStack(spacing: TelemetryTheme.Spacing.small) {
+                healthValue("BAD", String(model.invalidFrameCount))
+                healthValue("DROP", String(model.clientDrops + (model.frame?.status.drop ?? 0)))
+                healthValue("PROFILE", model.adapterProfile?.name ?? "None")
             }
         }
-        .telemetrySurface(.raised)
+        .telemetrySurface(.raised, padding: TelemetryTheme.Spacing.small)
         .accessibilityIdentifier("signals-health-card")
     }
 
     private func healthValue(_ label: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 2) {
             Text(label)
                 .font(.caption2.weight(.bold))
-                .tracking(0.7)
                 .foregroundStyle(TelemetryTheme.quietText)
             Text(value)
                 .font(.caption.monospacedDigit().weight(.semibold))
@@ -96,25 +107,60 @@ struct SignalsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private func filterBar() -> some View {
+        HStack(spacing: TelemetryTheme.Spacing.small) {
+            HStack(spacing: 7) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(TelemetryTheme.quietText)
+                TextField("Filter signal, CAN ID, source", text: $searchText)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+            }
+            .padding(.horizontal, TelemetryTheme.Spacing.small)
+            .padding(.vertical, 10)
+            .background(TelemetryTheme.surface, in: RoundedRectangle(cornerRadius: TelemetryTheme.Radius.small, style: .continuous))
+            Button(showStaleOnly ? "ALL" : "STALE") {
+                showStaleOnly.toggle()
+            }
+            .font(.caption2.weight(.bold))
+            .buttonStyle(.bordered)
+            .tint(showStaleOnly ? TelemetryTheme.warning : TelemetryTheme.mutedText)
+            .accessibilityLabel(showStaleOnly ? "Show all signals" : "Show stale signals")
+            .accessibilityIdentifier("signals-stale-filter")
+        }
+        .accessibilityIdentifier("signals-filter-bar")
+    }
+
     private func signalCatalog(at now: Date) -> some View {
-        VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
+        let rows = filteredRows(at: now)
+        return VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
             HStack {
                 Text("SIGNAL CATALOG")
                     .font(.caption.weight(.bold))
                     .tracking(1.0)
                     .foregroundStyle(TelemetryTheme.accent)
                 Spacer()
-                Text("\(signalRows.count) ITEMS")
+                Text("\(rows.count) ITEMS")
                     .font(.caption2.monospacedDigit().weight(.bold))
                     .foregroundStyle(TelemetryTheme.quietText)
             }
-            if signalRows.isEmpty {
-                Text("Connect to the server or import an adapter profile to populate signals.")
-                    .font(.subheadline)
-                    .foregroundStyle(TelemetryTheme.mutedText)
+            if model.adapterProfile == nil && model.frame == nil && model.connection != "Connected" {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("No signal source", systemImage: "waveform.slash")
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.white)
+                    Text("Connect the server or import an observed adapter profile. No placeholder values are shown.")
+                        .font(.caption)
+                        .foregroundStyle(TelemetryTheme.mutedText)
+                }
+                .telemetrySurface(.standard, padding: TelemetryTheme.Spacing.small)
+                .accessibilityIdentifier("signal-source-empty")
+            } else if rows.isEmpty {
+                ContentUnavailableView("No matching signals", systemImage: "line.3.horizontal.decrease.circle")
+                    .frame(maxWidth: .infinity)
                     .telemetrySurface(.standard, padding: TelemetryTheme.Spacing.small)
             } else {
-                ForEach(signalRows) { row in
+                ForEach(rows) { row in
                     signalRow(row, at: now)
                 }
             }
@@ -181,33 +227,38 @@ struct SignalsView: View {
         .accessibilityIdentifier("raw-can-card")
     }
 
-    private func adapterControls() -> some View {
-        VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
-            Text("DEVELOPER / ADAPTER")
+    private func developerControls() -> some View {
+        DisclosureGroup(isExpanded: $showDeveloperControls) {
+            VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
+                HStack(spacing: TelemetryTheme.Spacing.small) {
+                    Button("Demo adapter", action: model.startDemoAdapter)
+                        .buttonStyle(.borderedProminent)
+                        .tint(TelemetryTheme.accentMuted)
+                        .accessibilityIdentifier("start-adapter-demo")
+                    Button("Stop", role: .destructive, action: model.stopDemoAdapter)
+                        .buttonStyle(.bordered)
+                }
+                HStack(spacing: TelemetryTheme.Spacing.small) {
+                    Button("Start live", action: model.startLiveAdapter)
+                        .buttonStyle(.bordered)
+                        .disabled(model.adapterProfile == nil)
+                        .accessibilityIdentifier("start-live-adapter")
+                    Button("Stop live", role: .destructive, action: model.stopLiveAdapter)
+                        .buttonStyle(.bordered)
+                }
+                Text("Live adapters require an observed profile; no ELM327 UUIDs or commands are guessed.")
+                    .font(.caption)
+                    .foregroundStyle(TelemetryTheme.mutedText)
+            }
+            .padding(.top, TelemetryTheme.Spacing.xSmall)
+        } label: {
+            Label("Developer / Adapter", systemImage: "wrench.and.screwdriver")
                 .font(.caption.weight(.bold))
-                .tracking(1.0)
+                .tracking(0.7)
                 .foregroundStyle(TelemetryTheme.accent)
-            HStack(spacing: TelemetryTheme.Spacing.small) {
-                Button("Demo adapter", action: model.startDemoAdapter)
-                    .buttonStyle(.borderedProminent)
-                    .tint(TelemetryTheme.accentMuted)
-                    .accessibilityIdentifier("start-adapter-demo")
-                Button("Stop", role: .destructive, action: model.stopDemoAdapter)
-                    .buttonStyle(.bordered)
-            }
-            HStack(spacing: TelemetryTheme.Spacing.small) {
-                Button("Start live", action: model.startLiveAdapter)
-                    .buttonStyle(.bordered)
-                    .disabled(model.adapterProfile == nil)
-                    .accessibilityIdentifier("start-live-adapter")
-                Button("Stop live", role: .destructive, action: model.stopLiveAdapter)
-                    .buttonStyle(.bordered)
-            }
-            Text("Demo and live transport controls stay outside the driving view. Live adapters require an observed profile; no ELM327 UUIDs or commands are guessed.")
-                .font(.caption)
-                .foregroundStyle(TelemetryTheme.mutedText)
         }
-        .telemetrySurface(.standard)
+        .padding(TelemetryTheme.Spacing.small)
+        .background(TelemetryTheme.surface, in: RoundedRectangle(cornerRadius: TelemetryTheme.Radius.medium, style: .continuous))
         .accessibilityIdentifier("adapter-controls")
     }
 
@@ -223,8 +274,21 @@ struct SignalsView: View {
                 )
             }
         }
+        guard model.frame != nil || model.connection == "Connected" else { return [] }
         return ["ws_fl", "ws_fr", "ws_rl", "ws_rr", "yaw", "ax", "ay"].map { id in
             SignalRow(id: id, name: displayName(for: id), unit: unit(for: id), decimals: 1, detail: "SERVER SNAPSHOT · 10 Hz")
+        }
+    }
+
+    private func filteredRows(at now: Date) -> [SignalRow] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return signalRows.filter { row in
+            let matchesQuery = query.isEmpty
+                || row.id.lowercased().contains(query)
+                || row.name.lowercased().contains(query)
+                || row.detail.lowercased().contains(query)
+                || row.unit.lowercased().contains(query)
+            return matchesQuery && (!showStaleOnly || !isFresh(row, at: now))
         }
     }
 

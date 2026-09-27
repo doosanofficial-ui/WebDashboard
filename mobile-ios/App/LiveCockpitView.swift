@@ -7,7 +7,7 @@ struct LiveCockpitView: View {
     @Bindable var model: TelemetryModel
     @Binding var editorPresented: Bool
     @Binding var selectedPageID: String?
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @State private var profileExpanded = false
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.1)) { timeline in
@@ -18,7 +18,7 @@ struct LiveCockpitView: View {
                     wheelSpeedRail(at: timeline.date)
                     dynamicsCharts(at: timeline.date)
                     locationCard(at: timeline.date)
-                    profileSection(at: timeline.date)
+                    profileDisclosure(at: timeline.date)
 
                     if let error = model.storageStatus {
                         Label(error, systemImage: "exclamationmark.triangle.fill")
@@ -54,45 +54,56 @@ struct LiveCockpitView: View {
         let adapterLive = model.adapterStatus.localizedCaseInsensitiveContains("monitoring")
         let fresh = (model.connection == "Connected" || adapterLive) && (age ?? .infinity) <= 1.5
         let stateColor = fresh ? TelemetryTheme.valid : TelemetryTheme.warning
-        return HStack(spacing: TelemetryTheme.Spacing.small) {
-            ZStack {
-                Circle()
-                    .fill(stateColor.opacity(0.16))
-                    .frame(width: 42, height: 42)
-                Image(systemName: fresh ? "antenna.radiowaves.left.and.right" : "wifi.exclamationmark")
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(stateColor)
+        return VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
+            HStack(spacing: TelemetryTheme.Spacing.small) {
+                ZStack {
+                    Circle()
+                        .fill(stateColor.opacity(0.16))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: fresh ? "antenna.radiowaves.left.and.right" : "wifi.exclamationmark")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(stateColor)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("LIVE TELEMETRY")
+                        .font(.caption2.weight(.bold))
+                        .tracking(1.0)
+                        .foregroundStyle(TelemetryTheme.mutedText)
+                    Text((adapterLive ? "ADAPTER LIVE" : model.connection).uppercased())
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(.white)
+                }
+                Spacer(minLength: TelemetryTheme.Spacing.small)
+                TelemetryStatusBadge(
+                    title: fresh ? "Live" : "Stale",
+                    color: stateColor,
+                    symbol: fresh ? "checkmark.circle.fill" : "pause.circle.fill"
+                )
             }
-            VStack(alignment: .leading, spacing: 3) {
-                Text("LIVE TELEMETRY")
-                    .font(.caption.weight(.bold))
-                    .tracking(1.2)
-                    .foregroundStyle(TelemetryTheme.mutedText)
-                Text((adapterLive ? "ADAPTER LIVE" : model.connection).uppercased())
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(.white)
-                Text("SEQ \(model.frame?.status.seq.description ?? "-")  ·  DROP \(model.clientDrops + (model.frame?.status.drop ?? 0))  ·  BAD \(model.invalidFrameCount)")
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(TelemetryTheme.quietText)
-                Text("RTT \(model.serverRTTMilliseconds.map { String(format: "%.0f ms", $0) } ?? "-")  ·  PING FAIL \(model.serverPingFailures)")
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(TelemetryTheme.quietText)
-                Text(model.localRecordingStatus)
-                    .font(.caption2)
-                    .foregroundStyle(TelemetryTheme.quietText)
-                    .lineLimit(1)
-                    .accessibilityIdentifier("local-recording-status")
+            HStack(spacing: TelemetryTheme.Spacing.small) {
+                telemetryStat("SEQ", model.frame?.status.seq.description ?? "-")
+                telemetryStat("DROP", String(model.clientDrops + (model.frame?.status.drop ?? 0)))
+                telemetryStat("RTT", model.serverRTTMilliseconds.map { String(format: "%.0f ms", $0) } ?? "-")
+                telemetryStat("AGE", age.map { String(format: "%.0f ms", max(0, $0 * 1000)) } ?? "-")
             }
-            Spacer(minLength: TelemetryTheme.Spacing.small)
-            TelemetryStatusBadge(
-                title: fresh ? "Live" : "Stale",
-                color: stateColor,
-                symbol: fresh ? "checkmark.circle.fill" : "pause.circle.fill"
-            )
         }
-        .telemetrySurface(.raised)
+        .telemetrySurface(.raised, padding: TelemetryTheme.Spacing.small)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("live-status-strip")
+    }
+
+    private func telemetryStat(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(TelemetryTheme.quietText)
+            Text(value)
+                .font(.caption2.monospacedDigit().weight(.semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func primaryMetric(at now: Date) -> some View {
@@ -238,64 +249,69 @@ struct LiveCockpitView: View {
     }
 
     private func sessionBar() -> some View {
-        HStack(spacing: TelemetryTheme.Spacing.small) {
-            Button(action: model.mark) {
-                Label("MARK", systemImage: "flag.fill")
-                    .font(.headline.weight(.bold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 13)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(TelemetryTheme.warning)
-            .disabled(model.storageStatus != nil)
-            .accessibilityIdentifier("mark-event")
-
-            Button {
-                if model.localRecordingEnabled {
-                    model.stopRecording()
-                } else {
-                    model.startRecording()
-                }
-            } label: {
-                Label(model.localRecordingEnabled ? "STOP" : "REC",
-                      systemImage: model.localRecordingEnabled ? "stop.fill" : "record.circle")
-                    .font(.headline.weight(.bold))
-                    .frame(minWidth: 60)
-                    .padding(.vertical, 13)
-            }
-            .buttonStyle(.bordered)
-            .tint(model.localRecordingEnabled ? TelemetryTheme.critical : TelemetryTheme.valid)
-            .accessibilityIdentifier("toggle-recording")
-
-            Button {
-                if model.collecting {
-                    model.stopLocation()
-                } else {
-                    model.startLocation()
-                }
-            } label: {
-                Image(systemName: model.collecting ? "location.fill" : "location")
-                    .font(.headline.weight(.bold))
-                    .frame(width: 36)
-                    .padding(.vertical, 13)
-            }
-            .buttonStyle(.bordered)
-            .tint(model.collecting ? TelemetryTheme.accent : TelemetryTheme.mutedText)
-            .disabled(model.storageStatus != nil)
-            .accessibilityLabel(model.collecting ? "Stop GPS" : "Start GPS")
-            .accessibilityIdentifier("toggle-gps")
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(model.localRecordingEnabled ? "RECORDING" : (model.collecting ? "GPS ON" : "REC OFF"))
-                    .font(.caption.weight(.bold))
-                    .tracking(0.8)
-                    .foregroundStyle(model.collecting ? TelemetryTheme.accent : TelemetryTheme.valid)
-                Text(model.lastMarkAt.map { "Last mark " + $0.formatted(date: .omitted, time: .standard) } ?? model.locationStatus)
+        VStack(spacing: TelemetryTheme.Spacing.xSmall) {
+            HStack(spacing: TelemetryTheme.Spacing.small) {
+                Text(model.localRecordingEnabled ? "RECORDING" : "REC OFF")
+                    .font(.caption2.weight(.bold))
+                    .tracking(0.7)
+                    .foregroundStyle(model.localRecordingEnabled ? TelemetryTheme.critical : TelemetryTheme.valid)
+                Text(model.collecting ? "GPS ON" : "GPS OFF")
+                    .font(.caption2.weight(.bold))
+                    .tracking(0.7)
+                    .foregroundStyle(model.collecting ? TelemetryTheme.accent : TelemetryTheme.quietText)
+                Spacer()
+                Text(model.lastMarkAt.map { "Last mark " + $0.formatted(date: .omitted, time: .shortened) } ?? "No mark")
                     .font(.caption2)
                     .foregroundStyle(TelemetryTheme.mutedText)
                     .lineLimit(1)
             }
-            .frame(width: 104, alignment: .leading)
+            HStack(spacing: TelemetryTheme.Spacing.xSmall) {
+                Button(action: model.mark) {
+                    Label("MARK", systemImage: "flag.fill")
+                        .font(.headline.weight(.bold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(TelemetryTheme.warning)
+                .disabled(model.storageStatus != nil)
+                .accessibilityIdentifier("mark-event")
+
+                Button {
+                    if model.localRecordingEnabled {
+                        model.stopRecording()
+                    } else {
+                        model.startRecording()
+                    }
+                } label: {
+                    Label(model.localRecordingEnabled ? "STOP" : "REC",
+                          systemImage: model.localRecordingEnabled ? "stop.fill" : "record.circle")
+                        .font(.headline.weight(.bold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                }
+                .buttonStyle(.bordered)
+                .tint(model.localRecordingEnabled ? TelemetryTheme.critical : TelemetryTheme.valid)
+                .accessibilityIdentifier("toggle-recording")
+
+                Button {
+                    if model.collecting {
+                        model.stopLocation()
+                    } else {
+                        model.startLocation()
+                    }
+                } label: {
+                    Label("GPS", systemImage: model.collecting ? "location.fill" : "location")
+                        .font(.headline.weight(.bold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                }
+                .buttonStyle(.bordered)
+                .tint(model.collecting ? TelemetryTheme.accent : TelemetryTheme.mutedText)
+                .disabled(model.storageStatus != nil)
+                .accessibilityLabel(model.collecting ? "Stop GPS" : "Start GPS")
+                .accessibilityIdentifier("toggle-gps")
+            }
         }
         .padding(.horizontal, TelemetryTheme.Spacing.small)
         .padding(.vertical, TelemetryTheme.Spacing.xSmall)
@@ -306,6 +322,29 @@ struct LiveCockpitView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("session-mark")
+    }
+
+    @ViewBuilder
+    private func profileDisclosure(at now: Date) -> some View {
+        if let profile = model.dashboardProfile {
+            VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
+                HStack {
+                    Label(profile.name, systemImage: "rectangle.3.group")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                    Spacer()
+                    Text("\(profile.pages.count) page\(profile.pages.count == 1 ? "" : "s")")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(TelemetryTheme.quietText)
+                }
+                DisclosureGroup("Open custom profile", isExpanded: $profileExpanded) {
+                    profileSection(at: now)
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(TelemetryTheme.accent)
+            }
+            .telemetrySurface(.standard, padding: TelemetryTheme.Spacing.small)
+        }
     }
 
     @ViewBuilder

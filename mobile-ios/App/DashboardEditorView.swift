@@ -22,6 +22,10 @@ struct DashboardEditorView: View {
     @State private var draftConditionHysteresis = "0"
     @State private var draftConditionHold = "0"
     @State private var draftConditionStaleActive = false
+    @State private var confirmPageDelete = false
+    @State private var confirmWidgetDelete = false
+    @State private var pendingPageDeleteID: String?
+    @State private var pendingWidgetDelete: (pageID: String, widgetID: String)?
 
     private var selectedPage: DashboardPage? {
         guard let profile = model.dashboardProfile else { return nil }
@@ -56,7 +60,32 @@ struct DashboardEditorView: View {
             }
             .onChange(of: selectedWidgetID) { _, _ in loadDraftFromSelection() }
             .onChange(of: selectedPageID) { _, _ in loadDraftFromSelection() }
+            .confirmationDialog("Delete page?", isPresented: $confirmPageDelete, titleVisibility: .visible) {
+                Button("Delete page", role: .destructive) { deletePendingPage() }
+            } message: {
+                Text("This removes the page and its widget layout.")
+            }
+            .confirmationDialog("Delete widget?", isPresented: $confirmWidgetDelete, titleVisibility: .visible) {
+                Button("Delete widget", role: .destructive) { deletePendingWidget() }
+            } message: {
+                Text("This removes the selected widget from the profile.")
+            }
         }
+    }
+
+    private func deletePendingPage() {
+        guard let pageID = pendingPageDeleteID else { return }
+        model.deleteDashboardPage(pageID: pageID)
+        selectedPageID = model.dashboardProfile?.pages.first?.id
+        selectedWidgetID = nil
+        pendingPageDeleteID = nil
+    }
+
+    private func deletePendingWidget() {
+        guard let pendingWidgetDelete else { return }
+        model.deleteDashboardWidget(pageID: pendingWidgetDelete.pageID, widgetID: pendingWidgetDelete.widgetID)
+        selectedWidgetID = nil
+        self.pendingWidgetDelete = nil
     }
 
     private func pageControls(profile: DashboardProfile, page: DashboardPage) -> some View {
@@ -72,7 +101,8 @@ struct DashboardEditorView: View {
             .pickerStyle(.menu)
             .accessibilityIdentifier("dashboard-page-picker")
 
-            HStack {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack {
                 Button("Add page", action: model.addDashboardPage)
                     .accessibilityIdentifier("add-dashboard-page")
                 Menu("Add widget", systemImage: "plus.square") {
@@ -93,11 +123,11 @@ struct DashboardEditorView: View {
                 }
                 Button("Snap") { model.snapDashboard(pageID: page.id) }
                 Button("Delete page", role: .destructive) {
-                    model.deleteDashboardPage(pageID: page.id)
-                    selectedPageID = model.dashboardProfile?.pages.first?.id
-                    selectedWidgetID = nil
+                    pendingPageDeleteID = page.id
+                    confirmPageDelete = true
                 }
                 .disabled(profile.pages.count == 1)
+            }
             }
             .buttonStyle(.bordered)
             Text("\(page.orientation.rawValue.capitalized) · drag widgets, use the corner handle to resize")
@@ -129,7 +159,8 @@ struct DashboardEditorView: View {
         if let selectedWidgetID,
            let widget = page.widgets.first(where: { $0.id == selectedWidgetID }) {
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack {
                     Text(widget.configuration.label).font(.caption.weight(.semibold))
                     Spacer()
                     Button("Front") {
@@ -152,9 +183,10 @@ struct DashboardEditorView: View {
                         }
                     }
                     Button("Delete", role: .destructive) {
-                        model.deleteDashboardWidget(pageID: page.id, widgetID: widget.id)
-                        self.selectedWidgetID = nil
+                        pendingWidgetDelete = (page.id, widget.id)
+                        confirmWidgetDelete = true
                     }
+                }
                 }
                 .buttonStyle(.bordered)
 

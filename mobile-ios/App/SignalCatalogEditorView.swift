@@ -9,6 +9,8 @@ struct SignalCatalogEditorView: View {
     @State private var selectedID: String?
     @State private var draft = SignalDraft()
     @State private var errorText: String?
+    @State private var confirmDelete = false
+    @State private var pendingDeleteOffsets: IndexSet?
 
     init(model: TelemetryModel, profile: AdapterProfile) {
         self.model = model
@@ -27,7 +29,7 @@ struct SignalCatalogEditorView: View {
                             errorText = nil
                         } label: {
                             HStack {
-                                VStack(alignment: .leading, spacing: 2) {
+                                VStack(alignment: .leading, spacing: 3) {
                                     Text(signal.name)
                                         .foregroundStyle(.primary)
                                     Text("\(signal.id) · 0x\(String(signal.canID, radix: 16, uppercase: true)) · \(signal.unit)")
@@ -41,12 +43,11 @@ struct SignalCatalogEditorView: View {
                                 }
                             }
                         }
+                        .accessibilityIdentifier("signal-definition-\(signal.id)")
                     }
                     .onDelete { offsets in
-                        signals.remove(atOffsets: offsets)
-                        if let selectedID, !signals.contains(where: { $0.id == selectedID }) {
-                            self.selectedID = nil
-                        }
+                        pendingDeleteOffsets = offsets
+                        confirmDelete = true
                     }
                     Button("Add signal", systemImage: "plus") {
                         addSignal()
@@ -64,35 +65,49 @@ struct SignalCatalogEditorView: View {
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                         Toggle("Extended 29-bit ID", isOn: $draft.isExtended)
-                        HStack {
-                            TextField("Start bit", text: $draft.startBit)
+                        LabeledContent("Start bit") {
+                            TextField("0", text: $draft.startBit)
                                 .keyboardType(.numberPad)
-                            TextField("Bit length", text: $draft.bitLength)
+                                .multilineTextAlignment(.trailing)
+                        }
+                        LabeledContent("Bit length") {
+                            TextField("8", text: $draft.bitLength)
                                 .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
                         }
                         Picker("Byte order", selection: $draft.byteOrder) {
                             Text("Intel / little-endian").tag(ByteOrder.intel)
                             Text("Motorola / big-endian").tag(ByteOrder.motorola)
                         }
                         Toggle("Signed", isOn: $draft.isSigned)
-                        HStack {
-                            TextField("Factor", text: $draft.factor)
+                        LabeledContent("Factor") {
+                            TextField("1", text: $draft.factor)
                                 .keyboardType(.numbersAndPunctuation)
-                            TextField("Offset", text: $draft.offset)
-                                .keyboardType(.numbersAndPunctuation)
+                                .multilineTextAlignment(.trailing)
                         }
-                        HStack {
-                            TextField("Minimum", text: $draft.minimum)
+                        LabeledContent("Offset") {
+                            TextField("0", text: $draft.offset)
                                 .keyboardType(.numbersAndPunctuation)
-                            TextField("Maximum", text: $draft.maximum)
-                                .keyboardType(.numbersAndPunctuation)
+                                .multilineTextAlignment(.trailing)
                         }
-                        HStack {
-                            TextField("Unit", text: $draft.unit)
-                            TextField("Timeout seconds", text: $draft.timeout)
+                        LabeledContent("Minimum") {
+                            TextField("Optional", text: $draft.minimum)
                                 .keyboardType(.numbersAndPunctuation)
+                                .multilineTextAlignment(.trailing)
+                        }
+                        LabeledContent("Maximum") {
+                            TextField("Optional", text: $draft.maximum)
+                                .keyboardType(.numbersAndPunctuation)
+                                .multilineTextAlignment(.trailing)
+                        }
+                        TextField("Unit", text: $draft.unit)
+                        LabeledContent("Timeout seconds") {
+                            TextField("0.5", text: $draft.timeout)
+                                .keyboardType(.numbersAndPunctuation)
+                                .multilineTextAlignment(.trailing)
                         }
                         Button("Apply definition") { applyDraft() }
+                            .buttonStyle(.borderedProminent)
                             .accessibilityIdentifier("apply-signal-definition")
                     }
                 }
@@ -117,6 +132,13 @@ struct SignalCatalogEditorView: View {
                     .disabled(signals.isEmpty)
                 }
             }
+            .confirmationDialog("Delete signal?", isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button("Delete signal", role: .destructive) {
+                    deletePendingSignals()
+                }
+            } message: {
+                Text("The definition will be removed from this profile when you save.")
+            }
             .onAppear {
                 if selectedID == nil, let first = signals.first {
                     selectedID = first.id
@@ -124,6 +146,17 @@ struct SignalCatalogEditorView: View {
                 }
             }
         }
+    }
+
+
+    private func deletePendingSignals() {
+        guard let pendingDeleteOffsets else { return }
+        signals.remove(atOffsets: pendingDeleteOffsets)
+        if let selectedID, !signals.contains(where: { $0.id == selectedID }) {
+            self.selectedID = signals.first?.id
+            if let first = signals.first { draft = SignalDraft(first) }
+        }
+        self.pendingDeleteOffsets = nil
     }
 
     private func addSignal() {
