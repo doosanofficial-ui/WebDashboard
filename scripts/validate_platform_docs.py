@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import plistlib
 import sys
 
 
@@ -76,10 +77,53 @@ def validate_file(rel_path: str, required_markers: list[str]) -> list[str]:
     return errors
 
 
+def validate_carplay_scene_manifest() -> list[str]:
+    rel_path = "mobile-ios/App/Info.plist"
+    path = ROOT / rel_path
+    try:
+        plist = plistlib.loads(path.read_bytes())
+    except (OSError, plistlib.InvalidFileException) as exc:
+        return [f"[invalid-plist] {rel_path}: {exc}"]
+
+    manifest = plist.get("UIApplicationSceneManifest")
+    if not isinstance(manifest, dict):
+        return [f"[missing-key] {rel_path}: UIApplicationSceneManifest"]
+
+    errors: list[str] = []
+    if manifest.get("UIApplicationSupportsMultipleScenes") is not True:
+        errors.append(f"[missing-value] {rel_path}: UIApplicationSupportsMultipleScenes=true")
+
+    configurations = manifest.get("UISceneConfigurations")
+    if not isinstance(configurations, dict):
+        return errors + [f"[missing-key] {rel_path}: UISceneConfigurations"]
+
+    role = configurations.get("CPTemplateApplicationSceneSessionRoleApplication")
+    if not isinstance(role, list) or not role:
+        return errors + [
+            f"[missing-key] {rel_path}: CPTemplateApplicationSceneSessionRoleApplication"
+        ]
+
+    configuration = role[0]
+    expected = {
+        "UISceneClassName": "CPTemplateApplicationScene",
+        "UISceneConfigurationName": "CarPlay",
+    }
+    for key, value in expected.items():
+        if configuration.get(key) != value:
+            errors.append(f"[missing-value] {rel_path}: {key}={value}")
+    delegate = configuration.get("UISceneDelegateClassName")
+    if not isinstance(delegate, str) or not delegate.endswith(".CarPlaySceneDelegate"):
+        errors.append(
+            f"[missing-value] {rel_path}: UISceneDelegateClassName=*.CarPlaySceneDelegate"
+        )
+    return errors
+
+
 def main() -> int:
     failures: list[str] = []
     for rel_path, markers in REQUIRED_FILES.items():
         failures.extend(validate_file(rel_path, markers))
+    failures.extend(validate_carplay_scene_manifest())
 
     if failures:
         print("Platform docs validation failed:")
