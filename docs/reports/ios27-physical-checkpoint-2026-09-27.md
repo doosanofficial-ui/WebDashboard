@@ -1,8 +1,8 @@
 # iOS 27 Physical Telemetry Checkpoint
 
 Date: 2026-09-27
-Current main: `f8d87f1`
-App version/build: `0.21.0 (13)`
+Current main: `4f3b99a`
+App version/build: `0.21.0 (14)`
 Scope: iPhone, native iOS, BLE/ELM327, Vehicle CAN, Recording/Export, CarPlay
 Out of scope: iPad, Android
 
@@ -27,6 +27,7 @@ evidence, not an iOS 27 SDK build claim.
 | Physical iPhone install | PASS | `devicectl` installed `local.webdashboard.Telemetry`; `/tmp/telemetry-ios-device-run.sS9S1r` |
 | Physical iPhone launch | PASS | `devicectl` launched app and process was observed; same run evidence |
 | Physical XCUITest runner | PASS | Existing UI test plus session-control test passed on iPhone 17; `/tmp/telemetry-ios-physical-ui-session4.CRCSoc` |
+| BLE scan automation identifier | PASS | Reproduced the selector loss under the developer card, added an accessibility containment boundary, and passed `testBLEScanControlExposesStableAutomationIdentifier` on physical iPhone 17; `/tmp/telemetry-ios-ble-identifier-physical-green.L5akRI/result.xcresult` |
 | Physical iPhone BLE scan | PASS | Temporary physical XCUITest started the app's read-only BLE scan for 15 s; `/tmp/telemetry-ios-ble-scan-smoke.vNi7bf/result2.xcresult` passed and the UI reported `Found 54 BLE peripheral(s)` |
 | Current main simulator build/run | PASS | XcodeBuildMCP generated a clean project in `/tmp/telemetry-ios-sim-current.lM06ab`, built and launched `local.webdashboard.Telemetry` on iPhone 17 iOS 26.5; UI snapshot reported 151 elements and the screenshot showed the live cockpit in one viewport |
 | Physical REC/GPS transition | PASS (foreground) | REC and GPS state labels were observed; SpringBoard `Change to Always Allow` was handled by the test; same session evidence |
