@@ -36,6 +36,8 @@ evidence, not an iOS 27 SDK build claim.
 | Physical restart recovery | PASS | After relaunch, `/tmp/telemetry-ios-physical-data-recovery.3OJQ4h` shows `recording_interrupted` and `ended_at` for the previously open session; outbox remains durable with 18 pending events |
 | Physical background transition automation | PASS | XCUITest on physical iPhone 17 pressed Home, waited 15 s, and reactivated the app; `/tmp/telemetry-ios-physical-background-smoke3.rEyR63/result.xcresult` reports 1 passed test |
 | Physical background SQLite continuity | PASS | `/tmp/telemetry-ios-physical-background-data.gz8ERD`; latest session records `background` at `1790516884.85912`, `foreground` at `1790516899.6472` (14.788 s), and 4 GPS rows during that interval |
+| Physical 30-minute background recording | PASS (background, screen not locked) | Temporary physical XCUITest ran Home/background for 1,800 s and passed; `/tmp/telemetry-ios-30min-background.jqHbbd/` result reports 1 passed test |
+| Physical 30-minute GPS durability | PASS | `/tmp/telemetry-ios-30min-closed.WGzXNG`; latest session duration `1883.171 s`, 1,809 GPS rows, GPS source span `1816.504 s`, and a durable `recording_interrupted` close event |
 | iOS 27 SDK | BLOCKED | Mac has Xcode 26.3 / iOS 26.2 SDK; `iphoneos27` is not installed |
 | P1 GPS storage contract | PASS (software) | `LocationSample` preserves source timestamp, app epoch/monotonic receive times, coordinates, altitude, speed, course, and horizontal/vertical accuracy; `TelemetryStore` and `MeasurementRecorder` retain the same sample |
 | Foreground GPS/recording | PASS | Physical UI automation started REC/GPS and the app stored GPS samples in SQLite; CAN remains disconnected without vehicle hardware |
