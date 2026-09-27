@@ -1,0 +1,2 @@
+# Optional Windows/VN1640A dependency. Keep out of the default MVP install.
+python-can==4.6.1

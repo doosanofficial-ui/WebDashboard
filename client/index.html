@@ -21,6 +21,10 @@
           Server URL
           <input id="serverUrl" type="text" placeholder="http://192.168.x.x:8080" />
         </label>
+        <label>
+          Session token (production mode)
+          <input id="authToken" type="password" autocomplete="off" placeholder="optional" />
+        </label>
         <button id="connectBtn" class="primary">Connect</button>
         <button id="disconnectBtn">Disconnect</button>
         <button id="startGpsBtn">Start GPS</button>
@@ -29,12 +33,14 @@
           <option value="hold">GPS: Hold + EMA</option>
           <option value="lerp">GPS: Lerp + EMA</option>
         </select>
-        <input id="markNote" type="text" placeholder="MARK note (optional)" />
+        <input id="markNote" type="text" maxlength="500" placeholder="MARK note (optional)" />
         <button id="markBtn" class="warn">MARK</button>
       </div>
 
       <div class="status-strip">
         <span id="connState" class="pill disconnected">disconnected</span>
+        <span id="recordingState" class="pill neutral" role="status">CSV status unknown</span>
+        <span id="uplinkState" class="pill stale" role="status" hidden></span>
         <span class="pill">Frame age <b id="frameAge">-</b> ms</span>
         <span class="pill">SEQ <b id="seqValue">-</b></span>
         <span class="pill">DROP <b id="dropValue">0</b></span>

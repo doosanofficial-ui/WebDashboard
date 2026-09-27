@@ -207,11 +207,13 @@ export class NaverRoadview {
       this.lastPanoFix = { lat: fix.lat, lon: fix.lon };
     }
 
-    this.panorama.setPov({
-      pan: normalizePan(fix.hdg),
-      tilt: -2,
-      fov: 100,
-    });
+    if (Number.isFinite(fix.hdg)) {
+      this.panorama.setPov({
+        pan: normalizePan(fix.hdg),
+        tilt: -2,
+        fov: 100,
+      });
+    }
 
     if (!stale) {
       await this._maybeReverseGeocode(fix);

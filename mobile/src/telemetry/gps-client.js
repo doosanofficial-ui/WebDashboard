@@ -20,11 +20,14 @@ export async function requestLocationPermission(options = {}) {
   const { androidBackgroundMode = false } = options;
 
   if (Platform.OS === "ios") {
-    if (typeof Geolocation.requestAuthorization === "function") {
-      const result = await Geolocation.requestAuthorization("always");
-      return result === "granted";
+    if (typeof Geolocation.requestAuthorization !== "function") {
+      return false;
     }
-    return true;
+    // The community module uses callbacks; permission level is configured separately.
+    Geolocation.setRNConfiguration({ authorizationLevel: "always" });
+    return new Promise((resolve) => {
+      Geolocation.requestAuthorization(() => resolve(true), () => resolve(false));
+    });
   }
 
   if (Platform.OS !== "android") {
@@ -65,40 +68,47 @@ export class GpsClient {
 
   start(onFix, onError, options = {}) {
     if (this.watchId != null || this._usingBridge) {
-      return;
+      return true;
     }
 
     const { iosBackgroundMode = false, androidBackgroundMode = false } = options;
 
+    const missingBackgroundBridge =
+      (Platform.OS === "ios" && iosBackgroundMode && !_iosNativeBridge) ||
+      (Platform.OS === "android" && androidBackgroundMode && !_androidNativeBridge);
+    if (missingBackgroundBridge) {
+      onError?.({
+        code: "background-unavailable",
+        message: "Background location requires the native bridge in the installed build.",
+      });
+      return false;
+    }
+
     if (Platform.OS === "ios" && iosBackgroundMode && _iosNativeBridge) {
       this._startViaIosBridge(onFix, onError, options);
-      return;
+      return true;
     }
 
     if (Platform.OS === "android" && androidBackgroundMode && _androidNativeBridge) {
       this._startViaAndroidBridge(onFix, onError, options);
-      return;
+      return true;
     }
 
     const watchOptions = buildGpsOptions(options);
 
     this.watchId = Geolocation.watchPosition(
       (position) => {
-        const coords = position.coords;
-        onFix?.({
-          lat: coords.latitude,
-          lon: coords.longitude,
-          spd: Number.isFinite(coords.speed) ? coords.speed : 0,
-          hdg: Number.isFinite(coords.heading) ? coords.heading : null,
-          acc: Number.isFinite(coords.accuracy) ? coords.accuracy : null,
-          alt: Number.isFinite(coords.altitude) ? coords.altitude : null,
-        });
+        const fix = this._normalizeBridgeFix(position?.coords);
+        if (fix) {
+          onFix?.(fix);
+        }
       },
       (err) => {
         onError?.(err);
       },
       watchOptions
     );
+    return true;
   }
 
   /** @private */
@@ -152,23 +162,20 @@ export class GpsClient {
 
   /** @private */
   _normalizeBridgeFix(data = {}) {
-    const latitude = Number(data.latitude);
-    const longitude = Number(data.longitude);
-    const speed = Number(data.speed);
-    const heading = Number(data.heading);
-    const accuracy = Number(data.accuracy);
-    const altitude = Number(data.altitude);
+    const { latitude, longitude, speed, heading, accuracy, altitude } = data || {};
 
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+        Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
       return null;
     }
 
     return {
       lat: latitude,
       lon: longitude,
-      spd: Number.isFinite(speed) && speed >= 0 ? speed : 0,
-      hdg: Number.isFinite(heading) && heading >= 0 ? heading : null,
-      acc: Number.isFinite(accuracy) ? accuracy : null,
+      // Never turn unknown values or old measurements into new telemetry.
+      spd: Number.isFinite(speed) && speed >= 0 ? speed : null,
+      hdg: Number.isFinite(heading) && heading >= 0 && heading < 360 ? heading : null,
+      acc: Number.isFinite(accuracy) && accuracy >= 0 ? accuracy : null,
       alt: Number.isFinite(altitude) ? altitude : null,
     };
   }

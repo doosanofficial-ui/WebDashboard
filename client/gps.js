@@ -13,9 +13,23 @@ function lerp(a, b, alpha) {
   return a + (b - a) * alpha;
 }
 
+function smoothNumeric(current, target, alpha) {
+  const hasCurrent = Number.isFinite(current);
+  const hasTarget = Number.isFinite(target);
+
+  if (hasCurrent && hasTarget) {
+    return lerp(current, target, alpha);
+  }
+  if (hasTarget) {
+    return target;
+  }
+  // A new fix with an unknown field must stay unknown in the display, too.
+  return null;
+}
+
 function lerpHeading(a, b, alpha) {
   if (!Number.isFinite(a) || !Number.isFinite(b)) {
-    return Number.isFinite(b) ? b : a;
+    return Number.isFinite(b) ? b : null;
   }
   const delta = ((b - a + 540) % 360) - 180;
   return normalizeHeading(a + delta * alpha);
@@ -30,16 +44,10 @@ function smoothFix(current, target, alpha) {
     ...target,
     lat: lerp(current.lat, target.lat, alpha),
     lon: lerp(current.lon, target.lon, alpha),
-    spd: lerp(current.spd ?? 0, target.spd ?? 0, alpha),
-    acc: lerp(current.acc ?? target.acc ?? 0, target.acc ?? 0, alpha),
-    alt:
-      Number.isFinite(current.alt) && Number.isFinite(target.alt)
-        ? lerp(current.alt, target.alt, alpha)
-        : target.alt,
-    hdg:
-      current.hdg == null || target.hdg == null
-        ? target.hdg
-        : lerpHeading(current.hdg, target.hdg, alpha),
+    spd: smoothNumeric(current.spd, target.spd, alpha),
+    acc: smoothNumeric(current.acc, target.acc, alpha),
+    alt: smoothNumeric(current.alt, target.alt, alpha),
+    hdg: lerpHeading(current.hdg, target.hdg, alpha),
   };
 }
 
@@ -48,16 +56,10 @@ function lerpFix(from, to, alpha) {
     ...to,
     lat: lerp(from.lat, to.lat, alpha),
     lon: lerp(from.lon, to.lon, alpha),
-    spd: lerp(from.spd ?? 0, to.spd ?? 0, alpha),
-    acc: lerp(from.acc ?? to.acc ?? 0, to.acc ?? 0, alpha),
-    alt:
-      Number.isFinite(from.alt) && Number.isFinite(to.alt)
-        ? lerp(from.alt, to.alt, alpha)
-        : to.alt,
-    hdg:
-      from.hdg == null || to.hdg == null
-        ? to.hdg
-        : lerpHeading(from.hdg, to.hdg, alpha),
+    spd: smoothNumeric(from.spd, to.spd, alpha),
+    acc: smoothNumeric(from.acc, to.acc, alpha),
+    alt: smoothNumeric(from.alt, to.alt, alpha),
+    hdg: lerpHeading(from.hdg, to.hdg, alpha),
   };
 }
 
@@ -106,9 +108,15 @@ export class GpsTracker {
           recvMs: performance.now(),
           lat: coords.latitude,
           lon: coords.longitude,
-          spd: Number.isFinite(coords.speed) ? coords.speed : 0,
-          hdg: normalizeHeading(coords.heading),
-          acc: Number.isFinite(coords.accuracy) ? coords.accuracy : null,
+          spd:
+            Number.isFinite(coords.speed) && coords.speed >= 0
+              ? coords.speed
+              : null,
+          hdg:
+            Number.isFinite(coords.heading) && coords.heading >= 0 && coords.heading < 360
+              ? coords.heading
+              : null,
+          acc: Number.isFinite(coords.accuracy) && coords.accuracy >= 0 ? coords.accuracy : null,
           alt: Number.isFinite(coords.altitude) ? coords.altitude : null,
         };
 

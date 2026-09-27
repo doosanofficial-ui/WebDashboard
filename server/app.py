@@ -1,37 +1,76 @@
 from __future__ import annotations
 
 import asyncio
-import json
+import secrets
 import logging
+import math
 import time
-from contextlib import asynccontextmanager, suppress
+from contextlib import AsyncExitStack, asynccontextmanager, suppress
 from typing import Any
 
 import httpx
+import anyio
 import uvicorn
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from can_source import create_can_source
+from can_source.base import CANSource
 from config import CLIENT_DIR, settings
-from gps_sink import extract_event_row, extract_gps_row
-from logger import SessionCsvLogger
+from recording import AsyncCsvRecorder
+from ingest import TelemetryJournal
+from reliable_api import router as reliable_router
+from release import load_release_metadata
 from signal_mapper import SignalMapper
+from stream import StreamPeer
+from uplink import MAX_UPLINK_BYTES, UplinkError, decode_auth, decode_uplink
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(message)s")
 log = logging.getLogger("telemetry-server")
 
-can_source = create_can_source(settings.can_source)
-signal_mapper = SignalMapper(settings.signals_config)
-logger = SessionCsvLogger(settings.log_dir)
+can_source: CANSource | None = None
+signal_mapper: SignalMapper | None = None
+logger: AsyncCsvRecorder | None = None
 
-clients: set[WebSocket] = set()
-clients_lock = asyncio.Lock()
+clients: set[StreamPeer] = set()
 
 broadcast_task: asyncio.Task[None] | None = None
+recording_task: asyncio.Task[None] | None = None
 http_client: httpx.AsyncClient | None = None
-stream_state = {"seq": 0, "drop": 0}
+stream_state: dict[str, Any] = {"seq": 0, "drop": 0, "error": None, "last_frame": None}
+stream_ready: asyncio.Event | None = None
+release_metadata = load_release_metadata()
+
+
+def _fail_stream(code: str) -> None:
+    stream_state["error"] = code
+    if stream_ready:
+        stream_ready.set()
+    log.error("CAN capture stopped: %s", code)
+
+
+def _valid_bearer(headers: Any) -> bool:
+    token = settings.ingest_token
+    if not token:
+        return False
+    scheme, _, supplied = headers.get("authorization", "").partition(" ")
+    if scheme.lower() != "bearer" or not supplied or len(supplied) > 512:
+        return False
+    try:
+        return secrets.compare_digest(supplied.encode("utf-8"), token.encode("utf-8"))
+    except UnicodeError:
+        return False
+
+
+def _require_legacy_auth(headers: Any) -> None:
+    if not settings.require_legacy_uplink_auth:
+        return
+    if not settings.ingest_token:
+        raise UplinkError("auth_unconfigured")
+    if not _valid_bearer(headers):
+        raise UplinkError("unauthorized")
 
 
 async def _sleep_until(target: float) -> None:
@@ -43,23 +82,25 @@ async def _sleep_until(target: float) -> None:
 
 
 async def _broadcast(message: dict[str, Any]) -> None:
-    async with clients_lock:
-        sockets = list(clients)
+    for peer in tuple(clients):
+        peer.publish(message)
 
-    if not sockets:
-        return
 
-    dead: list[WebSocket] = []
-    for ws in sockets:
-        try:
-            await ws.send_json(message)
-        except Exception:
-            dead.append(ws)
-
-    if dead:
-        async with clients_lock:
-            for ws in dead:
-                clients.discard(ws)
+async def _watch_recording() -> None:
+    previous = None
+    while logger is not None:
+        recording = logger.snapshot()
+        if recording["state"] == "failed" and stream_state["error"] is None:
+            _fail_stream("recording_failed")
+        state = recording["state"]
+        if state != previous:
+            for peer in tuple(clients):
+                try:
+                    peer.control({"v": 1, "type": "recording_status", "recording": recording})
+                except OverflowError:
+                    peer.stop()
+            previous = state
+        await asyncio.sleep(0.1)
 
 
 async def can_broadcast_loop() -> None:
@@ -67,7 +108,14 @@ async def can_broadcast_loop() -> None:
     next_tick = time.perf_counter()
 
     while True:
+        if stream_state["error"]:
+            return
         next_tick += period
+
+        source = can_source
+        if source is None or not getattr(source, "is_ready", True) or getattr(source, "is_stale", False):
+            await _sleep_until(next_tick)
+            continue
 
         seq = stream_state["seq"]
         should_sim_drop = (
@@ -78,12 +126,22 @@ async def can_broadcast_loop() -> None:
 
         if should_sim_drop:
             stream_state["drop"] += 1
-            stream_state["seq"] += 1
-            await _sleep_until(next_tick)
-            continue
 
-        raw_sig = can_source.next_frame()
-        sig = signal_mapper.apply(raw_sig)
+        try:
+            raw_frame = getattr(can_source, "next_raw_frame", lambda: None)()
+            raw_sig = can_source.next_frame()
+            # Validate before clamping: max(0, NaN) can otherwise become a fake zero.
+            if not isinstance(raw_sig, dict) or any(
+                type(value) not in (int, float) or not math.isfinite(value)
+                for value in raw_sig.values()
+            ):
+                raise ValueError("invalid_signal_snapshot")
+            sig = signal_mapper.apply(raw_sig)
+            if any(not math.isfinite(value) for value in sig.values()):
+                raise ValueError("nonfinite_signal")
+        except Exception:
+            _fail_stream("source_failed")
+            return
 
         frame = {
             "v": 1,
@@ -94,63 +152,168 @@ async def can_broadcast_loop() -> None:
                 "drop": stream_state["drop"],
             },
         }
+        if raw_frame is not None:
+            frame["raw"] = raw_frame.to_dict()
 
-        logger.log_can(frame)
-        await _broadcast(frame)
+        try:
+            logger.log_can(frame)
+        except Exception:
+            _fail_stream("recording_failed")
+            return
+        frame["status"]["recording"] = logger.snapshot()
+        stream_state["last_frame"] = time.perf_counter()
+        if stream_ready:
+            stream_ready.set()
+        if not should_sim_drop:
+            await _broadcast(frame)
 
         stream_state["seq"] += 1
         await _sleep_until(next_tick)
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
-    global broadcast_task, http_client
+async def lifespan(application: FastAPI):
+    global broadcast_task, recording_task, http_client, logger, stream_ready, can_source, signal_mapper
 
     if not CLIENT_DIR.exists():
         raise RuntimeError(f"client directory not found: {CLIENT_DIR}")
 
-    broadcast_task = asyncio.create_task(can_broadcast_loop())
-    http_client = httpx.AsyncClient(timeout=httpx.Timeout(4.0))
-    log.info("session=%s", logger.session_id)
-    log.info("logs: %s", settings.log_dir)
-    log.info("signals config: %s", settings.signals_config)
-    log.info("static client: %s", CLIENT_DIR)
+    cleanup = AsyncExitStack()
+    async def stop_task(task):
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            _fail_stream("stream_unavailable")
+
+    async def stop_peers():
+        peers = tuple(clients)
+        for peer in peers:
+            peer.stop()
+        if peers:
+            await asyncio.gather(*(peer.finished.wait() for peer in peers))
+
+    async def close_recording(recorder):
+        report = await recorder.close()
+        application.state.recording_shutdown = report
+        if report["unconfirmed"] or report["error"] or report["worker_alive"]:
+            log.error("CSV shutdown not clean: error=%s unconfirmed=%d rejected=%d worker_alive=%s",
+                      report["error"], report["unconfirmed"], report["rejected"], report["worker_alive"])
 
     try:
+        can_source = create_can_source(settings.can_source)
+        cleanup.callback(getattr(can_source, "close", lambda: None))
+        signal_mapper = SignalMapper(settings.signals_config)
+        logger = AsyncCsvRecorder(settings.log_dir)
+        cleanup.push_async_callback(close_recording, logger)
+        await logger.start()
+        stream_state.update(seq=0, drop=0, error=None, last_frame=None)
+        stream_ready = asyncio.Event()
+        application.state.ingest_token = settings.ingest_token
+        application.state.ingest_journal = (
+            await asyncio.to_thread(TelemetryJournal, settings.log_dir / "telemetry.sqlite3")
+            if settings.ingest_token else None
+        )
+        http_client = httpx.AsyncClient(timeout=httpx.Timeout(4.0))
+        cleanup.push_async_callback(http_client.aclose)
+        cleanup.push_async_callback(stop_peers)
+        broadcast_task = asyncio.create_task(can_broadcast_loop())
+        recording_task = asyncio.create_task(_watch_recording())
+        cleanup.push_async_callback(stop_task, recording_task)
+        cleanup.push_async_callback(stop_task, broadcast_task)
+        if getattr(can_source, "waits_for_first_frame", True):
+            readiness = asyncio.create_task(stream_ready.wait())
+            try:
+                await asyncio.wait((readiness, broadcast_task), return_when=asyncio.FIRST_COMPLETED)
+            finally:
+                readiness.cancel()
+                with suppress(asyncio.CancelledError):
+                    await readiness
+        else:
+            await asyncio.sleep(0)
+        log.info("session=%s", logger.session_id)
+        log.info("logs: %s", settings.log_dir)
+        log.info("signals config: %s", settings.signals_config)
+        log.info("static client: %s", CLIENT_DIR)
         yield
     finally:
-        if broadcast_task:
-            broadcast_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await broadcast_task
-            broadcast_task = None
-
-        if http_client:
-            await http_client.aclose()
+        try:
+            with anyio.CancelScope(shield=True):
+                async def finish_cleanup():
+                    with anyio.CancelScope(shield=True):
+                        await cleanup.aclose()
+                finishing = asyncio.create_task(finish_cleanup())
+                cancelled = False
+                while True:
+                    try:
+                        await asyncio.shield(finishing)
+                        break
+                    except asyncio.CancelledError:
+                        if finishing.done():
+                            raise
+                        cancelled = True
+                if cancelled:
+                    raise asyncio.CancelledError()
+        finally:
+            logger = None
             http_client = None
+            broadcast_task = None
+            recording_task = None
+            stream_ready = None
+            application.state.ingest_journal = None
+            application.state.ingest_token = None
 
-        logger.close()
 
-
-app = FastAPI(title="Telemetry Dashboard", version="0.1.0", lifespan=lifespan)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app = FastAPI(title="Telemetry Dashboard", version=release_metadata.version, lifespan=lifespan)
+if settings.allowed_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(settings.allowed_origins),
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization"],
+    )
 
 
 @app.get("/api/ping")
-async def api_ping() -> dict[str, Any]:
-    return {"ok": True, "t": time.time(), "session": logger.session_id}
+async def api_ping() -> JSONResponse:
+    last_frame = stream_state["last_frame"]
+    age = time.perf_counter() - last_frame if last_frame is not None else None
+    error = stream_state["error"]
+    recording = logger.snapshot() if logger else None
+    source_status = can_source.status() if can_source and hasattr(can_source, "status") else None
+    if not error and recording and recording["state"] != "ready":
+        error = "recording_failed" if recording["state"] == "failed" else "recording_delayed"
+    if not error and (not logger or not broadcast_task or broadcast_task.done()):
+        error = "stream_unavailable"
+    if not error and source_status and not source_status["ready"]:
+        error = "source_not_ready"
+    if not error and source_status and source_status["stale"]:
+        error = "source_stale"
+    if not error and (age is None or age > max(1.0, 5.0 / settings.can_hz)):
+        error = "stream_stale"
+    payload = {
+        "ok": error is None,
+        "t": time.time(),
+        "session": logger.session_id if logger else None,
+        "stream": {"seq": stream_state["seq"], "drop": stream_state["drop"],
+                   "last_frame_age_ms": round(age * 1000) if age is not None else None},
+        "recording": recording,
+        "source": source_status,
+    }
+    if error:
+        payload["error"] = {"code": error}
+    return JSONResponse(payload, status_code=503 if error else 200,
+                        headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/public-config")
 async def api_public_config() -> dict[str, Any]:
     return {
         "ok": True,
+        "release": release_metadata.public_dict(),
         "naver": {
             "clientId": settings.naver_maps_client_id,
             "enabled": bool(settings.naver_maps_client_id),
@@ -209,40 +372,23 @@ def _safe_json(response: httpx.Response) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
-def _extract_naver_error(payload: dict[str, Any] | None) -> str | None:
+def _has_naver_error(payload: dict[str, Any] | None) -> bool:
     if not isinstance(payload, dict):
-        return None
+        return False
 
     status = payload.get("status")
     if isinstance(status, dict):
         code = status.get("code")
         if code not in (None, 0, "0"):
-            name = status.get("name")
-            message = status.get("message")
-            parts = [p for p in [name, f"code={code}", message] if p]
-            if parts:
-                return ", ".join(str(p) for p in parts)
-            return f"code={code}"
+            return True
 
     error = payload.get("error")
     if isinstance(error, dict):
         code = error.get("errorCode") or error.get("code")
-        message = error.get("message")
-        if code or message:
-            return f"{code or 'error'}: {message or ''}".strip()
+        if code:
+            return True
 
-    return None
-
-
-def _short_error_detail(payload: dict[str, Any] | None, response: httpx.Response) -> str:
-    from_payload = _extract_naver_error(payload)
-    if from_payload:
-        return from_payload
-
-    text = response.text.strip().replace("\n", " ")
-    if text:
-        return text[:220]
-    return "no detail"
+    return False
 
 
 @app.get("/api/naver/reverse-geocode")
@@ -273,131 +419,163 @@ async def api_naver_reverse_geocode(lat: float, lon: float) -> dict[str, Any]:
         "https://naveropenapi.apigw.ntruss.com/map-reversegeocode/v2/gc",
     ]
 
-    last_error: str | None = None
-    auth_error: HTTPException | None = None
-    rate_limit_error: HTTPException | None = None
-    for url in hosts:
+    auth_status: int | None = None
+    rate_limited = False
+    for endpoint_index, url in enumerate(hosts, start=1):
         try:
             response = await http_client.get(url, params=params, headers=headers)
             payload = _safe_json(response)
             status_code = response.status_code
 
             if status_code in (401, 403):
-                detail = _short_error_detail(payload, response)
-                auth_error = HTTPException(
-                    status_code=status_code,
-                    detail=f"Naver reverse-geocode auth failed ({url}): {detail}",
-                )
-                last_error = f"{url} -> HTTP {status_code} ({detail})"
+                auth_status = status_code
+                log.warning("reverse-geocode auth failure endpoint=%d status=%d", endpoint_index, status_code)
                 continue
 
             if status_code == 429:
-                detail = _short_error_detail(payload, response)
-                rate_limit_error = HTTPException(
-                    status_code=429,
-                    detail=f"Naver reverse-geocode rate limited ({url}): {detail}",
-                )
-                last_error = f"{url} -> HTTP 429 ({detail})"
+                rate_limited = True
+                log.warning("reverse-geocode rate limited endpoint=%d", endpoint_index)
                 continue
 
             if status_code != 200:
-                detail = _short_error_detail(payload, response)
-                last_error = f"{url} -> HTTP {status_code} ({detail})"
-                log.warning("reverse-geocode fallback: %s", last_error)
+                log.warning("reverse-geocode upstream failure endpoint=%d status=%d", endpoint_index, status_code)
                 continue
 
             if not payload:
-                last_error = f"{url} -> invalid JSON payload"
-                log.warning("reverse-geocode invalid payload: %s", last_error)
+                log.warning("reverse-geocode invalid JSON endpoint=%d", endpoint_index)
                 continue
 
-            api_error = _extract_naver_error(payload)
-            if api_error:
-                last_error = f"{url} -> API error ({api_error})"
-                log.warning("reverse-geocode API error: %s", last_error)
+            if _has_naver_error(payload):
+                log.warning("reverse-geocode API error endpoint=%d", endpoint_index)
                 continue
 
             address = _format_naver_address(payload)
             return {
                 "ok": True,
                 "address": address,
-                "raw": payload if address is None else None,
+                # Do not reflect an upstream provider payload to the browser.
+                "raw": None,
             }
         except Exception as exc:
-            last_error = str(exc)
-            log.warning("reverse-geocode exception (%s): %s", url, exc)
+            log.warning("reverse-geocode exception endpoint=%d type=%s", endpoint_index, type(exc).__name__)
 
-    if auth_error:
-        raise auth_error
-    if rate_limit_error:
-        raise rate_limit_error
+    if auth_status is not None:
+        raise HTTPException(status_code=auth_status, detail="reverse_geocode_auth_failed")
+    if rate_limited:
+        raise HTTPException(status_code=429, detail="reverse_geocode_rate_limited")
 
-    raise HTTPException(status_code=502, detail=f"Naver reverse-geocode failed: {last_error}")
+    raise HTTPException(status_code=502, detail="reverse_geocode_unavailable")
+
+
+async def _record_uplink(kind: str, row: dict[str, Any]) -> None:
+    if logger is None:
+        raise UplinkError("storage_unavailable")
+    try:
+        if kind == "GPS":
+            ticket = logger.log_gps(row)
+        else:
+            ticket = logger.log_event(row)
+        await logger.confirm(ticket)
+    except (OSError, ValueError):
+        raise UplinkError("storage_unavailable") from None
+
+
+async def _legacy_http(request: Request, expected: str) -> JSONResponse:
+    try:
+        _require_legacy_auth(request.headers)
+        if request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "application/json":
+            raise UplinkError("unsupported_media_type")
+        body = bytearray()
+        async for chunk in request.stream():
+            if len(body) + len(chunk) > MAX_UPLINK_BYTES:
+                raise UplinkError("payload_too_large")
+            body.extend(chunk)
+        kind, row = decode_uplink(body)
+        if kind != expected:
+            raise UplinkError("invalid_payload")
+        await _record_uplink(kind, row)
+    except UplinkError as error:
+        return JSONResponse(error.payload(), status_code=error.status,
+                            headers={"Cache-Control": "no-store"})
+    return JSONResponse({"ok": True}, headers={"Cache-Control": "no-store"})
 
 
 @app.post("/api/gps")
-async def api_gps(payload: dict[str, Any]) -> dict[str, bool]:
-    row = extract_gps_row(payload)
-    if not row:
-        raise HTTPException(status_code=400, detail="Invalid GPS payload")
-    logger.log_gps(row)
-    return {"ok": True}
+async def api_gps(request: Request) -> JSONResponse:
+    return await _legacy_http(request, "GPS")
 
 
 @app.post("/api/event")
-async def api_event(payload: dict[str, Any]) -> dict[str, bool]:
-    row = extract_event_row(payload)
-    if not row:
-        raise HTTPException(status_code=400, detail="Invalid event payload")
-    logger.log_event(row)
-    return {"ok": True}
+async def api_event(request: Request) -> JSONResponse:
+    return await _legacy_http(request, "MARK")
 
 
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket) -> None:
     await ws.accept()
+    peer = StreamPeer(ws)
+    authenticated = not settings.require_legacy_uplink_auth or _valid_bearer(ws.headers)
+    if authenticated:
+        clients.add(peer)
+    elif not settings.ingest_token:
+        peer.control({"v": 1, "type": "error", "error": {
+            "code": "auth_unconfigured", "message": "Legacy uplink authentication is not configured"
+        }})
+    else:
+        peer.control({"v": 1, "type": "auth_required"})
+    if logger and logger.snapshot()["state"] != "ready":
+        peer.control({"v": 1, "type": "recording_status", "recording": logger.snapshot()})
 
-    async with clients_lock:
-        clients.add(ws)
+    async def receive() -> None:
+        nonlocal authenticated
+        while True:
+            message = await ws.receive()
+            if message["type"] == "websocket.disconnect":
+                return
+            try:
+                raw = message.get("text")
+                if raw is None:
+                    raise UplinkError("text_frame_required")
+                auth_token = decode_auth(raw)
+                if auth_token is not None:
+                    if settings.require_legacy_uplink_auth and not settings.ingest_token:
+                        peer.control({"v": 1, "type": "error", **UplinkError("auth_unconfigured").payload()})
+                        return
+                    if settings.ingest_token:
+                        try:
+                            authenticated = secrets.compare_digest(
+                                auth_token.encode("utf-8"), settings.ingest_token.encode("utf-8")
+                            )
+                        except UnicodeError:
+                            authenticated = False
+                    else:
+                        authenticated = True
+                    if not authenticated:
+                        peer.control({"v": 1, "type": "error", **UplinkError("unauthorized").payload()})
+                        return
+                    clients.add(peer)
+                    peer.control({"v": 1, "type": "auth_ok"})
+                    continue
+                if not authenticated:
+                    peer.control({"v": 1, "type": "error", **UplinkError("unauthorized").payload()})
+                    return
+                kind, row = decode_uplink(raw)
+                if kind == "ping":
+                    peer.control({"v": 1, "type": "pong", "t": row["t"], "server_t": time.time()})
+                else:
+                    await _record_uplink(kind, row)
+            except UplinkError as error:
+                peer.control({"v": 1, "type": "error", **error.payload()})
 
     try:
-        while True:
-            raw = await ws.receive_text()
-
-            try:
-                payload = json.loads(raw)
-            except json.JSONDecodeError:
-                continue
-
-            msg_type = payload.get("type")
-
-            if msg_type == "ping":
-                await ws.send_json(
-                    {
-                        "v": 1,
-                        "type": "pong",
-                        "t": payload.get("t"),
-                        "server_t": time.time(),
-                    }
-                )
-                continue
-
-            gps_row = extract_gps_row(payload)
-            if gps_row:
-                logger.log_gps(gps_row)
-                continue
-
-            event_row = extract_event_row(payload)
-            if event_row:
-                logger.log_event(event_row)
-
-    except WebSocketDisconnect:
+        await peer.run(receive)
+    except (WebSocketDisconnect, TimeoutError, OSError, OverflowError):
         pass
     finally:
-        async with clients_lock:
-            clients.discard(ws)
+        clients.discard(peer)
 
 
+app.include_router(reliable_router)
 app.mount("/", StaticFiles(directory=str(CLIENT_DIR), html=True), name="client")
 
 
@@ -409,4 +587,6 @@ if __name__ == "__main__":
         reload=False,
         ssl_certfile=settings.ssl_certfile,
         ssl_keyfile=settings.ssl_keyfile,
+        ws_max_size=MAX_UPLINK_BYTES,
+        ws_max_queue=8,
     )

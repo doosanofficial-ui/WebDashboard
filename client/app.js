@@ -2,11 +2,12 @@ import { ScrollingChart } from "./charts.js";
 import { GpsTracker } from "./gps.js";
 import { NaverMap } from "./naver-map.js";
 import { NaverRoadview } from "./naver-roadview.js";
-import { updateConnection, updateGauges, updateGps } from "./ui.js";
+import { clearUplinkError, showUplinkError, updateConnection, updateGauges, updateGps, updateRecording } from "./ui.js";
 import { JsonCodec, TelemetrySocket } from "./ws.js";
 
 const els = {
   serverUrl: document.getElementById("serverUrl"),
+  authToken: document.getElementById("authToken"),
   connectBtn: document.getElementById("connectBtn"),
   disconnectBtn: document.getElementById("disconnectBtn"),
   startGpsBtn: document.getElementById("startGpsBtn"),
@@ -15,6 +16,8 @@ const els = {
   markBtn: document.getElementById("markBtn"),
   markNote: document.getElementById("markNote"),
   connState: document.getElementById("connState"),
+  uplinkState: document.getElementById("uplinkState"),
+  recordingState: document.getElementById("recordingState"),
   frameAge: document.getElementById("frameAge"),
   seqValue: document.getElementById("seqValue"),
   dropValue: document.getElementById("dropValue"),
@@ -107,6 +110,9 @@ const FRAME_STALENESS_THRESHOLD_MS = 1500;
 const THEME_STORAGE_KEY = "telemetry-theme";
 
 els.serverUrl.value = `${window.location.protocol}//${window.location.host}`;
+if (els.authToken) {
+  els.authToken.value = sessionStorage.getItem("telemetry.authToken") || "";
+}
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -324,8 +330,13 @@ function stopPing() {
 }
 
 function connectSocket() {
+  clearUplinkError(els.uplinkState);
+  updateRecording(els.recordingState, null);
   const base = normalizeHttpBase(els.serverUrl.value);
   const wsUrl = httpToWs(base);
+  const authToken = els.authToken?.value.trim() || "";
+  if (authToken) sessionStorage.setItem("telemetry.authToken", authToken);
+  else sessionStorage.removeItem("telemetry.authToken");
 
   if (socket) {
     socket.disconnect();
@@ -333,26 +344,39 @@ function connectSocket() {
 
   socket = new TelemetrySocket({
     url: wsUrl,
+    authToken,
     codec: new JsonCodec(),
     onStatus: (status) => {
       socketState = status.state;
-      const connected = status.state === "connected";
+      const connected = status.state === "connected" || status.state === "authenticated";
       els.connectBtn.disabled = connected;
       els.disconnectBtn.disabled = !connected && status.state !== "reconnecting";
 
-      if (connected) {
+      if (connected && (status.state === "authenticated" || !authToken)) {
         startPing();
+      }
+      if (status.state === "auth_required" || status.state === "auth_failed") {
+        stopPing();
+        els.uplinkState.textContent = status.state === "auth_required"
+          ? "Authentication required"
+          : "Authentication failed";
+        els.uplinkState.className = "pill stale";
+        els.uplinkState.hidden = false;
       }
       if (status.state === "disconnected") {
         stopPing();
+        updateRecording(els.recordingState, null);
       }
     },
     onMessage: (payload) => {
+      showUplinkError(els.uplinkState, payload);
+      if (payload?.type === "recording_status") updateRecording(els.recordingState, payload);
       if (payload?.type === "pong" && Number.isFinite(payload.t)) {
         rttMs = Math.max(0, Date.now() - payload.t * 1000);
       }
     },
     onFrame: (frame) => {
+      updateRecording(els.recordingState, frame);
       const seq = frame?.status?.seq;
       const serverDrop = Number.isFinite(frame?.status?.drop) ? frame.status.drop : 0;
 

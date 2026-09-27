@@ -1,5 +1,14 @@
 # MVP Backlog (Epic/Story)
 
+2026-09-19 사내 배포 목표의 현재 기준은 [상용화 계획](production-plan.md)과
+[진단 보고서](reports/commercial-readiness-2026-09-19.md)를 따른다.
+아래 기존 MVP 체크는 과거 진행 이력이며 현재 빌드·실기기·배포 검증을 대체하지 않는다.
+
+2026-09-23: iPhone 17 / iOS 27 및 NANICAR ELM327-BT4N + 싼타페 MX5 HEV
+호환 목표 추가. 현행 체크리스트는 [상용화 계획 C19-C25](production-plan.md)와
+[OBD 실측 실행표](reports/obd-bt4n-compatibility.md)에 단일 관리한다.
+이 장비의 연결/실차/백그라운드 시험은 아직 완료되지 않았다.
+
 ## P0
 - [x] **P0-1 Server WS 송출(더미 CAN 10Hz) + 정적 호스팅 + iPad 표시**
   - 산출물: `server/app.py`, `server/can_source/dummy.py`, `client/index.html`
@@ -101,12 +110,19 @@
 ## P4 (Projection)
 - [ ] **P4-1 CarPlay/Android Auto 정책/자격 요건 체크**
   - 산출물: 요구사항 매트릭스(엔타이틀먼트/카테고리/심사 조건)
+  - 진행: CarPlay Simulator 외부 디스플레이 실행은 확인했다. Apple Developer
+    팀/멤버십/App ID와 CarPlay managed capability 신청은 계정 로그인 및
+    Account Holder 확인 후 진행한다. 실행 증거는
+    `docs/reports/carplay-simulator-and-account-gates-2026-09-26.md`에 기록한다.
   - 완료 기준:
     - iOS/Android 투영 진입 요건을 문서화하고 블로커 식별
     - 구현 가능 범위와 불가 범위를 팀 합의
 
 - [ ] **P4-2 투영 전용 UI 템플릿 설계 및 PoC**
   - 산출물: 투영 UI 와이어/프로토타입, 데이터 바인딩 규격
+  - 진행: iPhone용 status-only CarPlay template/bridge는 컴파일 경계까지
+    구현했다. 승인된 entitlement와 scene manifest가 생기기 전에는 런타임
+    CarPlay 앱 표시를 완료로 처리하지 않는다.
   - 완료 기준:
     - 핵심 텔레메트리 카드 렌더링 검증(속도/yaw/경고/연결상태)
     - 운전 중 가독성 및 조작 최소화 기준 충족

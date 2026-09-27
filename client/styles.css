@@ -137,6 +137,10 @@ select {
   min-width: 165px;
 }
 
+#authToken {
+  min-width: 180px;
+}
+
 button {
   cursor: pointer;
 }
@@ -176,6 +180,10 @@ button:disabled {
   color: #d3e4f2;
   font-size: 0.75rem;
   white-space: nowrap;
+}
+
+#uplinkState[hidden] {
+  display: none;
 }
 
 :root[data-theme="day"] .pill {

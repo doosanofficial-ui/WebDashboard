@@ -1,0 +1,2 @@
+SwiftOBD2 fe6def4e8599671dfc1b9597dbcdbc6a7c078b96
+LTSupportAutomotive SPM 909c42a803e74d7e941add4ba31201948a117259
