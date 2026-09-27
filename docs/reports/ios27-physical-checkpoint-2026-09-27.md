@@ -40,7 +40,7 @@ evidence, not an iOS 27 SDK build claim.
 | Foreground GPS/recording | PASS | Physical UI automation started REC/GPS and the app stored GPS samples in SQLite; CAN remains disconnected without vehicle hardware |
 | Screen-lock GPS/recording | NOT TESTED | Public XCUITest APIs exposed here can press Home but cannot press the physical lock button; a manual lock/unlock run is still required |
 | Canonical workspace direct Xcode build | BLOCKED: HOST TOOLCHAIN | Xcode 26.3 mis-resolves Swift package file-list paths when invoked from this workspace's space/non-ASCII path; generated projects in `/tmp` and GitHub CI build successfully |
-| BT4N GATT profile | BLOCKED: PHYSICAL HARDWARE REQUIRED | The iPhone scan found 54 unnamed UUID/RSSI peripherals but no `NANICAR`, `ELM327`, or `BT4N` identity and no verified adapter GATT profile; the app correctly keeps the adapter profile `NOT CONFIGURED` |
+| BT4N GATT profile | BLOCKED: PHYSICAL HARDWARE REQUIRED | The iPhone scan found 54 UUID/RSSI entries with no human-readable adapter identity, no `NANICAR`, `ELM327`, or `BT4N` match, and no verified adapter GATT profile; the app correctly keeps the adapter profile `NOT CONFIGURED` |
 | Vehicle raw CAN | BLOCKED: PHYSICAL HARDWARE REQUIRED | No ELM327-to-vehicle capture |
 | Raw-to-decode-to-dashboard recording E2E | BLOCKED: PHYSICAL HARDWARE REQUIRED | Real frame and GPS are required |
 | One-hour endurance | NOT TESTED | Depends on physical E2E |
