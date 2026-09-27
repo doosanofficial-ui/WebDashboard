@@ -30,7 +30,9 @@ with tempfile.TemporaryDirectory() as directory:
     with TestClient(app, base_url="https://testserver") as client:
         assert client.get("/api/ping").json()["ok"] is True
         assert client.get("/").status_code == 200
-        assert token not in client.get("/api/public-config").text
+        public_config = client.get("/api/public-config")
+        assert token not in public_config.text
+        assert public_config.json()["release"]["version"] == "0.18.0"
         with client.websocket_connect("/ws") as ws:
             frames = []
             started = time.monotonic()

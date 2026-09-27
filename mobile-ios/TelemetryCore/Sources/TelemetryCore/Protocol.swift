@@ -18,7 +18,37 @@ public struct EventFields: Codable, Sendable, Equatable {
 public struct EventMetadata: Codable, Sendable, Equatable {
     public let bgState: String
     public let os: String
-    enum CodingKeys: String, CodingKey { case bgState = "bg_state", os }
+    public let source: String
+    public let appVersion: String
+    public let device: String
+
+    public init(bgState: String, os: String, source: String = "ios-native",
+                appVersion: String = "unknown", device: String = "unknown") {
+        self.bgState = bgState
+        self.os = os
+        self.source = source
+        self.appVersion = appVersion
+        self.device = device
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case bgState = "bg_state"
+        case os
+        case source
+        case appVersion = "app_ver"
+        case device
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            bgState: try values.decode(String.self, forKey: .bgState),
+            os: try values.decode(String.self, forKey: .os),
+            source: try values.decodeIfPresent(String.self, forKey: .source) ?? "ios-native",
+            appVersion: try values.decodeIfPresent(String.self, forKey: .appVersion) ?? "unknown",
+            device: try values.decodeIfPresent(String.self, forKey: .device) ?? "unknown"
+        )
+    }
 }
 
 public struct TelemetryEvent: Codable, Sendable, Equatable {
@@ -29,18 +59,26 @@ public struct TelemetryEvent: Codable, Sendable, Equatable {
     public let meta: EventMetadata
     enum CodingKeys: String, CodingKey { case id, type, capturedAt = "captured_t", data, meta }
 
-    private init(type: String, capturedAt: Double, data: EventFields, background: Bool) throws {
+    private init(type: String, capturedAt: Double, data: EventFields, background: Bool,
+                 source: String, appVersion: String, device: String) throws {
         guard capturedAt.isFinite, capturedAt > 0 else { throw TelemetryError.invalidLocation }
+        for value in [source, appVersion, device] {
+            guard !value.isEmpty, value.unicodeScalars.count <= 128, !value.contains("\0") else {
+                throw TelemetryError.invalidBatch
+            }
+        }
         self.id = UUID().uuidString.lowercased()
         self.type = type
         self.capturedAt = capturedAt
         self.data = data
-        self.meta = .init(bgState: background ? "background" : "foreground", os: "iOS")
+        self.meta = .init(bgState: background ? "background" : "foreground", os: "iOS",
+                          source: source, appVersion: appVersion, device: device)
     }
 
     public static func gps(latitude: Double, longitude: Double, speed: Double?, heading: Double?,
                            accuracy: Double?, altitude: Double?, capturedAt: Double,
-                           background: Bool) throws -> Self {
+                           background: Bool, source: String = "ios-native",
+                           appVersion: String = "unknown", device: String = "unknown") throws -> Self {
         guard latitude.isFinite, longitude.isFinite, (-90...90).contains(latitude),
               (-180...180).contains(longitude) else { throw TelemetryError.invalidLocation }
         func finite(_ value: Double?) -> Double? { value.flatMap { $0.isFinite ? $0 : nil } }
@@ -49,17 +87,25 @@ public struct TelemetryEvent: Codable, Sendable, Equatable {
         let acc = finite(accuracy).flatMap { $0 >= 0 ? $0 : nil }
         let fields = EventFields(lat: latitude, lon: longitude, spd: spd, hdg: hdg,
                                  acc: acc, alt: finite(altitude))
-        return try .init(type: "GPS", capturedAt: capturedAt, data: fields, background: background)
+        return try .init(type: "GPS", capturedAt: capturedAt, data: fields, background: background,
+                         source: source, appVersion: appVersion, device: device)
     }
 
-    public static func mark(note: String, capturedAt: Double, background: Bool) throws -> Self {
+    public static func mark(note: String, capturedAt: Double, background: Bool,
+                            source: String = "ios-native", appVersion: String = "unknown",
+                            device: String = "unknown") throws -> Self {
         guard note.unicodeScalars.count <= 500, !note.contains("\0") else { throw TelemetryError.invalidBatch }
-        return try .init(type: "MARK", capturedAt: capturedAt, data: EventFields(note: note), background: background)
+        return try .init(type: "MARK", capturedAt: capturedAt, data: EventFields(note: note),
+                         background: background, source: source, appVersion: appVersion, device: device)
     }
 
-    public static func state(_ value: String, capturedAt: Double) throws -> Self {
+    public static func state(_ value: String, capturedAt: Double,
+                             source: String = "ios-native", appVersion: String = "unknown",
+                             device: String = "unknown") throws -> Self {
         guard ["foreground", "background", "stopped"].contains(value) else { throw TelemetryError.invalidBatch }
-        return try .init(type: "STATE", capturedAt: capturedAt, data: EventFields(state: value), background: value == "background")
+        return try .init(type: "STATE", capturedAt: capturedAt, data: EventFields(state: value),
+                         background: value == "background", source: source,
+                         appVersion: appVersion, device: device)
     }
 }
 

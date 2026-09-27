@@ -79,6 +79,12 @@ final class TelemetryModel: NSObject {
     @ObservationIgnored private var pingLoop: Task<Void, Never>?
     @ObservationIgnored private let clientID: String
 
+    private var eventAppVersion: String {
+        (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "unknown"
+    }
+
+    private var eventDevice: String { UIDevice.current.model }
+
     private override init() {
         let existing = UserDefaults.standard.string(forKey: "clientID")
         clientID = existing ?? UUID().uuidString.lowercased()
@@ -572,7 +578,8 @@ final class TelemetryModel: NSObject {
         locationStatus = "Stopped"
         record(.system(name: "gps_stopped", timestamp: Date().timeIntervalSince1970,
                        monotonicNanos: DispatchTime.now().uptimeNanoseconds))
-        if let event = try? TelemetryEvent.state("stopped", capturedAt: Date().timeIntervalSince1970) { store(event) }
+        if let event = try? TelemetryEvent.state("stopped", capturedAt: Date().timeIntervalSince1970,
+            source: "ios-native", appVersion: eventAppVersion, device: eventDevice) { store(event) }
     }
 
     private func handleLocations(_ locations: [CLLocation]) {
@@ -582,7 +589,8 @@ final class TelemetryModel: NSObject {
             if let event = try? TelemetryEvent.gps(latitude: location.coordinate.latitude,
                 longitude: location.coordinate.longitude, speed: location.speed, heading: location.course,
                 accuracy: location.horizontalAccuracy, altitude: location.verticalAccuracy >= 0 ? location.altitude : nil,
-                capturedAt: location.timestamp.timeIntervalSince1970, background: background) {
+                capturedAt: location.timestamp.timeIntervalSince1970, background: background,
+                source: "ios-native", appVersion: eventAppVersion, device: eventDevice) {
                 lastLocation = event
                 locationStatus = "Collecting"
                 locationTrack.append(location.coordinate)
@@ -845,7 +853,8 @@ final class TelemetryModel: NSObject {
 
     func mark() {
         if let event = try? TelemetryEvent.mark(note: "", capturedAt: Date().timeIntervalSince1970,
-            background: UIApplication.shared.applicationState != .active) {
+            background: UIApplication.shared.applicationState != .active, source: "ios-native",
+            appVersion: eventAppVersion, device: eventDevice) {
             store(event)
             record(.system(name: "MARK", timestamp: event.capturedAt,
                            monotonicNanos: DispatchTime.now().uptimeNanoseconds))
@@ -854,7 +863,8 @@ final class TelemetryModel: NSObject {
 
     func sceneChanged(background: Bool) {
         if collecting, let event = try? TelemetryEvent.state(background ? "background" : "foreground",
-            capturedAt: Date().timeIntervalSince1970) {
+            capturedAt: Date().timeIntervalSince1970, source: "ios-native",
+            appVersion: eventAppVersion, device: eventDevice) {
             store(event)
             record(.system(name: background ? "background" : "foreground",
                            timestamp: event.capturedAt,
@@ -993,7 +1003,16 @@ final class TelemetryModel: NSObject {
         uploader?.restoreSession(baseURL: try? endpoint(), credential: CredentialStore.read())
     }
 
-    private func refreshQueueDepth() async { queueDepth = (try? await outbox?.count()) ?? 0 }
+    private func refreshQueueDepth() async {
+        guard let outbox else { return }
+        do {
+            queueDepth = try await outbox.count()
+        } catch {
+            // Keep the last known count; zero would falsely imply a drained queue.
+            storageStatus = "Durable upload queue unavailable"
+            uploadStatus = "Durable queue unavailable"
+        }
+    }
 
     private func startServerPingLoop(
         task: URLSessionWebSocketTask,

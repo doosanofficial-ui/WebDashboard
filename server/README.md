@@ -42,6 +42,8 @@ python app.py
 - WebSocket 10Hz CAN 브로드캐스트
 - 업링크 수신: GPS 프레임, MARK 이벤트 (WS 또는 HTTP)
 - CSV 세션 로그: `server/logs/`
+- `release.json` 기반 release identity를 `/api/public-config.release`에 노출하며,
+  서버/네이티브 버전 증거를 같은 제품 버전에 묶습니다.
 
 CAN source가 `next_raw_frame()`을 제공하면 같은 v1 CAN snapshot에 선택적인
 `raw` envelope가 추가됩니다. Classical CAN의 DLC 0..8과 CAN-FD DLC
@@ -61,7 +63,8 @@ CAN source가 `next_raw_frame()`을 제공하면 같은 v1 CAN snapshot에 선�
 
 `GET /api/ping`은 단순 HTTP 생존이 아니라 CAN 수집/기록 상태를 확인합니다.
 정상은 200, 수집/기록 작업 실패나 stale은 503이며 `error.code`로
-`source_failed`, `recording_failed`, `stream_unavailable`, `stream_stale`을 구분합니다.
+`source_failed`, `source_not_ready`, `source_stale`, `recording_failed`,
+`stream_unavailable`, `stream_stale`을 구분합니다.
 원본 예외 문자열이나 내부 경로는 반환하지 않습니다. 실패 후 자동으로 기록을
 건너뛰며 정상 표시하지 않고, 원인을 해결한 뒤 서버를 재시작해야 합니다.
 `stream.last_frame_age_ms`는 마지막 기록 성공 후 경과 시간입니다.
@@ -94,6 +97,10 @@ OS/커널 전체 고착이나 실제 저장장치 장애의 모든 복구를 검
 - `CAN_HZ` (기본 `10`, 유한한 양수만 허용)
 - `SIM_DROP_EVERY` (기본 `0`, 예: `25`면 25프레임마다 1회 누락 시뮬레이션)
 - `CAN_SOURCE` (기본 `dummy`)
+- `CAN_UDP_HOST` (기본 `127.0.0.1`, `CAN_SOURCE=udp_json` 수신 주소)
+- `CAN_UDP_PORT` (기본 `29999`, CANoe/MATLAB bridge UDP 포트)
+- `CAN_SOURCE_STALE_AFTER` (기본 `2.0`, 초 단위 source freshness limit)
+- `CAN_UDP_MAX_DATAGRAM_BYTES` (기본 `65536`)
 - `SIGNALS_CONFIG` (기본 `./signals.json`, 신호 enable/scale/offset/clamp 설정)
 - `SSL_CERTFILE`, `SSL_KEYFILE` (선택, HTTPS 실행)
 - `NAVER_MAPS_CLIENT_ID` (선택, NAVER 로드뷰/지도 JS 로드)
@@ -105,6 +112,17 @@ OS/커널 전체 고착이나 실제 저장장치 장애의 모든 복구를 검
 $env:SIM_DROP_EVERY = "20"
 python app.py
 ```
+
+CANoe/MATLAB에서 decoded `sig`와 선택적 `raw`를 UDP로 받을 때:
+```powershell
+$env:CAN_SOURCE = "udp_json"
+$env:CAN_UDP_HOST = "127.0.0.1"
+$env:CAN_UDP_PORT = "29999"
+python app.py
+```
+유효한 datagram이 도착하기 전에는 `/api/ping`이 `source_not_ready`를 반환하며,
+마지막 샘플이 freshness limit을 넘으면 `source_stale`로 내려갑니다. 빈 신호나
+잘못된 JSON을 0 값으로 바꾸지 않습니다.
 
 신호 매핑 파일 경로 변경 예시:
 ```powershell

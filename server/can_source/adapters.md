@@ -38,6 +38,37 @@ Python에서는 실제 `python-can.Message`를 `CANRawFrame.from_python_can()`�
 Windows transport를 사용하는 별도 adapter가 dependency를 선택적으로 추가해야
 합니다.
 
+## 구현된 bridge source
+
+`CAN_SOURCE=udp_json`을 사용하면 `UDPJsonCANSource`가 로컬 UDP에서 완성된
+decoded snapshot을 수신합니다. datagram은 최소 다음 형태입니다.
+
+```json
+{
+  "v": 1,
+  "t": 1730000001.456,
+  "sig": {"ws_fl": 42.5, "yaw": -1.2},
+  "raw": {
+    "t": 1730000001.456,
+    "source": "canoe",
+    "channel": "CAN1",
+    "arbitration_id": 530,
+    "extended": false,
+    "fd": false,
+    "brs": false,
+    "esi": false,
+    "dlc": 2,
+    "data_length": 2,
+    "data": [1, 2]
+  }
+}
+```
+
+수신기는 유효한 sample 전에는 ready가 되지 않고, stale sample을 송출하지 않으며,
+잘못된 datagram을 bounded counter에만 기록합니다. 이 source는 CANoe/MATLAB의
+decoded signal bridge를 바로 연결하는 경로이고, VN1640A를 직접 여는 Vector
+`python-can` backend는 별도 하드웨어 검증 단계입니다.
+
 ## 확장 옵션
 
 ### A) CANoe -> UDP/TCP bridge -> server adapter

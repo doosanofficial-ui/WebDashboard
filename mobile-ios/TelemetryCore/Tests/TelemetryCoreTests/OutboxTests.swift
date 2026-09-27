@@ -27,6 +27,34 @@ final class OutboxTests: XCTestCase {
         XCTAssertEqual(event.id, event.id.lowercased())
     }
 
+    func testUploadMetadataCarriesSourceVersionAndDeviceWithoutChangingCaptureTime() throws {
+        let event = try TelemetryEvent.gps(
+            latitude: 37,
+            longitude: 127,
+            speed: nil,
+            heading: nil,
+            accuracy: 5,
+            altitude: nil,
+            capturedAt: 1_700_000_000,
+            background: true,
+            source: "ios-native",
+            appVersion: "0.18.0",
+            device: "iPhone"
+        )
+        XCTAssertEqual(event.meta.bgState, "background")
+        XCTAssertEqual(event.meta.source, "ios-native")
+        XCTAssertEqual(event.meta.appVersion, "0.18.0")
+        XCTAssertEqual(event.meta.device, "iPhone")
+    }
+
+    func testLegacyMetadataWithoutReleaseFieldsRemainsReadable() throws {
+        let legacy = #"{"id":"legacy-event","type":"GPS","captured_t":1700000000,"data":{"lat":37,"lon":127},"meta":{"bg_state":"foreground","os":"iOS"}}"#
+        let event = try JSONDecoder().decode(TelemetryEvent.self, from: Data(legacy.utf8))
+        XCTAssertEqual(event.meta.source, "ios-native")
+        XCTAssertEqual(event.meta.appVersion, "unknown")
+        XCTAssertEqual(event.meta.device, "unknown")
+    }
+
     func testInvalidCoordinatesNeverBecomeZero() {
         for latitude in [Double.nan, Double.infinity, 91, -91] {
             XCTAssertThrowsError(try TelemetryEvent.gps(latitude: latitude, longitude: 127,

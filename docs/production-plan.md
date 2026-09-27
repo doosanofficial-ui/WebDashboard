@@ -9,7 +9,7 @@
 Windows 브리지 대안이며 실물 호환은 아직 미검증이다.
 단계 하나의 통과를 전체 목표 달성으로 처리하지 않는다.
 
-최신 구현/검증 증거: [v0.17 raw CAN 계약 체크포인트](reports/raw-can-contract-v017-2026-09-27.md), [v0.16 UI 제품화 체크포인트](reports/ui-productization-v016-2026-09-27.md), [네이티브 체크포인트](reports/native-milestone-2026-09-23.md),
+최신 구현/검증 증거: [v0.18 상용화 hardening 체크포인트](reports/commercial-hardening-v018-2026-09-27.md), [v0.17 raw CAN 계약 체크포인트](reports/raw-can-contract-v017-2026-09-27.md), [v0.16 UI 제품화 체크포인트](reports/ui-productization-v016-2026-09-27.md), [네이티브 체크포인트](reports/native-milestone-2026-09-23.md),
 [서버 장애 복구](reports/server-fault-recovery-2026-09-23.md),
 [OBD 후보 실제 평가](reports/obd-candidate-qualification-2026-09-23.md).
 시뮬레이터/ARM64 빌드와 Core 검사는 통과했지만 실기기 및 전체 출시 판정은 미완료다.
@@ -26,7 +26,7 @@ Windows 브리지 대안이며 실물 호환은 아직 미검증이다.
 - [x] **C02 GPS 무결성 검사**: null/0/범위/콜백/브리지 누락 회귀 검사.
   증거: scripts/tests/gps-data-integrity.test.mjs 19 PASS. 소스 검사만 완료이며 실기기/배포 완료가 아님.
 - [ ] **C03 모바일 빌드**: iOS는 Swift/Core Location 네이티브 앱으로 전환한다.
-  진행: v0.17.0 build 8의 simulator 검증과 iPhone 17/iOS 27.0용 arm64 서명 경계를 준비했다. 잠금 상태로 최신 launch verifier exit 12.
+  진행: v0.18.0 build 9의 simulator 검증 준비와 iPhone 17/iOS 27.0용 arm64 서명 경계를 준비했다. 잠금 상태로 최신 launch verifier exit 12.
   실제 네이티브 GPS 수집과 Xcode 27/iOS 27 SDK 빌드는 아직 남아 있다.
   완료: 깨끗한 환경의 Debug/Release 빌드, iPhone 설치 및 실제 네이티브 위치 수집.
 - [ ] **C04 계측 시각·품질**: 측정/수신 시각 분리, 모름·정지·stale 구별.
@@ -40,7 +40,7 @@ Windows 브리지 대안이며 실물 호환은 아직 미검증이다.
   2026-09-24: [CSV 프로세스 격리](adr/0005-isolated-csv-recording.md), 제한 큐,
   저장 지연/실패 표시, 종료·취소·부모 연결 종료 회수를 구현했다. 로컬 서버 63개,
   웹 28개, 서비스 워커 8개, 네이티브 Core 26개 테스트 및 iOS 26.2 SDK 빌드 통과.
-  v2 SQLite 고착 종료 정책·설정 검증·실제 Windows 저장장치/콘솔 검증은 남아 있다.
+  현재 서버 회귀는 79개이며, release identity·Naver 오류 redaction·UDP source readiness/stale 경계를 추가 검증했다. v2 SQLite 고착 종료 정책·설정 검증·실제 Windows 저장장치/콘솔 검증은 남아 있다.
   완료: 손상 입력 후에도 정상 10Hz 지속, 재시작 전후 기록 보존.
 
 ## 2. P0 백그라운드와 전송 신뢰성
@@ -70,13 +70,13 @@ Windows 브리지 대안이며 실물 호환은 아직 미검증이다.
 - [ ] **C11 의존성**: 취약점 영향/수정/예외 사유, SBOM/라이선스 정리.
   완료: 배포 경로에 미해결 중대 취약점이 없고 호환 업그레이드 빌드·회귀 통과.
 - [ ] **C12 UI/PWA/지도**: 더미/실차 모드 명시, 가독성/분할 조절, 정적 캐시 업데이트, 네이버 동기화.
-  진행: v0.16.0에서 Live/Signals/Setup 제품화 UI와 편집기 삭제 확인/입력 개선을 적용했고, v0.17.0에서 raw CAN/CAN-FD 표시 계약을 연결했다. simulator 접근성·렌더 검증을 통과했다. 기존 native dashboard profile에 legacy grid migration, page/orientation lifecycle,
+  진행: v0.16.0에서 Live/Signals/Setup 제품화 UI와 편집기 삭제 확인/입력 개선을 적용했고, v0.18.0에서 raw CAN/CAN-FD 표시 계약과 native uplink metadata를 연결했다. simulator 접근성·렌더 검증을 통과했다. 기존 native dashboard profile에 legacy grid migration, page/orientation lifecycle,
   rect drag/resize, z-order, duplicate/delete/snap과 live page selection을 연결했다.
   numeric/circular/bar/LED/status/raw/bit/time-series/GPS widget의 stale/threshold
   표시도 연결했으며, 실제 MapKit track/provider와 전체 편집기 acceptance는 남아 있다.
   완료: 데스크톱/iPhone/iPad UI 및 오프라인/업데이트 실측. 맵 실패가 텔레메트리를 중단시키지 않음.
 - [ ] **C13 실차 adapter**: CANoe 브리지 우선 후보, CANape/MATLAB SDK·라이선스 확인.
-  진행: `CANRawFrame`의 Classical CAN/CAN-FD DLC·payload 검증과 v1 WS/CSV raw 보존 계약을 추가했다. `python-can.Message` 변환 seam과 CANoe UDP/TCP envelope 문서를 제공하지만, VN1640A live adapter와 신호 7ch의 원본 대조는 아직 미실행이다.
+  진행: `CANRawFrame`의 Classical CAN/CAN-FD DLC·payload 검증, v1 WS/CSV raw 보존 계약, `CAN_SOURCE=udp_json` CANoe/MATLAB bridge source와 readiness/stale health를 구현했다. `python-can.Message` 변환 seam과 CANoe UDP/TCP envelope를 제공하지만, VN1640A live adapter와 신호 7ch의 원본 대조는 아직 미실행이다.
   GPS API에 CAN 데이터를 넣도록 한 기존 문서 예시는 교정했으며 실제 CAN push 계약/수신기는 미구현.
 - [ ] **C14 내구성**: 1시간 CAN 10Hz + GPS, P95 표시 지연 250ms 목표, 메모리/디스크/배터리·발열 측정.
   완료: 무응답·증가형 메모리 누수·미설명 유실 없음.

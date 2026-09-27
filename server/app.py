@@ -21,6 +21,7 @@ from config import CLIENT_DIR, settings
 from recording import AsyncCsvRecorder
 from ingest import TelemetryJournal
 from reliable_api import router as reliable_router
+from release import load_release_metadata
 from signal_mapper import SignalMapper
 from stream import StreamPeer
 from uplink import MAX_UPLINK_BYTES, UplinkError, decode_uplink
@@ -39,6 +40,7 @@ recording_task: asyncio.Task[None] | None = None
 http_client: httpx.AsyncClient | None = None
 stream_state: dict[str, Any] = {"seq": 0, "drop": 0, "error": None, "last_frame": None}
 stream_ready: asyncio.Event | None = None
+release_metadata = load_release_metadata()
 
 
 def _fail_stream(code: str) -> None:
@@ -86,6 +88,11 @@ async def can_broadcast_loop() -> None:
         if stream_state["error"]:
             return
         next_tick += period
+
+        source = can_source
+        if source is None or not getattr(source, "is_ready", True) or getattr(source, "is_stale", False):
+            await _sleep_until(next_tick)
+            continue
 
         seq = stream_state["seq"]
         should_sim_drop = (
@@ -193,13 +200,16 @@ async def lifespan(application: FastAPI):
         recording_task = asyncio.create_task(_watch_recording())
         cleanup.push_async_callback(stop_task, recording_task)
         cleanup.push_async_callback(stop_task, broadcast_task)
-        readiness = asyncio.create_task(stream_ready.wait())
-        try:
-            await asyncio.wait((readiness, broadcast_task), return_when=asyncio.FIRST_COMPLETED)
-        finally:
-            readiness.cancel()
-            with suppress(asyncio.CancelledError):
-                await readiness
+        if getattr(can_source, "waits_for_first_frame", True):
+            readiness = asyncio.create_task(stream_ready.wait())
+            try:
+                await asyncio.wait((readiness, broadcast_task), return_when=asyncio.FIRST_COMPLETED)
+            finally:
+                readiness.cancel()
+                with suppress(asyncio.CancelledError):
+                    await readiness
+        else:
+            await asyncio.sleep(0)
         log.info("session=%s", logger.session_id)
         log.info("logs: %s", settings.log_dir)
         log.info("signals config: %s", settings.signals_config)
@@ -233,7 +243,7 @@ async def lifespan(application: FastAPI):
             application.state.ingest_token = None
 
 
-app = FastAPI(title="Telemetry Dashboard", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Telemetry Dashboard", version=release_metadata.version, lifespan=lifespan)
 if settings.allowed_origins:
     app.add_middleware(
         CORSMiddleware,
@@ -250,10 +260,15 @@ async def api_ping() -> JSONResponse:
     age = time.perf_counter() - last_frame if last_frame is not None else None
     error = stream_state["error"]
     recording = logger.snapshot() if logger else None
+    source_status = can_source.status() if can_source and hasattr(can_source, "status") else None
     if not error and recording and recording["state"] != "ready":
         error = "recording_failed" if recording["state"] == "failed" else "recording_delayed"
     if not error and (not logger or not broadcast_task or broadcast_task.done()):
         error = "stream_unavailable"
+    if not error and source_status and not source_status["ready"]:
+        error = "source_not_ready"
+    if not error and source_status and source_status["stale"]:
+        error = "source_stale"
     if not error and (age is None or age > max(1.0, 5.0 / settings.can_hz)):
         error = "stream_stale"
     payload = {
@@ -263,6 +278,7 @@ async def api_ping() -> JSONResponse:
         "stream": {"seq": stream_state["seq"], "drop": stream_state["drop"],
                    "last_frame_age_ms": round(age * 1000) if age is not None else None},
         "recording": recording,
+        "source": source_status,
     }
     if error:
         payload["error"] = {"code": error}
@@ -274,6 +290,7 @@ async def api_ping() -> JSONResponse:
 async def api_public_config() -> dict[str, Any]:
     return {
         "ok": True,
+        "release": release_metadata.public_dict(),
         "naver": {
             "clientId": settings.naver_maps_client_id,
             "enabled": bool(settings.naver_maps_client_id),
@@ -332,40 +349,23 @@ def _safe_json(response: httpx.Response) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
-def _extract_naver_error(payload: dict[str, Any] | None) -> str | None:
+def _has_naver_error(payload: dict[str, Any] | None) -> bool:
     if not isinstance(payload, dict):
-        return None
+        return False
 
     status = payload.get("status")
     if isinstance(status, dict):
         code = status.get("code")
         if code not in (None, 0, "0"):
-            name = status.get("name")
-            message = status.get("message")
-            parts = [p for p in [name, f"code={code}", message] if p]
-            if parts:
-                return ", ".join(str(p) for p in parts)
-            return f"code={code}"
+            return True
 
     error = payload.get("error")
     if isinstance(error, dict):
         code = error.get("errorCode") or error.get("code")
-        message = error.get("message")
-        if code or message:
-            return f"{code or 'error'}: {message or ''}".strip()
+        if code:
+            return True
 
-    return None
-
-
-def _short_error_detail(payload: dict[str, Any] | None, response: httpx.Response) -> str:
-    from_payload = _extract_naver_error(payload)
-    if from_payload:
-        return from_payload
-
-    text = response.text.strip().replace("\n", " ")
-    if text:
-        return text[:220]
-    return "no detail"
+    return False
 
 
 @app.get("/api/naver/reverse-geocode")
@@ -396,66 +396,52 @@ async def api_naver_reverse_geocode(lat: float, lon: float) -> dict[str, Any]:
         "https://naveropenapi.apigw.ntruss.com/map-reversegeocode/v2/gc",
     ]
 
-    last_error: str | None = None
-    auth_error: HTTPException | None = None
-    rate_limit_error: HTTPException | None = None
-    for url in hosts:
+    auth_status: int | None = None
+    rate_limited = False
+    for endpoint_index, url in enumerate(hosts, start=1):
         try:
             response = await http_client.get(url, params=params, headers=headers)
             payload = _safe_json(response)
             status_code = response.status_code
 
             if status_code in (401, 403):
-                detail = _short_error_detail(payload, response)
-                auth_error = HTTPException(
-                    status_code=status_code,
-                    detail=f"Naver reverse-geocode auth failed ({url}): {detail}",
-                )
-                last_error = f"{url} -> HTTP {status_code} ({detail})"
+                auth_status = status_code
+                log.warning("reverse-geocode auth failure endpoint=%d status=%d", endpoint_index, status_code)
                 continue
 
             if status_code == 429:
-                detail = _short_error_detail(payload, response)
-                rate_limit_error = HTTPException(
-                    status_code=429,
-                    detail=f"Naver reverse-geocode rate limited ({url}): {detail}",
-                )
-                last_error = f"{url} -> HTTP 429 ({detail})"
+                rate_limited = True
+                log.warning("reverse-geocode rate limited endpoint=%d", endpoint_index)
                 continue
 
             if status_code != 200:
-                detail = _short_error_detail(payload, response)
-                last_error = f"{url} -> HTTP {status_code} ({detail})"
-                log.warning("reverse-geocode fallback: %s", last_error)
+                log.warning("reverse-geocode upstream failure endpoint=%d status=%d", endpoint_index, status_code)
                 continue
 
             if not payload:
-                last_error = f"{url} -> invalid JSON payload"
-                log.warning("reverse-geocode invalid payload: %s", last_error)
+                log.warning("reverse-geocode invalid JSON endpoint=%d", endpoint_index)
                 continue
 
-            api_error = _extract_naver_error(payload)
-            if api_error:
-                last_error = f"{url} -> API error ({api_error})"
-                log.warning("reverse-geocode API error: %s", last_error)
+            if _has_naver_error(payload):
+                log.warning("reverse-geocode API error endpoint=%d", endpoint_index)
                 continue
 
             address = _format_naver_address(payload)
             return {
                 "ok": True,
                 "address": address,
-                "raw": payload if address is None else None,
+                # Do not reflect an upstream provider payload to the browser.
+                "raw": None,
             }
         except Exception as exc:
-            last_error = str(exc)
-            log.warning("reverse-geocode exception (%s): %s", url, exc)
+            log.warning("reverse-geocode exception endpoint=%d type=%s", endpoint_index, type(exc).__name__)
 
-    if auth_error:
-        raise auth_error
-    if rate_limit_error:
-        raise rate_limit_error
+    if auth_status is not None:
+        raise HTTPException(status_code=auth_status, detail="reverse_geocode_auth_failed")
+    if rate_limited:
+        raise HTTPException(status_code=429, detail="reverse_geocode_rate_limited")
 
-    raise HTTPException(status_code=502, detail=f"Naver reverse-geocode failed: {last_error}")
+    raise HTTPException(status_code=502, detail="reverse_geocode_unavailable")
 
 
 async def _record_uplink(kind: str, row: dict[str, Any]) -> None:
