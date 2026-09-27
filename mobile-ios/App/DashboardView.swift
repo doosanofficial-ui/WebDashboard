@@ -335,6 +335,7 @@ private struct SetupView: View {
         }
         .padding(TelemetryTheme.Spacing.medium)
         .background(TelemetryTheme.surface, in: RoundedRectangle(cornerRadius: TelemetryTheme.Radius.medium, style: .continuous))
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("setup-developer-card")
     }
 }

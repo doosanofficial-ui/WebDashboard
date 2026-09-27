@@ -181,6 +181,16 @@ final class TelemetryUITests: XCTestCase {
         XCTAssertTrue(app.buttons["save-ble-observation"].waitForExistence(timeout: 5))
     }
 
+    func testBLEScanControlExposesStableAutomationIdentifier() {
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
+        app.tabBars.buttons["Setup"].tap()
+        app.buttons["Developer / diagnostics"].tap()
+        app.buttons["BLE discovery (read-only)"].tap()
+        XCTAssertTrue(app.buttons["scan-ble-adapters"].waitForExistence(timeout: 5))
+    }
+
     func testMeasurementExportControlIsVisible() {
         let app = XCUIApplication()
         app.launch()
