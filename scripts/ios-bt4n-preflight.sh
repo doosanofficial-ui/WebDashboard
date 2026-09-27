@@ -29,7 +29,7 @@ device_output=""
 if command -v xcrun >/dev/null 2>&1; then
   device_output="$(xcrun devicectl list devices 2>&1 || true)"
 fi
-if printf '%s\n' "$device_output" | grep -Eq 'iPhone .*available .*iPhone 17 \('; then
+if printf '%s\n' "$device_output" | grep -Eq 'iPhone[[:space:]].*(available|connected).*iPhone 17[[:space:]]*\('; then
   report "IPHONE17_CONNECTED" "PASS" "physical device listed by devicectl"
 else
   report "IPHONE17_CONNECTED" "BLOCKED" "no physical iPhone 17 in devicectl inventory"

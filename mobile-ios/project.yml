@@ -22,7 +22,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: local.webdashboard.Telemetry
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 548HKZYKDP
-        TARGETED_DEVICE_FAMILY: '1,2'
+        TARGETED_DEVICE_FAMILY: '1'
     info:
       path: App/Info.plist
       properties:
