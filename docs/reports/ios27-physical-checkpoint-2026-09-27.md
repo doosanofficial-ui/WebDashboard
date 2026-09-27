@@ -1,8 +1,8 @@
 # iOS 27 Physical Telemetry Checkpoint
 
 Date: 2026-09-27
-Current main: `4f3b99a`
-App version/build: `0.21.0 (14)`
+Current main: `60e0e00`
+App version/build: `0.21.0 (15)`
 Scope: iPhone, native iOS, BLE/ELM327, Vehicle CAN, Recording/Export, CarPlay
 Out of scope: iPad, Android
 
@@ -45,6 +45,7 @@ evidence, not an iOS 27 SDK build claim.
 | Vehicle raw CAN | BLOCKED: PHYSICAL HARDWARE REQUIRED | No ELM327-to-vehicle capture |
 | Raw-to-decode-to-dashboard recording E2E | BLOCKED: PHYSICAL HARDWARE REQUIRED | Real frame and GPS are required |
 | One-hour endurance | NOT TESTED | Depends on physical E2E |
+| CarPlay scene manifest wiring | PASS (software) | Built `Info.plist` contains `CPTemplateApplicationSceneSessionRoleApplication`, `CPTemplateApplicationScene`, and `Telemetry.CarPlaySceneDelegate`; build 15 physical test passed in `/tmp/telemetry-ios-carplay-manifest-build15.i5E1hA/result.xcresult` |
 | CarPlay compile | PASS | CarPlay sources compiled in the native build |
 | CarPlay simulator rendering | NOT TESTED | No CarPlay head-unit simulator/runtime was present in the installed Xcode or `simctl` device inventory; iPhone simulator rendering is not a CarPlay runtime result |
 | CarPlay entitlement approval | NOT TESTED | No approval evidence in this checkpoint |
