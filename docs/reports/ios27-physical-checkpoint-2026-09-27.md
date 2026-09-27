@@ -29,6 +29,8 @@ evidence, not an iOS 27 SDK build claim.
 | Physical XCUITest runner | PASS | Existing UI test plus session-control test passed on iPhone 17; `/tmp/telemetry-ios-physical-ui-session4.CRCSoc` |
 | Physical REC/GPS transition | PASS (foreground) | REC and GPS state labels were observed; SpringBoard `Change to Always Allow` was handled by the test; same session evidence |
 | Physical session UI screenshot | PASS | XCUITest attachment `/tmp/telemetry-ios-physical-ui-attachments.cMmlG8/14676355-EFAB-470C-99D0-D473716A3638.png` visibly shows `RECORDING` and `GPS ON`; CAN remains honestly `DISCONNECTED/STALE` without vehicle input |
+| Physical SQLite GPS recording | PASS (foreground) | `devicectl` app-container copy `/tmp/telemetry-ios-physical-data.Jsd74N`; 16 `LOCATION` rows over 172.579 s preserve original/received epoch, monotonic time, coordinates, altitude, speed, course, and horizontal/vertical accuracy |
+| Physical restart recovery | PASS | After relaunch, `/tmp/telemetry-ios-physical-data-recovery.3OJQ4h` shows `recording_interrupted` and `ended_at` for the previously open session; outbox remains durable with 18 pending events |
 | iOS 27 SDK | BLOCKED | Mac has Xcode 26.3 / iOS 26.2 SDK; `iphoneos27` is not installed |
 | P1 GPS storage contract | PASS (software) | `LocationSample` preserves source timestamp, app epoch/monotonic receive times, coordinates, altitude, speed, course, and horizontal/vertical accuracy; `TelemetryStore` and `MeasurementRecorder` retain the same sample |
 | Foreground GPS/recording | NOT TESTED | A physical measurement session has not been started |
