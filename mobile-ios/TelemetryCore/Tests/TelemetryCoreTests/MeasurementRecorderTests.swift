@@ -87,4 +87,23 @@ final class MeasurementRecorderTests: XCTestCase {
         XCTAssertTrue(row.payloadJSON.contains("37.5"))
         XCTAssertTrue(row.payloadJSON.contains("127"))
     }
+
+    func testRecoveryClosesOpenSessionAndAddsInterruptionEvent() async throws {
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("measurement-recovery-(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: path) }
+
+        let recorder = try MeasurementRecorder(path: path, sessionID: "open-session", startedAt: 90)
+        try await recorder.append(.can(frame: frame()))
+
+        XCTAssertEqual(try MeasurementRecorder.recoverUnfinishedSessions(path: path, endedAt: 200), 1)
+        XCTAssertEqual(try MeasurementRecorder.recoverUnfinishedSessions(path: path, endedAt: 201), 0)
+
+        let reopened = try MeasurementRecorder(path: path, sessionID: "open-session", startedAt: 90)
+        let session = try await reopened.exportSession()
+        XCTAssertEqual(session.endedAt, 200)
+        let rows = try await reopened.export()
+        XCTAssertEqual(rows.map(\.kind), ["CAN", "SYSTEM"])
+        XCTAssertTrue(rows.last?.payloadJSON.contains("recording_interrupted") == true)
+    }
 }

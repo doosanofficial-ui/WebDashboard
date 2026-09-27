@@ -107,6 +107,68 @@ public actor MeasurementRecorder {
         guard sqlite3_step(insert) == SQLITE_DONE else { throw TelemetryError.storage }
     }
 
+    /// Closes sessions left open by a crash or force-quit and records the
+    /// recovery boundary inside each affected session. It is safe to call on
+    /// every application launch because completed sessions are ignored.
+    public static func recoverUnfinishedSessions(path: URL, endedAt: Double) throws -> Int {
+        guard endedAt.isFinite, FileManager.default.fileExists(atPath: path.path) else { return 0 }
+        var connection: OpaquePointer?
+        guard sqlite3_open(path.path, &connection) == SQLITE_OK, let connection else {
+            if let connection { sqlite3_close(connection) }
+            throw TelemetryError.storage
+        }
+        defer { sqlite3_close(connection) }
+        sqlite3_busy_timeout(connection, 5_000)
+        guard sqlite3_exec(connection, "BEGIN IMMEDIATE", nil, nil, nil) == SQLITE_OK else {
+            throw TelemetryError.storage
+        }
+        do {
+            let query = try Self.prepare(connection,
+                "SELECT session_id FROM measurement_sessions WHERE ended_at IS NULL ORDER BY started_at")
+            defer { sqlite3_finalize(query) }
+            var sessionIDs: [String] = []
+            while true {
+                let result = sqlite3_step(query)
+                if result == SQLITE_DONE { break }
+                guard result == SQLITE_ROW,
+                      let sessionText = sqlite3_column_text(query, 0) else {
+                    throw TelemetryError.storage
+                }
+                sessionIDs.append(String(cString: sessionText))
+            }
+
+            let monotonicNanos = DispatchTime.now().uptimeNanoseconds
+            for sessionID in sessionIDs {
+                let insert = try Self.prepare(connection, """
+                    INSERT INTO measurements(
+                      session_id, kind, source_timestamp, received_at,
+                      received_monotonic, payload_json
+                    ) VALUES (?, 'SYSTEM', ?, ?, ?, '{"name":"recording_interrupted"}')
+                    """)
+                defer { sqlite3_finalize(insert) }
+                try Self.bind(sessionID, to: insert, index: 1)
+                sqlite3_bind_double(insert, 2, endedAt)
+                sqlite3_bind_double(insert, 3, endedAt)
+                sqlite3_bind_int64(insert, 4, Int64(bitPattern: monotonicNanos))
+                guard sqlite3_step(insert) == SQLITE_DONE else { throw TelemetryError.storage }
+
+                let update = try Self.prepare(connection,
+                    "UPDATE measurement_sessions SET ended_at=? WHERE session_id=? AND ended_at IS NULL")
+                defer { sqlite3_finalize(update) }
+                sqlite3_bind_double(update, 1, endedAt)
+                try Self.bind(sessionID, to: update, index: 2)
+                guard sqlite3_step(update) == SQLITE_DONE else { throw TelemetryError.storage }
+            }
+            guard sqlite3_exec(connection, "COMMIT", nil, nil, nil) == SQLITE_OK else {
+                throw TelemetryError.storage
+            }
+            return sessionIDs.count
+        } catch {
+            sqlite3_exec(connection, "ROLLBACK", nil, nil, nil)
+            throw error
+        }
+    }
+
     deinit { sqlite3_close(db) }
 
     public func append(_ event: MeasurementEvent) throws {

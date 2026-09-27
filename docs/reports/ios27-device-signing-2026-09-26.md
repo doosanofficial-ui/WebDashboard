@@ -24,8 +24,8 @@ compatibility or release approval.
 - Previous feature build: 0.9.0, build 1
 - Previous feature build: 0.10.0, build 1
 - Current feature build: 0.10.1, build 1
-- Previous feature build: 0.11.0, build 2
-- Current feature build: 0.12.0, build 3
+- Previous feature build: 0.12.0, build 3
+- Current feature build: 0.13.0, build 4
 
 ## Evidence
 
@@ -239,6 +239,17 @@ then built from the current source and installed:
 - Launch: **PASS**, `verify_device.sh` exit `0`
 - Process: `Telemetry.app/Telemetry`, observed after launch and again after 5 seconds
 - Verification artifacts: `/tmp/telemetry-ios-device-v0120-final.OXSvAw/device-run/`
+
+The `0.13.0` build (build `4`) adds recovery of unfinished SQLite sessions with
+an explicit `recording_interrupted` event:
+
+- Build artifact: `/tmp/telemetry-ios-device-v0130-final.U5WFT9`
+- Bundle: `local.webdashboard.Telemetry`, version `0.13.0`, build `4`
+- SDK boundary: Xcode 26.3 / iOS 26.2 SDK against iOS 27.0 device
+- Install: **PASS**
+- Launch: **PASS**, `verify_device.sh` exit `0`
+- Process: `Telemetry.app/Telemetry`, observed after launch and again after 5 seconds
+- Verification artifacts: `/tmp/telemetry-ios-device-v0130-final.U5WFT9/device-run/`
 
 ## Limitations
 

@@ -2,7 +2,7 @@
 
 Checked: 2026-09-26; engineering follow-up: 2026-09-27. Branch: `codex/native-telemetry-productization`.
 This is an evidence checkpoint, not a release approval.
-Current native development version: `0.12.0` (build `3`).
+Current native development version: `0.13.0` (build `4`).
 
 ## Implemented in this checkpoint
 
@@ -90,6 +90,8 @@ Current native development version: `0.12.0` (build `3`).
   application termination attempts to close the active measurement session.
 - Native measurement export now includes a versioned JSON session envelope and CSV
   output with session metadata and ordered raw/decoded/location/system rows.
+- On launch, unfinished SQLite sessions are closed with a durable
+  `recording_interrupted` system event before a new recording can begin.
 - Adapter lifecycle transitions are normalized into stable system events in the
   local recorder for post-run diagnosis.
 - Dashboard Editor can create each supported widget type directly, including GPS,
@@ -122,12 +124,12 @@ Current native development version: `0.12.0` (build `3`).
 
 | Area | Result | Evidence |
 | --- | --- | --- |
-| Swift Core tests | PASS, 84 tests | `mobile-ios/scripts/verify.sh build`; `0.12.0` artifact `/tmp/telemetry-ios-verify.QfG0Bu` |
+| Swift Core tests | PASS, 85 tests | `mobile-ios/scripts/verify.sh build`; `0.13.0` artifact `/tmp/telemetry-ios-verify.GWBst8` |
 | Server CAN contract tests | PASS, 3 tests | `ServerCANFrameTests` in the same artifact |
 | CAN pipeline tests | PASS, 3 tests | `CANSignalPipelineTests` in the same artifact |
 | End-to-end CAN measurement pipeline | PASS, 1 test | `CANMeasurementPipelineTests` covers MockCANTransport -> ELM327Session -> Store -> SQLite |
 | ELM327 DLC/recovery tests | PASS, 8 session tests | `ELM327SessionTests` in the same artifact, including zero-DLC frames |
-| Native app build after hardening | PASS | XcodeGen-generated `0.12.0 (3)` project, Xcode 26.3/iOS 26.2 Simulator SDK; `/tmp/telemetry-ios-verify.QfG0Bu` |
+| Native app build after hardening | PASS | XcodeGen-generated `0.13.0 (4)` project, Xcode 26.3/iOS 26.2 Simulator SDK; `/tmp/telemetry-ios-verify.GWBst8` |
 | MapKit track widget compile | PASS | Native target includes `MapKit`, `MapPolyline`, and bounded GPS track model; runtime GPS fix not run |
 | BLE discovery probe compile | PASS | Native target compile; physical BT4N GATT observation not run |
 | Current cockpit visual smoke | PASS (simulator render) | `0.12.0` iPhone 17 simulator install/launch and screenshot: `docs/reports/evidence/swiftui-cockpit-v0120-2026-09-27.png`; disconnected/stale, ready-to-record, RTT and ping-failure states render safely |
@@ -149,6 +151,9 @@ Current native development version: `0.12.0` (build `3`).
 | iPhone 17 physical build `0.12.0 (3)` | PASS (SDK boundary) | Xcode 26.3/iOS 26.2 SDK, artifact `/tmp/telemetry-ios-device-v0120-final.OXSvAw` |
 | iPhone 17 physical install `0.12.0 (3)` | PASS | `devicectl` installed `local.webdashboard.Telemetry`, version `0.12.0`, build `3` |
 | iPhone 17 physical launch `0.12.0 (3)` | PASS | `verify_device.sh` exit `0`; process remained after 5 seconds; logs `/tmp/telemetry-ios-device-v0120-final.OXSvAw/device-run` |
+| iPhone 17 physical build `0.13.0 (4)` | PASS (SDK boundary) | Xcode 26.3/iOS 26.2 SDK, artifact `/tmp/telemetry-ios-device-v0130-final.U5WFT9` |
+| iPhone 17 physical install `0.13.0 (4)` | PASS | `devicectl` installed `local.webdashboard.Telemetry`, version `0.13.0`, build `4` |
+| iPhone 17 physical launch `0.13.0 (4)` | PASS | `verify_device.sh` exit `0`; process remained after 5 seconds; logs `/tmp/telemetry-ios-device-v0130-final.U5WFT9/device-run` |
 | Software ELM vertical slice | PASS | Direct simulator demo adapter start/monitor/stop; not a BT4N or vehicle result |
 | CarPlay external display host | PASS (display only) | Simulator `I/O > External Displays > CarPlay` opened the default CarPlay home screen; app rendering was not claimed |
 | BT4N live profile | NOT RUN | No observed GATT/serial profile or firmware capture |

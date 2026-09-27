@@ -35,6 +35,8 @@ validation and is not a released product. App Store/CarPlay approval is not impl
 - Local recording starts idle and is explicitly opened by `REC`; `STOP` closes the
   session and leaves it exportable. The cockpit exposes malformed server frames,
   forward sequence gaps, and the current reconnect attempt.
+- On launch, any unfinished SQLite session is closed with a durable
+  `recording_interrupted` event before a new session is allowed to start.
 
 ## OBD work in progress
 
@@ -106,7 +108,7 @@ This target update does not raise the app's minimum deployment version or consti
 a release.
 
 Generate/open Telemetry.xcodeproj with XcodeGen, select the verified Apple team,
-then build for the connected device. The current native development version is 0.12.0 while
+then build for the connected device. The current native development version is 0.13.0 while
 Git integration and release verification are incomplete. Use the original source
 path only if it has no NBSP; otherwise use the verification snapshot for a trial build
 and make edits back in the canonical source.

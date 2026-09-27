@@ -154,8 +154,18 @@ final class TelemetryModel: NSObject {
             }
             let box = try DurableOutbox(path: root.appendingPathComponent("outbox.sqlite3"))
             outbox = box
-            measurementDBURL = root.appendingPathComponent("measurements.sqlite3")
-            localRecordingStatus = "Ready to record"
+            let databaseURL = root.appendingPathComponent("measurements.sqlite3")
+            measurementDBURL = databaseURL
+            let recovered = try MeasurementRecorder.recoverUnfinishedSessions(
+                path: databaseURL, endedAt: Date().timeIntervalSince1970
+            )
+            if recovered == 0 {
+                localRecordingStatus = "Ready to record"
+            } else {
+                let suffix = recovered == 1 ? "" : "s"
+                localRecordingStatus = "Recovered " + String(recovered)
+                    + " interrupted session" + suffix
+            }
             publishCarPlayProjection()
             uploader = try BackgroundUploader(outbox: box, clientID: clientID,
                 directory: root.appendingPathComponent("uploads"))
