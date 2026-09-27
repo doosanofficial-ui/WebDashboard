@@ -265,6 +265,15 @@ final class TelemetryModel: NSObject {
                             self.clientDrops = self.frameSequenceTracker.dropCount
                             self.frame = frame; self.lastFrameAt = Date(); self.connection = "Connected"
                             self.canSource = "Server"
+                            if let raw = frame.raw {
+                                let idWidth = raw.isExtended ? 8 : 3
+                                let identifier = String(format: "0x%0*X", idWidth, raw.arbitrationID)
+                                let bytes = raw.data.map { String(format: "%02X", $0) }.joined(separator: " ")
+                                let fd = raw.isFD ? "  FD DLC\(raw.dlc) \(raw.bitrateSwitch ? "BRS" : "")" : ""
+                                self.rawCANText = "\(identifier)  \(bytes)\(fd)"
+                            } else {
+                                self.rawCANText = "-"
+                            }
                             self.updateDashboardConditions(values: frame.sig, now: frame.t)
                             if self.connectionStableSince == nil {
                                 self.connectionStableSince = Date()

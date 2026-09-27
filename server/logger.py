@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from contextlib import ExitStack
 from datetime import datetime
 from pathlib import Path
@@ -45,6 +46,7 @@ class SessionCsvLogger:
                 "yaw",
                 "ax",
                 "ay",
+                "raw_json",
             ],
         )
         self._gps_file, self._gps_writer = self._open_writer(
@@ -92,6 +94,7 @@ class SessionCsvLogger:
                     sig.get("yaw"),
                     sig.get("ax"),
                     sig.get("ay"),
+                    csv_cell(json.dumps(frame.get("raw"), separators=(",", ":"), ensure_ascii=False) if frame.get("raw") is not None else ""),
                 ]
             )
             self._can_file.flush()

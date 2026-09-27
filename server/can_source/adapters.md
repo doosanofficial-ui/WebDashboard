@@ -6,6 +6,37 @@ MVP는 `DummyCANSource`만 포함합니다. 실차 신호 연동은 `CANSource` 
 - 파일: `server/can_source/base.py`
 - 계약: `next_frame() -> dict[str, float]`
 - 반환 키는 기본적으로 `ws_fl/ws_fr/ws_rl/ws_rr/yaw/ax/ay`를 권장합니다.
+- 원본 프레임을 제공하는 adapter는 선택적으로 `next_raw_frame() -> CANRawFrame | None`을 구현합니다.
+- `CANRawFrame`은 `server/can_source/frame.py`에 있으며, decoded `sig`와 분리된
+  `raw` envelope로 WS와 CAN CSV에 보존됩니다. 기존 v1 `sig` 소비자는 그대로 동작합니다.
+
+## Raw CAN/CAN-FD bridge envelope
+
+서버가 송출하는 `v: 1` CAN snapshot에 `raw`가 있으면 다음 필드를 사용합니다.
+
+```json
+{
+  "t": 1730000001.456,
+  "channel": "CAN1",
+  "source": "canoe",
+  "arbitration_id": 530,
+  "extended": false,
+  "fd": true,
+  "brs": true,
+  "esi": false,
+  "dlc": 9,
+  "data_length": 12,
+  "data": [0, 17, 34, 51, 68, 85, 102, 119, 136, 153, 170, 187]
+}
+```
+
+`fd=false`이면 DLC 0..8은 payload byte 수와 동일합니다. `fd=true`이면 DLC
+9..15는 각각 12/16/20/24/32/48/64 bytes로 매핑하며 DLC를 byte 수로
+취급하지 않습니다. `brs`와 `esi`는 Classical CAN에서 허용하지 않습니다.
+Python에서는 실제 `python-can.Message`를 `CANRawFrame.from_python_can()`으로
+변환할 수 있지만, `python-can`은 Dummy MVP의 필수 의존성이 아닙니다. Vector
+Windows transport를 사용하는 별도 adapter가 dependency를 선택적으로 추가해야
+합니다.
 
 ## 확장 옵션
 
@@ -15,6 +46,8 @@ MVP는 `DummyCANSource`만 포함합니다. 실차 신호 연동은 `CANSource` 
 - `CANSource.next_frame()`는 캐시를 읽어 반환
 - 장점: 실시간성 좋고 구조 단순
 - 리스크: CANoe 프로젝트마다 export 설정 재작업 필요
+- raw bridge를 사용할 때는 위 envelope의 `raw`와 decoded `sig`를 같은 datagram에
+  넣고, 수신 adapter가 identifier/DLC/payload 검증을 통과시킨 경우에만 publish합니다.
 
 ### B) CANape measurement export/DAQ external feed -> server adapter
 - CANape에서 외부 송신(가능한 plugin/API/export) 경로를 사용해 신호 전달
@@ -43,6 +76,8 @@ MVP는 `DummyCANSource`만 포함합니다. 실차 신호 연동은 `CANSource` 
 - 타임스탬프 기준(UTC epoch vs monotonic) 통일 여부
 - 단위/스케일(km/h, m/s, deg/s, m/s^2) 합의 여부
 - 10Hz 이상 송신 시 CPU/지연 측정 결과
+- Classical CAN/CAN-FD 여부, arbitration ID 형식(11/29-bit), CAN-FD data bitrate/BRS
+- raw frame timestamp가 bus timestamp인지 adapter receive timestamp인지
 
 ## E) NANICAR ELM327-BT4N -> native iOS / Windows bridge
 

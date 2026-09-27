@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .base import CANSource
 from .dummy import DummyCANSource
+from .frame import CANRawFrame
 
 
 def create_can_source(kind: str) -> CANSource:
@@ -15,4 +16,4 @@ def create_can_source(kind: str) -> CANSource:
     )
 
 
-__all__ = ["CANSource", "DummyCANSource", "create_can_source"]
+__all__ = ["CANRawFrame", "CANSource", "DummyCANSource", "create_can_source"]

@@ -43,6 +43,12 @@ python app.py
 - 업링크 수신: GPS 프레임, MARK 이벤트 (WS 또는 HTTP)
 - CSV 세션 로그: `server/logs/`
 
+CAN source가 `next_raw_frame()`을 제공하면 같은 v1 CAN snapshot에 선택적인
+`raw` envelope가 추가됩니다. Classical CAN의 DLC 0..8과 CAN-FD DLC
+9..15(12/16/20/24/32/48/64 bytes)를 엄격히 검증하고, `raw_json` CSV 열에
+원본 메타데이터를 보존합니다. `python-can`/Vector/CANoe 연결은 core 의존성이
+아니며 [adapter extension guide](can_source/adapters.md)의 별도 브리지 단계입니다.
+
 세션 ID는 `YYYYMMDD_HHMMSS_<UUID>`입니다. CSV는 exclusive create로 열어
 빠른 재시작이나 명시적 ID 충돌 시 기존 파일을 덮어쓰지 않습니다.
 뷰어별 CAN 전송은 최신 대기 프레임 1개만 유지하고, 전송이 1초 이상 막히면

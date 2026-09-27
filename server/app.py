@@ -98,6 +98,7 @@ async def can_broadcast_loop() -> None:
             stream_state["drop"] += 1
 
         try:
+            raw_frame = getattr(can_source, "next_raw_frame", lambda: None)()
             raw_sig = can_source.next_frame()
             # Validate before clamping: max(0, NaN) can otherwise become a fake zero.
             if not isinstance(raw_sig, dict) or any(
@@ -121,6 +122,8 @@ async def can_broadcast_loop() -> None:
                 "drop": stream_state["drop"],
             },
         }
+        if raw_frame is not None:
+            frame["raw"] = raw_frame.to_dict()
 
         try:
             logger.log_can(frame)
@@ -171,6 +174,7 @@ async def lifespan(application: FastAPI):
 
     try:
         can_source = create_can_source(settings.can_source)
+        cleanup.callback(getattr(can_source, "close", lambda: None))
         signal_mapper = SignalMapper(settings.signals_config)
         logger = AsyncCsvRecorder(settings.log_dir)
         cleanup.push_async_callback(close_recording, logger)

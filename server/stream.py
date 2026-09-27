@@ -55,7 +55,11 @@ class StreamPeer:
             else:
                 self._wake.clear()
                 continue
-            await asyncio.wait_for(self.socket.send_json(message), self.send_timeout)
+            try:
+                await asyncio.wait_for(self.socket.send_json(message), self.send_timeout)
+            except asyncio.TimeoutError as exc:
+                # Normalize the timeout across supported Python runtimes.
+                raise TimeoutError("stream_send_timeout") from exc
 
     async def run(self, receive: Callable[[], Awaitable[None]]) -> None:
         writer = asyncio.create_task(self._send())
