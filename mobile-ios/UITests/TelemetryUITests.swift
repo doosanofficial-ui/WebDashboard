@@ -42,6 +42,52 @@ final class TelemetryUITests: XCTestCase {
         XCTAssertTrue(app.buttons["toggle-recording"].waitForExistence(timeout: 5))
     }
 
+    func testSessionControlsCanStartRecordingAndGPS() {
+        let app = XCUIApplication()
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let locationPermission = addUIInterruptionMonitor(withDescription: "Location permission") { alert in
+            for label in ["Allow While Using App", "Allow Once", "Change to Always Allow", "Allow"] {
+                let button = alert.buttons[label]
+                if button.exists {
+                    button.tap()
+                    return true
+                }
+            }
+            return false
+        }
+        defer { _ = locationPermission }
+
+        let existingAlwaysPermission = springboard.buttons["Change to Always Allow"]
+        if existingAlwaysPermission.waitForExistence(timeout: 2) {
+            existingAlwaysPermission.tap()
+        }
+
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
+
+        let recording = app.buttons["toggle-recording"]
+        XCTAssertTrue(recording.waitForExistence(timeout: 5))
+        recording.tap()
+        let recordingState = app.staticTexts.matching(NSPredicate(format: "label == %@", "RECORDING")).firstMatch
+        XCTAssertTrue(recordingState.waitForExistence(timeout: 5))
+
+        let gps = app.buttons["toggle-gps"]
+        XCTAssertTrue(gps.waitForExistence(timeout: 5))
+        gps.tap()
+        app.tap()
+        let newAlwaysPermission = springboard.buttons["Change to Always Allow"]
+        if newAlwaysPermission.waitForExistence(timeout: 5) {
+            newAlwaysPermission.tap()
+        }
+        let gpsState = app.staticTexts.matching(NSPredicate(format: "label == %@", "GPS ON")).firstMatch
+        XCTAssertTrue(gpsState.waitForExistence(timeout: 15))
+
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Physical session controls started"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
     func testCockpitAnchorsAreVisible() {
         let app = XCUIApplication()
         app.launch()

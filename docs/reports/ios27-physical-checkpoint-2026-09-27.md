@@ -26,8 +26,8 @@ evidence, not an iOS 27 SDK build claim.
 | Physical iPhone build | PASS | iPhone 17, iOS 27.0 build 24A437; `/tmp/telemetry-ios-device-build.e8d1Bm` |
 | Physical iPhone install | PASS | `devicectl` installed `local.webdashboard.Telemetry`; `/tmp/telemetry-ios-device-run.sS9S1r` |
 | Physical iPhone launch | PASS | `devicectl` launched app and process was observed; same run evidence |
-| Physical XCUITest runner | PASS (partial) | Existing `testRecordingToggleIsVisibleInLiveCockpit` passed on iPhone 17; `/tmp/telemetry-ios-physical-ui.LyLqYL` |
-| Physical REC/GPS transition | FAIL / BLOCKED | REC state assertion passed and GPS tap was issued, but `GPS ON` was not observed; `/tmp/telemetry-ios-physical-ui-session.xFbVda`; location authorization state/alert requires diagnosis |
+| Physical XCUITest runner | PASS | Existing UI test plus session-control test passed on iPhone 17; `/tmp/telemetry-ios-physical-ui-session4.CRCSoc` |
+| Physical REC/GPS transition | PASS (foreground) | REC and GPS state labels were observed; SpringBoard `Change to Always Allow` was handled by the test; same session evidence |
 | iOS 27 SDK | BLOCKED | Mac has Xcode 26.3 / iOS 26.2 SDK; `iphoneos27` is not installed |
 | P1 GPS storage contract | PASS (software) | `LocationSample` preserves source timestamp, app epoch/monotonic receive times, coordinates, altitude, speed, course, and horizontal/vertical accuracy; `TelemetryStore` and `MeasurementRecorder` retain the same sample |
 | Foreground GPS/recording | NOT TESTED | A physical measurement session has not been started |
@@ -55,6 +55,10 @@ evidence, not an iOS 27 SDK build claim.
 - `LocationService` starts Core Location with automotive navigation accuracy,
   disables automatic pausing, enables background updates, and records invalid
   horizontal fixes as unavailable rather than inventing a coordinate.
+- The physical session-control test uses label-based SwiftUI assertions and a
+  SpringBoard permission bridge. An earlier attempt failed because the
+  permission alert remained foreground and the test queried a label as an
+  identifier; the corrected test passed on the physical iPhone.
 
 ## Next Automatic Action
 
