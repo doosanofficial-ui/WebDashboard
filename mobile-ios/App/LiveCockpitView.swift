@@ -260,24 +260,42 @@ struct LiveCockpitView: View {
                 Label(model.localRecordingEnabled ? "STOP" : "REC",
                       systemImage: model.localRecordingEnabled ? "stop.fill" : "record.circle")
                     .font(.headline.weight(.bold))
-                    .frame(minWidth: 72)
+                    .frame(minWidth: 60)
                     .padding(.vertical, 13)
             }
             .buttonStyle(.bordered)
             .tint(model.localRecordingEnabled ? TelemetryTheme.critical : TelemetryTheme.valid)
             .accessibilityIdentifier("toggle-recording")
 
+            Button {
+                if model.collecting {
+                    model.stopLocation()
+                } else {
+                    model.startLocation()
+                }
+            } label: {
+                Image(systemName: model.collecting ? "location.fill" : "location")
+                    .font(.headline.weight(.bold))
+                    .frame(width: 36)
+                    .padding(.vertical, 13)
+            }
+            .buttonStyle(.bordered)
+            .tint(model.collecting ? TelemetryTheme.accent : TelemetryTheme.mutedText)
+            .disabled(model.storageStatus != nil)
+            .accessibilityLabel(model.collecting ? "Stop GPS" : "Start GPS")
+            .accessibilityIdentifier("toggle-gps")
+
             VStack(alignment: .leading, spacing: 3) {
-                Text(model.localRecordingEnabled ? "RECORDING" : "REC OFF")
+                Text(model.localRecordingEnabled ? "RECORDING" : (model.collecting ? "GPS ON" : "REC OFF"))
                     .font(.caption.weight(.bold))
                     .tracking(0.8)
-                    .foregroundStyle(TelemetryTheme.valid)
-                Text(model.lastMarkAt.map { "Last mark " + $0.formatted(date: .omitted, time: .standard) } ?? "No mark in session")
+                    .foregroundStyle(model.collecting ? TelemetryTheme.accent : TelemetryTheme.valid)
+                Text(model.lastMarkAt.map { "Last mark " + $0.formatted(date: .omitted, time: .standard) } ?? model.locationStatus)
                     .font(.caption2)
                     .foregroundStyle(TelemetryTheme.mutedText)
                     .lineLimit(1)
             }
-            .frame(width: 132, alignment: .leading)
+            .frame(width: 104, alignment: .leading)
         }
         .padding(.horizontal, TelemetryTheme.Spacing.small)
         .padding(.vertical, TelemetryTheme.Spacing.xSmall)
@@ -289,7 +307,6 @@ struct LiveCockpitView: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("session-mark")
     }
-
 
     @ViewBuilder
     private func profileSection(at now: Date) -> some View {

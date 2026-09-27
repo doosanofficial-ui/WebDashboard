@@ -267,3 +267,24 @@ Official references:
 - https://developer.apple.com/documentation/xcode/running-your-app-on-simulated-or-physical-devices
 - https://developer.apple.com/help/account/basics/about-your-developer-account
 - https://developer.apple.com/support/compare-memberships/
+
+
+## Physical device follow-up (2026-09-27)
+
+The device became available again and the signed 0.14.0 build was verified on
+the target hardware:
+
+- Device: iPhone 17 / iOS 27.0 build 24A437
+- CoreDevice: 2C0892EB-662D-5D9A-A908-96EA723DEEB4
+- Bundle: local.webdashboard.Telemetry, version 0.14.0, build 5
+- Artifact: /tmp/telemetry-ios-device-v014-any/Build/Products/Debug-iphoneos/Telemetry.app
+- Standard verifier: exit 0
+- Install: PASS
+- Launch: PASS
+- Process: Telemetry.app/Telemetry observed after launch and after 5 seconds
+- Verifier artifacts: /tmp/telemetry-ios-device-run.4SCCnV
+
+This is a physical iOS 27 runtime/install result using the Xcode 26.3 /
+iOS 26.2 SDK. It does not establish an iOS 27 SDK compile result, GPS permission
+behavior, BT4N GATT compatibility, vehicle CAN visibility, background endurance,
+or CarPlay entitlement/runtime.

@@ -12,7 +12,7 @@ Keep values below empty until observed; do not replace them with typical ELM UUI
 | 12V | User photo 4 | Do not connect to 24V |
 | BT4.0 dual mode, iOS/Android/Windows | Photos 2-3, package | Advertising claim, not live compatibility |
 | Hyundai Santa Fe MX5 HEV | User answer | Test target, year/market unconfirmed |
-| iPhone 17 / iOS 27 | User answer | Primary device; exact build unconfirmed |
+| iPhone 17 / iOS 27 | devicectl 2026-09-27 | iOS 27.0 build 24A437 confirmed; physical connected |
 | Xcode 26.3 / macOS 26.6.2 | Local commands 2026-09-23 | Prepare Xcode 27 SDK validation |
 | BLE/serial/vehicle session | None | NOT RUN |
 

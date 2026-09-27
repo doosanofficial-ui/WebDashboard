@@ -48,7 +48,7 @@ entitlement-gated.
 | Sessions screen | PASS | AX tree exposed recording, MARK, duration, pending/GPS status, JSON and CSV actions |
 | Recording interaction | PASS | Simulator action changed READY TO RECORD to RECORDING, 00:00, then returned to READY TO RECORD after Stop |
 | Physical arm64 build | PASS (SDK boundary) | Xcode 26.3, iOS 26.2 SDK; /tmp/telemetry-ios-device-v014-any/Build/Products/Debug-iphoneos/Telemetry.app; Apple Development identity |
-| Physical v0.14 install/launch | BLOCKED | devicectl list devices currently reports iPhone 17 CoreDevice 2C0892EB-662D-5D9A-A908-96EA723DEEB4 as unavailable |
+| Physical v0.14 install/launch | PASS (SDK boundary) | iPhone 17 iOS 27.0; standard verifier exit 0; /tmp/telemetry-ios-device-run.4SCCnV |
 
 ## Known Environment Constraint
 
@@ -60,8 +60,6 @@ shell verification route. No second editable checkout was created.
 
 ## Remaining Gates
 
-- Reconnect/unlock the physical iPhone 17 so CoreDevice becomes available, then
-  install and launch the signed 0.14.0 artifact.
 - Run physical GPS permission, screen-lock, adapter disconnect, recording, and
   30-minute endurance checks.
 - Capture the NANICAR BT4N GATT profile and validate one Santa Fe MX5 HEV signal.
@@ -69,3 +67,24 @@ shell verification route. No second editable checkout was created.
   is retained as a different evidence class.
 - Obtain Apple CarPlay category entitlement before adding any entitlement key or
   claiming CarPlay app rendering.
+
+
+## Physical device follow-up (2026-09-27)
+
+The device became available again and the signed 0.14.0 build was verified on
+the target hardware:
+
+- Device: iPhone 17 / iOS 27.0 build 24A437
+- CoreDevice: 2C0892EB-662D-5D9A-A908-96EA723DEEB4
+- Bundle: local.webdashboard.Telemetry, version 0.14.0, build 5
+- Artifact: /tmp/telemetry-ios-device-v014-any/Build/Products/Debug-iphoneos/Telemetry.app
+- Standard verifier: exit 0
+- Install: PASS
+- Launch: PASS
+- Process: Telemetry.app/Telemetry observed after launch and after 5 seconds
+- Verifier artifacts: /tmp/telemetry-ios-device-run.4SCCnV
+
+This is a physical iOS 27 runtime/install result using the Xcode 26.3 /
+iOS 26.2 SDK. It does not establish an iOS 27 SDK compile result, GPS permission
+behavior, BT4N GATT compatibility, vehicle CAN visibility, background endurance,
+or CarPlay entitlement/runtime.
