@@ -4,6 +4,14 @@ Baseline: 2026-09-23. **NOT HARDWARE-VERIFIED.**
 Spec: [ADR-0004](../adr/0004-obd-bt4n-integration.md).
 Keep values below empty until observed; do not replace them with typical ELM UUIDs.
 
+## Latest preflight (2026-09-27)
+
+- Current local Xcode: `26.3`, iOS SDK: `26.2` only.
+- Current `xcrun devicectl list devices`: no connected physical device returned.
+- The earlier iPhone 17/iOS 27 observation is historical evidence from a prior
+  connected-device session; it is not current availability or BT4N pairing proof.
+- Current verdict: **BLOCKED for physical execution / NOT TESTED for BT4N**.
+
 ## Known inputs
 
 | Item | Evidence | Current conclusion |
