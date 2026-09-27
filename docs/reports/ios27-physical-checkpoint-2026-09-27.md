@@ -27,6 +27,7 @@ evidence, not an iOS 27 SDK build claim.
 | Physical iPhone install | PASS | `devicectl` installed `local.webdashboard.Telemetry`; `/tmp/telemetry-ios-device-run.sS9S1r` |
 | Physical iPhone launch | PASS | `devicectl` launched app and process was observed; same run evidence |
 | Physical XCUITest runner | PASS | Existing UI test plus session-control test passed on iPhone 17; `/tmp/telemetry-ios-physical-ui-session4.CRCSoc` |
+| Current main simulator build/run | PASS | XcodeBuildMCP generated a clean project in `/tmp/telemetry-ios-sim-current.lM06ab`, built and launched `local.webdashboard.Telemetry` on iPhone 17 iOS 26.5; UI snapshot reported 151 elements and the screenshot showed the live cockpit in one viewport |
 | Physical REC/GPS transition | PASS (foreground) | REC and GPS state labels were observed; SpringBoard `Change to Always Allow` was handled by the test; same session evidence |
 | Physical session UI screenshot | PASS | XCUITest attachment `/tmp/telemetry-ios-physical-ui-attachments.cMmlG8/14676355-EFAB-470C-99D0-D473716A3638.png` visibly shows `RECORDING` and `GPS ON`; CAN remains honestly `DISCONNECTED/STALE` without vehicle input |
 | Physical SQLite GPS recording | PASS (foreground) | `devicectl` app-container copy `/tmp/telemetry-ios-physical-data.Jsd74N`; 16 `LOCATION` rows over 172.579 s preserve original/received epoch, monotonic time, coordinates, altitude, speed, course, and horizontal/vertical accuracy |
@@ -37,12 +38,13 @@ evidence, not an iOS 27 SDK build claim.
 | P1 GPS storage contract | PASS (software) | `LocationSample` preserves source timestamp, app epoch/monotonic receive times, coordinates, altitude, speed, course, and horizontal/vertical accuracy; `TelemetryStore` and `MeasurementRecorder` retain the same sample |
 | Foreground GPS/recording | PASS | Physical UI automation started REC/GPS and the app stored GPS samples in SQLite; CAN remains disconnected without vehicle hardware |
 | Screen-lock GPS/recording | NOT TESTED | Public XCUITest APIs exposed here can press Home but cannot press the physical lock button; a manual lock/unlock run is still required |
+| Canonical workspace direct Xcode build | BLOCKED: HOST TOOLCHAIN | Xcode 26.3 mis-resolves Swift package file-list paths when invoked from this workspace's space/non-ASCII path; generated projects in `/tmp` and GitHub CI build successfully |
 | BT4N GATT profile | BLOCKED: PHYSICAL HARDWARE REQUIRED | No observed BT4N capture fixture |
 | Vehicle raw CAN | BLOCKED: PHYSICAL HARDWARE REQUIRED | No ELM327-to-vehicle capture |
 | Raw-to-decode-to-dashboard recording E2E | BLOCKED: PHYSICAL HARDWARE REQUIRED | Real frame and GPS are required |
 | One-hour endurance | NOT TESTED | Depends on physical E2E |
 | CarPlay compile | PASS | CarPlay sources compiled in the native build |
-| CarPlay simulator rendering | NOT TESTED | Separate CarPlay simulator gate |
+| CarPlay simulator rendering | NOT TESTED | No CarPlay head-unit simulator/runtime was present in the installed Xcode or `simctl` device inventory; iPhone simulator rendering is not a CarPlay runtime result |
 | CarPlay entitlement approval | NOT TESTED | No approval evidence in this checkpoint |
 | CarPlay physical vehicle runtime | NOT TESTED | Requires approved entitlement and head unit |
 | Vector/CANoe/CANape | NOT TESTED | Future/optional scope |
