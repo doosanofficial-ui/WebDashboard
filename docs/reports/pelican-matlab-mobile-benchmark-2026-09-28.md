@@ -10,7 +10,9 @@ The physical iPhone is connected for this project. The initial developer-only ap
 - Pelican: `com.featherless.apps.electricsidecar`, version `5.0.3`.
 - MATLAB Mobile: `com.mathworks.matlab`, version `9.12`.
 
-Xcode Device Hub was then used to launch each bundle with `devicectl` and capture the actual iPhone display. iPhone Mirroring remains unavailable on this Mac because it shows an iCloud synchronization error, and Device Hub exposes capture but not touch automation. Therefore the physical evidence covers launch/initial UI states; deeper in-app navigation remains explicitly `NOT TESTED`.
+Xcode Device Hub was then used to launch each bundle with `devicectl` and capture the actual iPhone display. iPhone Mirroring remains unavailable on this Mac because it shows an iCloud synchronization error. Apple’s official Device Hub documentation says physical-device interaction is available when the `View Screen` canvas is exposed; in the current Xcode 26.3 Devices window, the observed controls are `Take Screenshot`, `Open Recent Logs`, and `Open Console`, with no `View Screen`. Therefore the physical evidence covers launch/initial UI states; deeper in-app navigation remains explicitly `NOT TESTED` until that documented interaction surface is available.
+
+Official Xcode interaction references: https://developer.apple.com/documentation/xcode/interacting-with-your-app-in-the-ios-or-ipados-simulator and https://developer.apple.com/documentation/xcode/capturing-screenshots-and-videos-from-devices.
 
 The benchmark combines direct physical screenshots, live official product sites, App Store listings, and official documentation. Physical app behavior and published product claims are kept as separate evidence classes.
 
@@ -161,7 +163,7 @@ The physical screenshot confirms that the app opens into a Cloud connection stat
 - The current native dashboard already has the main cockpit, stale/disconnected states, GPS/recording controls, sessions/export, and read-only BLE discovery.
 - Physical iPhone BLE scan is proven, but the real BT4N identity/GATT profile is not present in the observed environment.
 - CarPlay scene wiring is now present and validator-checked, but entitlement approval and head-unit runtime remain separate gates.
-- Pelican and MATLAB Mobile physical launch/initial UI exploration: `PASS`, with screenshots above. Full in-app workflow exploration is `NOT TESTED` because iPhone Mirroring is unavailable and Device Hub provides capture but not touch control in this environment.
+- Pelican and MATLAB Mobile physical launch/initial UI exploration: `PASS`, with screenshots above. Full in-app workflow exploration is `NOT TESTED` because iPhone Mirroring is unavailable and the documented Device Hub `View Screen` surface is not exposed in this current Xcode session.
 
 ## Recommendation
 
