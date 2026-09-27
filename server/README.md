@@ -150,6 +150,8 @@ $env:CAN_SOURCE = "vector"
 $env:VECTOR_CHANNEL = "0"
 python app.py
 ```
+또는 Windows 운영 진입점에서 `.start.ps1 -Vector -HostAddress 0.0.0.0`로
+기본/Vector dependency hash 설치를 함께 수행할 수 있습니다.
 직접 Vector 경로는 `signals.json`에 `can_id`, `extended`, `start_bit`,
 `bit_length`, `byte_order`, `signed` 필드를 추가한 signal만 decode합니다.
 물리 factor/offset/min/max는 기존 `SignalMapper` 설정을 적용합니다. 실제

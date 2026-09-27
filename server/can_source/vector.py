@@ -125,6 +125,7 @@ class VectorCANSource(CANSource):
             except Exception:
                 with self._lock:
                     self._invalid_frames = min(self._invalid_frames + 1, 2**31 - 1)
+                time.sleep(0.05)
                 continue
             with self._lock:
                 self._latest_raw = raw

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -22,6 +21,10 @@ class SignalRule:
     def __post_init__(self) -> None:
         if not self.output or not self.source:
             raise ValueError("signal_name_required")
+        if type(self.output) is not str or type(self.source) is not str:
+            raise ValueError("signal_name_invalid")
+        if type(self.extended) is not bool or type(self.signed) is not bool:
+            raise ValueError("signal_flags_invalid")
         maximum_id = 0x1FFF_FFFF if self.extended else 0x7FF
         if type(self.can_id) is not int or not 0 <= self.can_id <= maximum_id:
             raise ValueError("signal_can_id_invalid")
@@ -48,9 +51,12 @@ class CANSignalDecoder:
                 continue
             if "can_id" not in config:
                 continue
+            source = config.get("source", output)
+            if type(source) is not str or type(config.get("extended", False)) is not bool:
+                raise ValueError("signal_config_invalid")
             rules.append(SignalRule(
                 output=output,
-                source=config.get("source", output),
+                source=source,
                 can_id=config["can_id"],
                 extended=config.get("extended", False),
                 start_bit=config["start_bit"],

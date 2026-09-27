@@ -2,7 +2,8 @@
 param(
     [string]$HostAddress = "127.0.0.1",
     [int]$Port = 8080,
-    [switch]$SkipInstall
+    [switch]$SkipInstall,
+    [switch]$Vector
 )
 
 Set-StrictMode -Version Latest
@@ -13,6 +14,8 @@ $venvDir = Join-Path $serverDir ".venv"
 $python = Join-Path $venvDir "Scripts\python.exe"
 $requirements = Join-Path $serverDir "requirements.txt"
 $stamp = Join-Path $venvDir ".requirements.sha256"
+$vectorRequirements = Join-Path $serverDir "requirements-vector.txt"
+$vectorStamp = Join-Path $venvDir ".requirements-vector.sha256"
 
 if (-not (Test-Path $python)) {
     $launcher = Get-Command py -ErrorAction SilentlyContinue
@@ -23,6 +26,10 @@ if (-not (Test-Path $python)) {
     if ($LASTEXITCODE -ne 0) { throw "Python virtual environment creation failed." }
 }
 
+if ($Vector -and -not (Test-Path $vectorRequirements)) {
+    throw "Vector requirements file was not found."
+}
+
 if (-not $SkipInstall) {
     $hash = (Get-FileHash $requirements -Algorithm SHA256).Hash
     $installedHash = if (Test-Path $stamp) { (Get-Content $stamp -Raw).Trim() } else { "" }
@@ -31,11 +38,21 @@ if (-not $SkipInstall) {
         if ($LASTEXITCODE -ne 0) { throw "Python dependency installation failed." }
         Set-Content -Path $stamp -Value $hash -NoNewline
     }
+    if ($Vector) {
+        $vectorHash = (Get-FileHash $vectorRequirements -Algorithm SHA256).Hash
+        $installedVectorHash = if (Test-Path $vectorStamp) { (Get-Content $vectorStamp -Raw).Trim() } else { "" }
+        if ($vectorHash -ne $installedVectorHash) {
+            & $python -m pip install --disable-pip-version-check -r $vectorRequirements
+            if ($LASTEXITCODE -ne 0) { throw "Vector dependency installation failed." }
+            Set-Content -Path $vectorStamp -Value $vectorHash -NoNewline
+        }
+    }
 }
 
 $env:HOST = $HostAddress
 $env:PORT = [string]$Port
 Write-Host "Telemetry server: http://$HostAddress`:$Port"
 Write-Host "Press Ctrl+C to stop. Default binding is loopback; use -HostAddress 0.0.0.0 only for LAN testing."
+if ($Vector) { Write-Host "Vector backend dependencies enabled." }
 & $python (Join-Path $serverDir "app.py")
 exit $LASTEXITCODE

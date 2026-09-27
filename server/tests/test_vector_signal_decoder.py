@@ -7,6 +7,12 @@ from can_source.signal_decoder import CANSignalDecoder, SignalRule
 
 
 class CANSignalDecoderTests(unittest.TestCase):
+    def test_invalid_rule_flags_fail_closed(self):
+        with self.assertRaises(ValueError):
+            SignalRule("x", "x", 1, "false", 0, 1, "intel", False)
+        with self.assertRaises(ValueError):
+            SignalRule("x", "x", 1, False, 0, 1, "intel", "false")
+
     def test_intel_unsigned_and_signed_values_are_decoded_from_classical_can(self):
         decoder = CANSignalDecoder([
             SignalRule("speed_raw", "speed_raw", 0x123, False, 0, 16, "intel", False),

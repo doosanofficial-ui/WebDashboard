@@ -32,7 +32,7 @@ with tempfile.TemporaryDirectory() as directory:
         assert client.get("/").status_code == 200
         public_config = client.get("/api/public-config")
         assert token not in public_config.text
-        assert public_config.json()["release"]["version"] == "0.20.0"
+        assert public_config.json()["release"]["version"] == "0.20.1"
         with client.websocket_connect("/ws") as ws:
             frames = []
             started = time.monotonic()
