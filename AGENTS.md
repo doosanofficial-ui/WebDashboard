@@ -7,6 +7,14 @@ This file defines always-on, repository-level instructions for AI agents in this
 - Keep changes minimal, reversible, and aligned with existing file structure.
 - Prefer fixing root cause over surface patching.
 
+## 1.1) Canonical branch policy
+- `main` is the repository's single working and integration branch.
+- Start every implementation, review, verification, commit, and push from the local `main` checkout.
+- Keep code changes, tests, and release evidence on `main`; do not create or switch to feature branches, PR branches, or worktrees for repository work.
+- Parallel workers may perform independent read-only research, review, or verification only. The primary agent reconciles their reports and applies code changes sequentially on `main`.
+- Before committing or pushing, verify `git branch --show-current` is `main` and preserve unrelated user changes; stage only files in the active task.
+- If a hosting rule mandates a pull request, treat the temporary transport ref as a platform constraint, return the canonical checkout to `main`, and remove the temporary ref after integration when safe.
+
 ## 2) Current project workflow (observed)
 - Main CI entry: `.github/workflows/smoke.yml`
   - Runs on `pull_request` and `push` to `main`.
@@ -28,12 +36,12 @@ This file defines always-on, repository-level instructions for AI agents in this
   - target files
 
 ## 4) Local execution policy: subagents + parallelism
-- If local execution can use subagents, default to using them.
-- For multi-track tasks, split into parallel sub-tasks when safe:
+- Use subagents only when they provide an independent read-only research, review, or verification result.
+- For multi-track tasks, split only read-only work into parallel sub-tasks when safe:
   - research/analysis
-  - implementation
   - verification
-- Keep each sub-task output concise and merge results in main thread.
+- Keep each sub-task output concise and reconcile results in the primary `main` checkout.
+- Apply implementation changes sequentially on `main`; do not give workers a writable branch or worktree.
 - Do not run destructive commands in parallel.
 - Parallel execution in this repository does **not** require extra project config.
   - Local agent parallelism is runtime/orchestrator capability.
@@ -81,10 +89,10 @@ This file defines always-on, repository-level instructions for AI agents in this
 2. Plan:
    - Define 2~4 concrete steps and dependency order.
    - Split into parallel tracks only when tasks are independent.
-3. Parallel implementation:
-   - Use dedicated branch/worktree per track (`copilot/issue-<id>-<slug>` preferred).
-   - Run workers in parallel (local agent and/or Copilot CLI).
-   - Keep each track minimal and focused; avoid cross-track file overlap where possible.
+3. Serial implementation on `main`:
+   - Confirm `git branch --show-current` returns `main` before editing.
+   - Apply the smallest viable patch directly in the canonical checkout.
+   - Use parallel workers only for read-only reports; the primary agent owns all writes and integration.
 4. Review and verification gate (per track):
    - Changed-file sanity check.
    - Repository parity checks:
@@ -93,23 +101,24 @@ This file defines always-on, repository-level instructions for AI agents in this
      - `server` Python sanity when touched: compile/import smoke.
    - Contract/schema consistency check against existing runtime/log formats.
 5. Integration:
-   - Merge in explicit dependency order (lowest-risk/foundation first).
-   - After each merge: fast-forward local `main` and re-check next PR for drift/conflicts.
+   - Commit verified changes directly on `main` in explicit dependency order (lowest-risk/foundation first).
+   - After each commit: verify local `main` and `origin/main` are synchronized and re-check the next change for drift.
 6. Finalization:
    - Verify `main` clean and synced with remote.
    - Clean temporary worktrees/branches.
    - Close or update related issues with actual merge references.
 
 ## 11) Copilot CLI orchestration policy
-- Copilot CLI is an allowed parallel worker for this repository.
+- Copilot CLI is an allowed read-only worker for this repository.
 - Default non-interactive execution pattern:
   - `copilot -p "<task>" --allow-all-tools --allow-all-paths --allow-all-urls --no-ask-user --silent`
-- One worker per isolated worktree; do not share a worktree across parallel workers.
+- Do not give Copilot CLI a writable worktree or branch. It may inspect, research, review, or verify and return a report; the primary agent applies any accepted change directly on `main`.
 - If GitHub assignee mapping for `Copilot` is unavailable, do not block:
   - create/update issue + comment mention, then proceed with local Copilot CLI execution.
 - Human/primary agent remains responsible for final code review, fixes, and merge decisions.
 
 ## 12) PR merge gate checklist (must pass before merge)
+- This gate applies only when a hosting rule mandates a pull request; normal work is committed directly on `main`.
 - PR is not draft.
 - Required `smoke` checks are green (`server`, `client`, `mobile`).
 - No unresolved conflicts with current `main`.
