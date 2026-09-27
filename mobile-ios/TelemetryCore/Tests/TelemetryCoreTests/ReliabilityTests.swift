@@ -38,4 +38,28 @@ final class ReliabilityTests: XCTestCase {
         backoff.reset()
         XCTAssertEqual(backoff.nextDelaySeconds(), 1)
     }
+
+    func testPingMetricsExposeLastRttAndConsecutiveFailures() {
+        var metrics = PingMetrics()
+
+        XCTAssertNil(metrics.lastRTTMilliseconds)
+        XCTAssertEqual(metrics.consecutiveFailures, 0)
+
+        metrics.recordSuccess(rttMilliseconds: 42.5)
+        XCTAssertEqual(metrics.lastRTTMilliseconds, 42.5)
+        XCTAssertEqual(metrics.consecutiveFailures, 0)
+
+        metrics.recordFailure()
+        metrics.recordFailure()
+        XCTAssertEqual(metrics.lastRTTMilliseconds, 42.5)
+        XCTAssertEqual(metrics.consecutiveFailures, 2)
+
+        metrics.recordSuccess(rttMilliseconds: 55)
+        XCTAssertEqual(metrics.lastRTTMilliseconds, 55)
+        XCTAssertEqual(metrics.consecutiveFailures, 0)
+
+        metrics.reset()
+        XCTAssertNil(metrics.lastRTTMilliseconds)
+        XCTAssertEqual(metrics.consecutiveFailures, 0)
+    }
 }

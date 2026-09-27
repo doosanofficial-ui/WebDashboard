@@ -24,7 +24,8 @@ compatibility or release approval.
 - Previous feature build: 0.9.0, build 1
 - Previous feature build: 0.10.0, build 1
 - Current feature build: 0.10.1, build 1
-- Current feature build: 0.11.0, build 2
+- Previous feature build: 0.11.0, build 2
+- Current feature build: 0.12.0, build 3
 
 ## Evidence
 
@@ -227,6 +228,17 @@ This establishes trust, signing, install, and process launch for the current
 build. It does not establish GPS permission behavior, BT4N GATT compatibility,
 vehicle CAN visibility, recording interaction, background endurance, or CarPlay
 entitlement/runtime.
+
+The `0.12.0` build (build `3`) with WebSocket RTT/ping-failure health display was
+then built from the current source and installed:
+
+- Build artifact: `/tmp/telemetry-ios-device-v0120-final.OXSvAw`
+- Bundle: `local.webdashboard.Telemetry`, version `0.12.0`, build `3`
+- SDK boundary: Xcode 26.3 / iOS 26.2 SDK against iOS 27.0 device
+- Install: **PASS**
+- Launch: **PASS**, `verify_device.sh` exit `0`
+- Process: `Telemetry.app/Telemetry`, observed after launch and again after 5 seconds
+- Verification artifacts: `/tmp/telemetry-ios-device-v0120-final.OXSvAw/device-run/`
 
 ## Limitations
 

@@ -46,6 +46,8 @@ final class TelemetryModel: NSObject {
     var clientDrops = 0
     var invalidFrameCount = 0
     var reconnectAttempt = 0
+    var serverRTTMilliseconds: Double?
+    var serverPingFailures = 0
     var lastMarkAt: Date?
     // Core Location delivers delegate events on this manager's main run loop.
     @ObservationIgnored private let locationService: LocationService
@@ -69,6 +71,8 @@ final class TelemetryModel: NSObject {
     @ObservationIgnored private var frameSequenceTracker = FrameSequenceTracker()
     @ObservationIgnored private var serverBackoff = ReconnectBackoff()
     @ObservationIgnored private var connectionStableSince: Date?
+    @ObservationIgnored private var pingMetrics = PingMetrics()
+    @ObservationIgnored private var pingLoop: Task<Void, Never>?
     @ObservationIgnored private let clientID: String
 
     private override init() {
@@ -198,6 +202,9 @@ final class TelemetryModel: NSObject {
             invalidFrameCount = 0
             reconnectAttempt = 0
             serverBackoff.reset()
+            pingMetrics.reset()
+            serverRTTMilliseconds = nil
+            serverPingFailures = 0
             let generation = UUID()
             connectionGeneration = generation
             socketLoop = Task { [weak self] in
@@ -217,6 +224,8 @@ final class TelemetryModel: NSObject {
                     self.connection = "Connecting"
                     task.resume()
                     self.connectionStableSince = nil
+                    let pinger = self.startServerPingLoop(task: task, generation: generation)
+                    self.pingLoop = pinger
                     do {
                         while !Task.isCancelled {
                             let message = try await task.receive()
@@ -266,8 +275,12 @@ final class TelemetryModel: NSObject {
                         self.clientDrops = 0
                         let delay = self.serverBackoff.nextDelaySeconds()
                         self.reconnectAttempt = min(Int.max, self.reconnectAttempt + 1)
+                        pinger.cancel()
+                        self.pingLoop = nil
                         try? await Task.sleep(nanoseconds: delay * 1_000_000_000)
                     }
+                    pinger.cancel()
+                    self.pingLoop = nil
                 }
             }
             Task { await flush() }
@@ -278,9 +291,13 @@ final class TelemetryModel: NSObject {
         connectionGeneration = UUID()
         socketLoop?.cancel(); socketLoop = nil
         socket?.cancel(with: .normalClosure, reason: nil); socket = nil
+        pingLoop?.cancel(); pingLoop = nil
         connectionStableSince = nil
         serverBackoff.reset()
         reconnectAttempt = 0
+        pingMetrics.reset()
+        serverRTTMilliseconds = nil
+        serverPingFailures = 0
         connection = "Disconnected"
         serverRecording = nil
         publishCarPlayProjection()
@@ -954,4 +971,41 @@ final class TelemetryModel: NSObject {
     }
 
     private func refreshQueueDepth() async { queueDepth = (try? await outbox?.count()) ?? 0 }
+
+    private func startServerPingLoop(
+        task: URLSessionWebSocketTask,
+        generation: UUID
+    ) -> Task<Void, Never> {
+        Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(nanoseconds: 5_000_000_000)
+                } catch {
+                    return
+                }
+                guard let self, self.connectionGeneration == generation else { return }
+                let startedAt = Date()
+                await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                    task.sendPing { error in
+                        Task { @MainActor [weak self] in
+                            guard let self, self.connectionGeneration == generation else {
+                                continuation.resume()
+                                return
+                            }
+                            if error == nil {
+                                self.pingMetrics.recordSuccess(
+                                    rttMilliseconds: Date().timeIntervalSince(startedAt) * 1_000
+                                )
+                            } else {
+                                self.pingMetrics.recordFailure()
+                            }
+                            self.serverRTTMilliseconds = self.pingMetrics.lastRTTMilliseconds
+                            self.serverPingFailures = self.pingMetrics.consecutiveFailures
+                            continuation.resume()
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

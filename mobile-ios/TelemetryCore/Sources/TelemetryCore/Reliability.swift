@@ -61,3 +61,30 @@ public struct ReconnectBackoff: Equatable, Sendable {
         nextSeconds = initialSeconds
     }
 }
+
+/// Minimal WebSocket health state for an operator-visible connection indicator.
+public struct PingMetrics: Equatable, Sendable {
+    public private(set) var lastRTTMilliseconds: Double?
+    public private(set) var consecutiveFailures = 0
+
+    public init() {}
+
+    public mutating func recordSuccess(rttMilliseconds: Double) {
+        guard rttMilliseconds.isFinite, rttMilliseconds >= 0 else {
+            recordFailure()
+            return
+        }
+        lastRTTMilliseconds = rttMilliseconds
+        consecutiveFailures = 0
+    }
+
+    public mutating func recordFailure() {
+        consecutiveFailures = consecutiveFailures == Int.max
+            ? Int.max : consecutiveFailures + 1
+    }
+
+    public mutating func reset() {
+        lastRTTMilliseconds = nil
+        consecutiveFailures = 0
+    }
+}
