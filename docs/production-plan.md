@@ -26,7 +26,7 @@ Windows 브리지 대안이며 실물 호환은 아직 미검증이다.
 - [x] **C02 GPS 무결성 검사**: null/0/범위/콜백/브리지 누락 회귀 검사.
   증거: scripts/tests/gps-data-integrity.test.mjs 19 PASS. 소스 검사만 완료이며 실기기/배포 완료가 아님.
 - [ ] **C03 모바일 빌드**: iOS는 Swift/Core Location 네이티브 앱으로 전환한다.
-  진행: v0.20.1 build 12의 simulator 검증 준비와 iPhone 17/iOS 27.0용 arm64 서명 경계를 준비했다. 잠금 상태로 최신 launch verifier exit 12.
+  진행: v0.20.1 build 12의 simulator 검증과 iPhone 17/iOS 27.0 실기기 arm64 build/install/launch를 PASS했다. UI automation runner는 automation mode timeout으로 BLOCKED이며, GPS/CAN/30분 잠금 시험은 남아 있다.
   실제 네이티브 GPS 수집과 Xcode 27/iOS 27 SDK 빌드는 아직 남아 있다.
   완료: 깨끗한 환경의 Debug/Release 빌드, iPhone 설치 및 실제 네이티브 위치 수집.
 - [ ] **C04 계측 시각·품질**: 측정/수신 시각 분리, 모름·정지·stale 구별.

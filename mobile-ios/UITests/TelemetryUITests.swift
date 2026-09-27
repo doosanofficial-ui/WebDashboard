@@ -11,8 +11,8 @@ final class TelemetryUITests: XCTestCase {
         for _ in 0..<5 where !mark.isHittable { app.swipeUp() }
         XCTAssertTrue(mark.waitForExistence(timeout: 3))
         mark.tap()
-        XCTAssertTrue(app.staticTexts["last-mark"].waitForExistence(timeout: 5))
-        app.tabBars.buttons["Connection"].tap()
+        XCTAssertTrue(app.otherElements["session-mark"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Setup"].tap()
         let server = app.textFields["server-url"]
         XCTAssertTrue(server.waitForExistence(timeout: 5))
         server.tap()
@@ -31,7 +31,8 @@ final class TelemetryUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["local-recording-status"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Sessions"].tap()
+        XCTAssertTrue(app.otherElements["sessions-hero"].waitForExistence(timeout: 5))
     }
 
     func testRecordingToggleIsVisibleInLiveCockpit() {
@@ -62,6 +63,8 @@ final class TelemetryUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
+        app.tabBars.buttons["Signals"].tap()
+        app.buttons["Developer / Adapter"].tap()
         XCTAssertTrue(app.buttons["start-adapter-demo"].waitForExistence(timeout: 5))
     }
 
@@ -69,7 +72,8 @@ final class TelemetryUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
-        app.tabBars.buttons["Connection"].tap()
+        app.tabBars.buttons["Setup"].tap()
+        app.buttons["Developer / diagnostics"].tap()
         XCTAssertTrue(app.buttons["import-adapter-profile"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["start-live-adapter"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["edit-signal-catalog"].waitForExistence(timeout: 5))
@@ -79,16 +83,16 @@ final class TelemetryUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
-        app.tabBars.buttons["Connection"].tap()
+        app.tabBars.buttons["Sessions"].tap()
         XCTAssertTrue(app.buttons["export-measurement-json"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["measurement-export-status"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.otherElements["sessions-export-card"].waitForExistence(timeout: 5))
     }
 
     func testMeasurementCSVExportControlIsVisible() {
         let app = XCUIApplication()
         app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
-        app.tabBars.buttons["Connection"].tap()
+        app.tabBars.buttons["Sessions"].tap()
         XCTAssertTrue(app.buttons["export-measurement-csv"].waitForExistence(timeout: 5))
     }
 

@@ -7,10 +7,17 @@ Keep values below empty until observed; do not replace them with typical ELM UUI
 ## Latest preflight (2026-09-27)
 
 - Current local Xcode: `26.3`, iOS SDK: `26.2` only.
-- Current `xcrun devicectl list devices`: no connected physical device returned.
-- The earlier iPhone 17/iOS 27 observation is historical evidence from a prior
-  connected-device session; it is not current availability or BT4N pairing proof.
-- Current verdict: **BLOCKED for physical execution / NOT TESTED for BT4N**.
+- Current `xcrun devicectl` details: iPhone 17, iOS 27.0 build `24A437`,
+  paired/connected over wired transport, developer mode enabled, unlocked.
+- v0.20.1 build 12 physical arm64 build: PASS,
+  `/tmp/telemetry-ios-device-build.FQElCD`.
+- Physical install/launch: PASS,
+  `/tmp/telemetry-ios-device-run.cvrv55`.
+- Xcode 27 SDK remains BLOCKED; current build used Xcode 26.3/iOS 26.2 SDK.
+- BT4N GATT/vehicle capture remains **NOT TESTED**.
+- Repeatable command: `./scripts/ios-bt4n-preflight.sh`.
+- Device artifact command: `DEVICE_UDID="<physical-UDID>" ./mobile-ios/scripts/build_device.sh`,
+  followed by `mobile-ios/scripts/verify_device.sh`.
 
 ## Known inputs
 

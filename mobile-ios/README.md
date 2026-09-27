@@ -123,6 +123,15 @@ APP_PATH="/path/to/Telemetry.app" \
 ./mobile-ios/scripts/verify_device.sh
 ```
 
+To create the signed physical-device artifact from the canonical workspace,
+use the NBSP-safe staging build first:
+```bash
+DEVICE_UDID="00008150-000E39C43CDB401C" ./mobile-ios/scripts/build_device.sh
+```
+Then pass the printed `Telemetry.app` path to `verify_device.sh`. This build
+requires a connected, trusted device and an available Apple Development signing
+identity; it does not bypass trust, passcodes, or MFA.
+
 The script records device, install, launch, and process evidence. A trust error
 returns exit code 10 and prints the exact iPhone Settings path; a locked device
 returns exit code 12. It never handles passwords, MFA, payment, or device passcodes.
@@ -139,6 +148,11 @@ an adapter profile. Scanning lists advertisements without connecting; tap Inspec
 GATT for the selected peripheral only. Copy the observed service/characteristic JSON
 and verify the write/notify properties and framing against the physical adapter
 documentation.
+
+Before the physical BT4N run, execute `./scripts/ios-bt4n-preflight.sh` from the
+repository root. It reports the iOS 27 SDK, physical iPhone 17 inventory, and
+capture-fixture gates independently; a simulator or successful compile never
+counts as a hardware PASS.
 
 For locked-screen operation, the native store uses file protection available after
 first unlock. Force-quit, reboot before first unlock, revoked permissions, and OS
