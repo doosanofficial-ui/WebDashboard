@@ -27,6 +27,7 @@ evidence, not an iOS 27 SDK build claim.
 | Physical iPhone install | PASS | `devicectl` installed `local.webdashboard.Telemetry`; `/tmp/telemetry-ios-device-run.sS9S1r` |
 | Physical iPhone launch | PASS | `devicectl` launched app and process was observed; same run evidence |
 | iOS 27 SDK | BLOCKED | Mac has Xcode 26.3 / iOS 26.2 SDK; `iphoneos27` is not installed |
+| P1 GPS storage contract | PASS (software) | `LocationSample` preserves source timestamp, app epoch/monotonic receive times, coordinates, altitude, speed, course, and horizontal/vertical accuracy; `TelemetryStore` and `MeasurementRecorder` retain the same sample |
 | Foreground GPS/recording | NOT TESTED | A physical measurement session has not been started |
 | Screen-lock/background GPS/recording | NOT TESTED | Requires a started physical session and operator action |
 | BT4N GATT profile | BLOCKED: PHYSICAL HARDWARE REQUIRED | No observed BT4N capture fixture |
@@ -49,6 +50,9 @@ evidence, not an iOS 27 SDK build claim.
   preflight reports the connected iPhone 17 correctly.
 - The preflight still reports the iOS 27 SDK as blocked and BT4N as not tested;
   those are real blockers, not software failures.
+- `LocationService` starts Core Location with automotive navigation accuracy,
+  disables automatic pausing, enables background updates, and records invalid
+  horizontal fixes as unavailable rather than inventing a coordinate.
 
 ## Next Automatic Action
 
