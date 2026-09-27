@@ -26,6 +26,8 @@ evidence, not an iOS 27 SDK build claim.
 | Physical iPhone build | PASS | iPhone 17, iOS 27.0 build 24A437; `/tmp/telemetry-ios-device-build.e8d1Bm` |
 | Physical iPhone install | PASS | `devicectl` installed `local.webdashboard.Telemetry`; `/tmp/telemetry-ios-device-run.sS9S1r` |
 | Physical iPhone launch | PASS | `devicectl` launched app and process was observed; same run evidence |
+| Physical XCUITest runner | PASS (partial) | Existing `testRecordingToggleIsVisibleInLiveCockpit` passed on iPhone 17; `/tmp/telemetry-ios-physical-ui.LyLqYL` |
+| Physical REC/GPS transition | FAIL / BLOCKED | REC state assertion passed and GPS tap was issued, but `GPS ON` was not observed; `/tmp/telemetry-ios-physical-ui-session.xFbVda`; location authorization state/alert requires diagnosis |
 | iOS 27 SDK | BLOCKED | Mac has Xcode 26.3 / iOS 26.2 SDK; `iphoneos27` is not installed |
 | P1 GPS storage contract | PASS (software) | `LocationSample` preserves source timestamp, app epoch/monotonic receive times, coordinates, altitude, speed, course, and horizontal/vertical accuracy; `TelemetryStore` and `MeasurementRecorder` retain the same sample |
 | Foreground GPS/recording | NOT TESTED | A physical measurement session has not been started |
