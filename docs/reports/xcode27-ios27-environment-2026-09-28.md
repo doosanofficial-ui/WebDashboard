@@ -1,7 +1,7 @@
 # Xcode 27 / iOS 27 Environment Checkpoint
 
 Date: 2026-09-28
-Baseline main before this report: `da9e3e0`
+Baseline main before this report: `22a836d`
 Application version: `0.21.0 (15)`
 
 This checkpoint records the host toolchain refresh requested for the native
@@ -71,14 +71,16 @@ checkpoint.
 
 | Gate | Result | Evidence |
 | --- | --- | --- |
-| iPhone 17 hardware identity | NOT TESTED in this refresh | Previous known device: iPhone 17 / iPhone18,3 / iOS 27.0 build 24A437 |
-| CoreDevice connection after Xcode update | BLOCKED | `xcrun devicectl list devices` no longer listed the previous physical device; the known CoreDevice ID returned `device was not found` |
-| Physical iPhone build with Xcode 27 | BLOCKED | Requires the iPhone to be reconnected, unlocked, and trusted again |
+| iPhone 17 hardware identity | PASS | iPhone 17 / iPhone18,3 / UDID `00008150-000E39C43CDB401C` / iOS 27.0 build 24A437 |
+| CoreDevice connection after Xcode update | PASS | CoreDevice `2C0892EB-662D-5D9A-A908-96EA723DEEB4`, paired, connected, unlocked |
+| Physical iPhone build with Xcode 27 | PASS | `/tmp/telemetry-ios-device-build.oRh2wy`, `Debug-iphoneos/Telemetry.app` |
+| Physical iPhone install and launch | PASS | `/tmp/telemetry-ios-device-run.nowZM9`, process launch observed |
+| Physical iPhone screen evidence | PASS | `docs/reports/evidence/telemetry-ios27-physical-xcode27.png`; 1206x2622 PNG captured with `devicectl` |
+| Physical Xcode 27 BLE UI smoke test | PASS | `testBLEScanControlExposesStableAutomationIdentifier`; 1 test, 0 failures; `/tmp/telemetry-ios-physical-xcode27-smoke.xcresult` |
 | Physical BLE/ELM327/CAN | BLOCKED: PHYSICAL HARDWARE REQUIRED | No adapter or vehicle evidence was created by this host refresh |
 
-This report does not convert the earlier iOS 27 physical evidence into Xcode
-27 build evidence. Reconnect evidence must be collected again with the active
-Xcode 27 toolchain.
+The physical build/install/launch gate now has Xcode 27 evidence. This does
+not convert the result into a vehicle CAN or ELM327 compatibility PASS.
 
 ## Repository Safety
 
@@ -87,9 +89,7 @@ uncommitted changes under `mobile/` were not staged, modified, or removed.
 
 ## Next Gates
 
-1. Reconnect and unlock the physical iPhone 17, then confirm the new Xcode 27
-   CoreDevice identifier.
-2. Build, install, and launch the app on that physical device with Xcode 27.
-3. Reset simulator permissions and run the UI suite again; fix only confirmed
+1. Reset simulator permissions and run the UI suite again; fix only confirmed
    product/test contract failures.
-4. Repeat physical screen-lock/background and BLE/ELM327 evidence separately.
+2. Repeat physical screen-lock/background evidence with the Xcode 27 build.
+3. Repeat BLE/ELM327 discovery and vehicle CAN evidence separately.
