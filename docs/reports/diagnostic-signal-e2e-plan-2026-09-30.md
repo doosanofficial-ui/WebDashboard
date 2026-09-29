@@ -135,3 +135,5 @@ Status at implementation checkpoint: `SOFTWARE: PASS`.
 `PHYSICAL DIAGNOSTIC E2E`, `RAW CAN`, and `CARPLAY` remain `NOT TESTED` or
 `BLOCKED: PHYSICAL HARDWARE/ENTITLEMENT EVIDENCE REQUIRED` until a verified
 BT4N GATT profile and stationary Santa Fe response are captured on iPhone 17.
+
+Detailed checkpoint and device evidence: `docs/reports/diagnostic-signal-e2e-implementation-2026-09-30.md`.
