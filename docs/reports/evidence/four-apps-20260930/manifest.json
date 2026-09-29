@@ -1,0 +1,112 @@
+[
+  {
+    "screen": "Pelican-scan-sessions",
+    "file": "Pelican-scan-sessions.png",
+    "sha256": "f0c4bc42ee665ed69542782328dcd12c9bf6bcac1162996a01884ba1e6e0a5b1",
+    "epoch": 1790706086.843,
+    "test": "BenchmarkTests/testRecordingBranches()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Navigation/screen evidence, not vehicle acquisition proof"
+  },
+  {
+    "screen": "OBDeleven-live-data-list",
+    "file": "OBDeleven-live-data-list.png",
+    "sha256": "18e35ea6ffa880a2e64be640a4343f7a6a6f760a8cce114766685cc667f77e23",
+    "epoch": 1790706077.536,
+    "test": "BenchmarkTests/testRecordingBranches()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Navigation/screen evidence, not vehicle acquisition proof"
+  },
+  {
+    "screen": "CarScanner-settings-open",
+    "file": "CarScanner-settings-open.png",
+    "sha256": "8a2cb2d09fcfdcbf0e85c32935fd1a1b13445abbeec789a0bb4c9b79b6c96e12",
+    "epoch": 1790706072.401,
+    "test": "BenchmarkTests/testRecordingBranches()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Navigation/screen evidence, not vehicle acquisition proof"
+  },
+  {
+    "screen": "OBDeleven-vehicle-settled",
+    "file": "OBDeleven-vehicle-settled.png",
+    "sha256": "acdb63e36ae81428c317d0070db4e697edc6edba2ccdd32f3c09333514dcff30",
+    "epoch": 1790705779.514,
+    "test": "BenchmarkTests/testDeepScreens()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Navigation/screen evidence, not vehicle acquisition proof"
+  },
+  {
+    "screen": "OBDeleven-control-units",
+    "file": "OBDeleven-control-units.png",
+    "sha256": "0d33cb15dd6ad155f475da0027a0181eeb1aa87ad80d9323fce788b150e1f092",
+    "epoch": 1790705878.585,
+    "test": "BenchmarkTests/testReadOnlyBranches()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Navigation/screen evidence, not vehicle acquisition proof"
+  },
+  {
+    "screen": "OBDeleven-entry",
+    "file": "OBDeleven-entry.png",
+    "sha256": "c04765c673a2d8c5f6a019245823135c27bccb74c3e71fd94226696aecbd2a30",
+    "epoch": 1790705644.725,
+    "test": "BenchmarkTests/testFourApps()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Navigation/screen evidence, not vehicle acquisition proof"
+  },
+  {
+    "screen": "CarScanner-entry",
+    "file": "CarScanner-entry.png",
+    "sha256": "423031e53dd5e939fa799e75444715438048b3962268bbdc071e5d5470045ebf",
+    "epoch": 1790705633.814,
+    "test": "BenchmarkTests/testFourApps()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Navigation/screen evidence, not vehicle acquisition proof"
+  },
+  {
+    "screen": "Pelican-entry",
+    "file": "Pelican-entry.png",
+    "sha256": "21a5fa6b80ec3350df6c040c0130668469368f82a087eac66c363fdbfad6da6d",
+    "epoch": 1790705628.566,
+    "test": "BenchmarkTests/testFourApps()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Navigation/screen evidence, not vehicle acquisition proof"
+  },
+  {
+    "screen": "ABRP-charging-options",
+    "file": "ABRP-charging-options.png",
+    "sha256": "07eb21342dd923ea22eed1a3e5f0bd6828118c286ee1695461d726cba1f0c856",
+    "epoch": 1790705958.144,
+    "test": "BenchmarkTests/testMoreBranches()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Navigation/screen evidence, not vehicle acquisition proof"
+  },
+  {
+    "screen": "OBDeleven-engine",
+    "file": "OBDeleven-engine.png",
+    "sha256": "1a4940c7ca691570f597b8c54cca96019ee7865bd5222f14b9edad9ffec4c00e",
+    "epoch": 1790705950.024,
+    "test": "BenchmarkTests/testMoreBranches()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Navigation/screen evidence, not vehicle acquisition proof"
+  },
+  {
+    "screen": "Pelican-demo-list",
+    "file": "Pelican-demo-list.png",
+    "sha256": "1b193411a07643a616dd0b9d50fc46de0a2c0578a99590b787cdf423b9f028fd",
+    "epoch": 1790705944.264,
+    "test": "BenchmarkTests/testMoreBranches()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Navigation/screen evidence, not vehicle acquisition proof"
+  }
+]

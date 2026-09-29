@@ -92,3 +92,11 @@ these features does not authorize adding them to this product.
 4. Add accepted reusable feature specifications and regression criteria to the backlog before implementation.
 
 No product code, version, or recorded measurement data changed for this benchmark setup.
+
+## Authenticated exploration checkpoint
+
+User completed XCTest authentication. Current direct observations and adoption specifications:
+[four-app-benchmark-observed-2026-09-30.md](four-app-benchmark-observed-2026-09-30.md).
+The earlier blocked rows above describe the initial attempt, not current access status.
+Four apps were subsequently opened; 11 reviewed non-identifying screenshots are preserved.
+Hardware-only behavior, export behavior and the remaining child menus are not fully verified.
