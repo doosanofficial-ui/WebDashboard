@@ -86,7 +86,9 @@ public actor MeasurementRecorder {
         startedAt: Double,
         mode: TelemetryRunMode = .live
     ) throws {
-        guard !sessionID.isEmpty, startedAt.isFinite else { throw TelemetryError.invalidBatch }
+        guard !sessionID.isEmpty, !sessionID.contains("\0"), startedAt.isFinite else {
+            throw TelemetryError.invalidBatch
+        }
         try FileManager.default.createDirectory(
             at: path.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -96,9 +98,8 @@ public actor MeasurementRecorder {
             if let connection { sqlite3_close(connection) }
             throw TelemetryError.storage
         }
-        db = connection
-        self.sessionID = sessionID
-        self.mode = mode
+        var initialized = false
+        defer { if !initialized { sqlite3_close(connection) } }
         try? FileManager.default.setAttributes(
             [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
             ofItemAtPath: path.path
@@ -126,7 +127,6 @@ public actor MeasurementRecorder {
           ON measurements(session_id, sequence);
         """
         guard sqlite3_exec(connection, schema, nil, nil, nil) == SQLITE_OK else {
-            sqlite3_close(connection)
             throw TelemetryError.storage
         }
         // Existing sessions databases predate the mode column. SQLite reports
@@ -145,6 +145,20 @@ public actor MeasurementRecorder {
         sqlite3_bind_double(insert, 2, startedAt)
         try Self.bind(mode.rawValue, to: insert, index: 3)
         guard sqlite3_step(insert) == SQLITE_DONE else { throw TelemetryError.storage }
+        // Reopening for export is supported, but an ID cannot silently stand
+        // for a different recording or execution mode.
+        let existing = try Self.prepare(connection,
+            "SELECT started_at, mode FROM measurement_sessions WHERE session_id=?")
+        defer { sqlite3_finalize(existing) }
+        try Self.bind(sessionID, to: existing, index: 1)
+        guard sqlite3_step(existing) == SQLITE_ROW,
+              let storedMode = sqlite3_column_text(existing, 1) else { throw TelemetryError.storage }
+        guard sqlite3_column_double(existing, 0) == startedAt,
+              String(cString: storedMode) == mode.rawValue else { throw TelemetryError.eventConflict }
+        db = connection
+        self.sessionID = sessionID
+        self.mode = mode
+        initialized = true
     }
 
     /// Closes sessions left open by a crash or force-quit and records the
@@ -212,32 +226,70 @@ public actor MeasurementRecorder {
     deinit { sqlite3_close(db) }
 
     public func append(_ event: MeasurementEvent) throws {
-        let row = try encode(event)
+        try append(contentsOf: [event])
+    }
+
+    /// A source response and its decoded samples can share one transaction.
+    /// Validation or disk failure must not leave half a measurement group.
+    public func append(contentsOf events: [MeasurementEvent]) throws {
+        let rows = try events.map(encode)
         try transaction {
-            let insert = try Self.prepare(db, """
-                INSERT INTO measurements(
-                  session_id, kind, source_timestamp, received_at,
-                  received_monotonic, payload_json
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                """)
-            defer { sqlite3_finalize(insert) }
-            try Self.bind(sessionID, to: insert, index: 1)
-            try Self.bind(row.kind, to: insert, index: 2)
-            sqlite3_bind_double(insert, 3, row.sourceTimestamp)
-            sqlite3_bind_double(insert, 4, row.receivedAtEpoch)
-            sqlite3_bind_int64(insert, 5, Int64(bitPattern: row.receivedAtMonotonicNanos))
-            try Self.bind(row.payloadJSON, to: insert, index: 6)
-            guard sqlite3_step(insert) == SQLITE_DONE else { throw TelemetryError.storage }
+            try requireOpenSession()
+            for row in rows { try insert(row) }
         }
     }
 
     public func finish(endedAt: Double) throws {
+        try close(endedAt: endedAt, terminalEvent: nil)
+    }
+
+    /// Commit the terminal marker and session boundary atomically. Repeated
+    /// Stop requests cannot add duplicate markers or rewrite the first end time.
+    public func finish(endedAt: Double, terminalEvent: MeasurementEvent) throws {
+        try close(endedAt: endedAt, terminalEvent: terminalEvent)
+    }
+
+    private func close(endedAt: Double, terminalEvent: MeasurementEvent?) throws {
         guard endedAt.isFinite else { throw TelemetryError.invalidBatch }
-        let update = try Self.prepare(db, "UPDATE measurement_sessions SET ended_at=? WHERE session_id=?")
-        defer { sqlite3_finalize(update) }
-        sqlite3_bind_double(update, 1, endedAt)
-        try Self.bind(sessionID, to: update, index: 2)
-        guard sqlite3_step(update) == SQLITE_DONE else { throw TelemetryError.storage }
+        let terminalRow: EncodedRow?
+        if let terminalEvent {
+            guard case .system(_, let timestamp, _) = terminalEvent,
+                  timestamp == endedAt else { throw TelemetryError.invalidBatch }
+            terminalRow = try encode(terminalEvent)
+        } else {
+            terminalRow = nil
+        }
+        try transaction {
+            // Read persisted state, not a per-actor flag: another connection or
+            // crash recovery may already have closed this session.
+            let session = try exportSession()
+            guard session.endedAt == nil else { return }
+            if let terminalRow { try insert(terminalRow) }
+            let update = try Self.prepare(db,
+                "UPDATE measurement_sessions SET ended_at=? WHERE session_id=? AND ended_at IS NULL")
+            defer { sqlite3_finalize(update) }
+            sqlite3_bind_double(update, 1, endedAt)
+            try Self.bind(sessionID, to: update, index: 2)
+            guard sqlite3_step(update) == SQLITE_DONE,
+                  sqlite3_changes(db) == 1 else { throw TelemetryError.storage }
+        }
+    }
+
+    private func insert(_ row: EncodedRow) throws {
+        let statement = try Self.prepare(db, """
+            INSERT INTO measurements(
+              session_id, kind, source_timestamp, received_at,
+              received_monotonic, payload_json
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """)
+        defer { sqlite3_finalize(statement) }
+        try Self.bind(sessionID, to: statement, index: 1)
+        try Self.bind(row.kind, to: statement, index: 2)
+        sqlite3_bind_double(statement, 3, row.sourceTimestamp)
+        sqlite3_bind_double(statement, 4, row.receivedAtEpoch)
+        sqlite3_bind_int64(statement, 5, Int64(bitPattern: row.receivedAtMonotonicNanos))
+        try Self.bind(row.payloadJSON, to: statement, index: 6)
+        guard sqlite3_step(statement) == SQLITE_DONE else { throw TelemetryError.storage }
     }
 
     public func count() throws -> Int {
@@ -317,7 +369,7 @@ public actor MeasurementRecorder {
            let decodedMode = TelemetryRunMode(rawValue: String(cString: modeText)) {
             mode = decodedMode
         } else {
-            mode = .live
+            throw TelemetryError.storage
         }
         return PersistedMeasurementSession(
             sessionID: sessionID,
@@ -400,6 +452,11 @@ public actor MeasurementRecorder {
                 payloadJSON: String(decoding: encoder.encode(SystemPayload(name: name)), as: UTF8.self)
             )
         }
+    }
+
+    private func requireOpenSession() throws {
+        let session = try exportSession()
+        guard session.endedAt == nil else { throw TelemetryError.eventConflict }
     }
 
     private func transaction(_ work: () throws -> Void) throws {

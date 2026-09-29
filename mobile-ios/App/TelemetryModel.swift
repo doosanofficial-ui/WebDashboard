@@ -76,6 +76,8 @@ final class TelemetryModel: NSObject {
     @ObservationIgnored private var outbox: DurableOutbox?
     @ObservationIgnored private var localRecorder: MeasurementRecorder?
     @ObservationIgnored private var completedRecorder: MeasurementRecorder?
+    @ObservationIgnored private var recordingWriteQueue: MeasurementWriteQueue?
+    @ObservationIgnored private var recordingClosing = false
     @ObservationIgnored private var recordingLifecycle = RecordingLifecycle()
     @ObservationIgnored private var recordingStartedAt: Date?
     @ObservationIgnored private var measurementDBURL: URL?
@@ -231,6 +233,7 @@ final class TelemetryModel: NSObject {
     }
 
     func connect() {
+        guard prepareAcquisitionMode(.live) else { return }
         demoAdapter.stop()
         liveAdapter.stop()
         diagnosticAdapter.stop()
@@ -353,7 +356,17 @@ final class TelemetryModel: NSObject {
         publishCarPlayProjection()
     }
 
+    private func prepareAcquisitionMode(_ mode: TelemetryRunMode) -> Bool {
+        guard !recordingClosing, localRecorder == nil || runMode == mode else {
+            adapterStatus = "Stop recording before changing LIVE/DEMO mode"
+            return false
+        }
+        runMode = mode
+        return true
+    }
+
     func startDemoAdapter() {
+        guard prepareAcquisitionMode(.demo) else { return }
         disconnect()
         liveAdapter.stop()
         diagnosticAdapter.stop()
@@ -373,6 +386,7 @@ final class TelemetryModel: NSObject {
     }
 
     func startLiveAdapter() {
+        guard prepareAcquisitionMode(.live) else { return }
         disconnect()
         demoAdapter.stop()
         diagnosticAdapter.stop()
@@ -507,7 +521,8 @@ final class TelemetryModel: NSObject {
             unit: "demo",
             frameSequence: frame.sequence,
             receivedAtEpoch: frame.receivedAtEpoch,
-            receivedAtMonotonicNanos: frame.receivedAtMonotonicNanos
+            receivedAtMonotonicNanos: frame.receivedAtMonotonicNanos,
+            source: .demo
         )
         ingestLocal(frame: frame, samples: [sample])
         applyLocalSignals(
@@ -516,8 +531,7 @@ final class TelemetryModel: NSObject {
             rawValues: ["demo.signal": decoded.rawValue],
             source: "Demo"
         )
-        record(.can(frame: frame))
-        record(.signal(sample))
+        record(contentsOf: [.can(frame: frame), .signal(sample)])
         publishCarPlayProjection()
     }
 
@@ -545,10 +559,7 @@ final class TelemetryModel: NSObject {
         // Raw frames remain valuable even when the current signal catalog does
         // not contain a matching definition. Never drop the source measurement
         // solely because signal decoding is unavailable.
-        record(.can(frame: frame))
-        for item in decoded {
-            record(.signal(item.sample))
-        }
+        record(contentsOf: [.can(frame: frame)] + decoded.map { .signal($0.sample) })
         publishCarPlayProjection()
     }
 
@@ -569,10 +580,9 @@ final class TelemetryModel: NSObject {
             localSignalReceivedAt[signal.signalID] = signal.receivedAtEpoch
             Task { await telemetryStore.ingest(diagnostic: signal) }
         }
-        record(.diagnosticResponse(result.response))
-        for signal in result.signals {
-            record(.diagnosticSignal(signal))
-        }
+        record(contentsOf: [.diagnosticResponse(result.response)] + result.signals.map {
+            .diagnosticSignal($0)
+        })
         publishCarPlayProjection()
     }
 
@@ -763,19 +773,39 @@ final class TelemetryModel: NSObject {
     }
 
     private func record(_ event: MeasurementEvent) {
-        guard let localRecorder else {
-            return
-        }
-        localRecordingStatus = "Writing local measurements"
-        Task {
-            do {
-                try await localRecorder.append(event)
-                localRecordingStatus = "Local recorder active"
-            } catch {
-                localRecordingStatus = "Local recorder failed"
-                storageStatus = "Local measurement recording failed; server/GPS queue remains separate."
+        record(contentsOf: [event])
+    }
+
+    private func record(contentsOf events: [MeasurementEvent]) {
+        guard localRecordingEnabled, let writer = recordingWriteQueue else { return }
+        do {
+            // Admission happens now, not inside a later Task. Stop closes this
+            // same queue synchronously, then drains all accepted submissions.
+            let pending = try writer.enqueue(contentsOf: events)
+            localRecordingStatus = "Writing local measurements"
+            Task { [weak self] in
+                do {
+                    try await pending.value
+                    guard let self, self.recordingWriteQueue === writer,
+                          self.localRecordingEnabled else { return }
+                    self.localRecordingStatus = "Local recorder active"
+                } catch {
+                    self?.handleRecordingFailure(writer: writer)
+                }
             }
+        } catch {
+            handleRecordingFailure(writer: writer)
         }
+    }
+
+    private func handleRecordingFailure(writer: MeasurementWriteQueue) {
+        guard recordingWriteQueue === writer else { return }
+        localRecordingEnabled = false
+        recordingLifecycle.fail()
+        localRecordingStatus = "Local recording failed; preserving accepted measurements"
+        // An errored queue is drained and closed with recording_failed, never
+        // a success marker. It must not poison a later session's UI callbacks.
+        stopRecording()
     }
 
     func duplicateDashboardWidget(pageID: String, widgetID: String) {
@@ -1013,7 +1043,9 @@ final class TelemetryModel: NSObject {
             exportStatus = "Local recorder unavailable"
             return nil
         }
+        let writer = recordingWriteQueue
         do {
+            try await writer?.drain()
             let data = try await recorder.exportSessionJSON()
             exportStatus = "Export ready: \(data.count) bytes"
             return data
@@ -1028,7 +1060,9 @@ final class TelemetryModel: NSObject {
             exportStatus = "Local recorder unavailable"
             return nil
         }
+        let writer = recordingWriteQueue
         do {
+            try await writer?.drain()
             let data = try await recorder.exportCSV()
             exportStatus = "CSV export ready: \(data.count) bytes"
             return data
@@ -1039,98 +1073,67 @@ final class TelemetryModel: NSObject {
     }
 
     func finishLocalMeasurement() {
-        guard let localRecorder else { return }
-        let endedAt = Date().timeIntervalSince1970
-        Task {
-            do {
-                try await localRecorder.append(.system(
-                    name: "recording_stopped",
-                    timestamp: endedAt,
-                    monotonicNanos: DispatchTime.now().uptimeNanoseconds
-                ))
-                try await localRecorder.finish(endedAt: endedAt)
-                self.completedRecorder = localRecorder
-                self.localRecorder = nil
-                self.localRecordingEnabled = false
-                self.recordingLifecycle.stop()
-                self.recordingStartedAt = nil
-                localRecordingStatus = "Local measurement session closed"
-            } catch {
-                localRecordingStatus = "Local recorder could not close cleanly"
-            }
-        }
+        stopRecording()
     }
 
     func startRecording() {
-        guard localRecorder == nil, let measurementDBURL,
+        guard localRecorder == nil, !recordingClosing, let measurementDBURL,
               recordingLifecycle.start() else { return }
         do {
             let now = Date().timeIntervalSince1970
-            let sessionID = "ios-\(Int(now))-\(clientID)"
+            // A second Start in the same wall-clock second is a new session.
+            let sessionID = "ios-\(Int(now))-\(UUID().uuidString.lowercased())"
             let recorder = try MeasurementRecorder(
                 path: measurementDBURL,
                 sessionID: sessionID,
                 startedAt: now,
                 mode: runMode
             )
+            let writer = try MeasurementWriteQueue(recorder: recorder)
             localRecorder = recorder
+            recordingWriteQueue = writer
             completedRecorder = nil
             localRecordingEnabled = true
             recordingStartedAt = Date(timeIntervalSince1970: now)
             localRecordingStatus = "Local recorder ready"
-            Task {
-                do {
-                    try await recorder.append(.system(
-                        name: "recording_started",
-                        timestamp: now,
-                        monotonicNanos: DispatchTime.now().uptimeNanoseconds
-                    ))
-                } catch {
-                    self.recordingLifecycle.fail()
-                    self.localRecordingEnabled = false
-                    self.localRecordingStatus = "Local recorder failed"
-                    if self.localRecorder === recorder {
-                        try? await recorder.finish(endedAt: Date().timeIntervalSince1970)
-                        self.localRecorder = nil
-                        self.recordingStartedAt = nil
-                        self.publishCarPlayProjection()
-                    }
-                }
-            }
+            record(.system(name: "recording_started", timestamp: now,
+                           monotonicNanos: DispatchTime.now().uptimeNanoseconds))
             publishCarPlayProjection()
         } catch {
+            localRecordingEnabled = false
             recordingLifecycle.fail()
             localRecordingStatus = "Local recorder unavailable"
         }
     }
 
     func stopRecording() {
-        guard let recorder = localRecorder else {
+        guard !recordingClosing else { return }
+        guard let recorder = localRecorder, let writer = recordingWriteQueue else {
             localRecordingEnabled = false
-            localRecordingStatus = "Recording off"
             return
         }
         localRecordingEnabled = false
+        recordingClosing = true
         localRecordingStatus = "Closing local recording"
-        let endedAt = Date().timeIntervalSince1970
-        Task {
-            do {
-                try await recorder.append(.system(
-                    name: "recording_stopped",
-                    timestamp: endedAt,
-                    monotonicNanos: DispatchTime.now().uptimeNanoseconds
-                ))
-                try await recorder.finish(endedAt: endedAt)
-                completedRecorder = recorder
-                localRecorder = nil
-                localRecordingStatus = "Recording off"
-                recordingLifecycle.stop()
-                recordingStartedAt = nil
-                publishCarPlayProjection()
-            } catch {
-                localRecordingEnabled = true
-                localRecordingStatus = "Local recorder close failed"
+        let pending = writer.finish(endedAt: Date().timeIntervalSince1970,
+                                    monotonicNanos: DispatchTime.now().uptimeNanoseconds)
+        Task { [weak self] in
+            let result = await pending.result
+            guard let self, self.recordingWriteQueue === writer else { return }
+            self.completedRecorder = recorder
+            self.localRecorder = nil
+            self.recordingWriteQueue = nil
+            self.recordingClosing = false
+            self.recordingStartedAt = nil
+            switch result {
+            case .success:
+                self.localRecordingStatus = "Recording off"
+                self.recordingLifecycle.stop()
+            case .failure:
+                self.localRecordingStatus = "Recording failed; retained data is available for export"
+                self.recordingLifecycle.fail()
             }
+            self.publishCarPlayProjection()
         }
     }
 
