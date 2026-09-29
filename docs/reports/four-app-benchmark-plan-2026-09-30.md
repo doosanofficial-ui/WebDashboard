@@ -16,8 +16,8 @@ Current device inventory confirms these installed apps:
 The attached home-screen photos establish installation, not feature execution. Current
 capture shows “Enter iPhone Passcode for XCTest / Enable UI Automation”. The user must
 enter the passcode on the phone. No app feature was directly verified in this run yet.
-The active harness is /tmp/vehicle-benchmark-20260930/entry.log with result bundle
-/tmp/vehicle-benchmark-20260930/entry.xcresult. Inspect its terminal status before retrying.
+The harness log is /tmp/vehicle-benchmark-20260930/entry.log with result bundle
+/tmp/vehicle-benchmark-20260930/entry.xcresult. The run terminated with exit 65: timed out while enabling automation mode. Retry only after device authentication.
 
 Prior evidence, not current-run proof:
 - car-scanner-demo-physical-2026-09-29.md: last-vehicle demo selector and synthetic readings.
