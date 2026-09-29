@@ -16,6 +16,9 @@
 첫 교정 시도에서 자동화의 홈 판별 조건이 잘못되어 실패한 결과도 성공으로 승격하지 않았다.
 최종 직접 화면 증거는 `carscanner-visible-functions.xcresult`와 `safe-deep-branches.xcresult`다.
 이 증거는 앱 메뉴/데모 UI의 관찰이지 Car Scanner 데이터 수집 또는 싼타페 실차 측정 성공이 아니다.
+사용자가 iPhone 잠금을 해제한 뒤 추가로 시도한 Custom Sensor 생성 폼/센서 필터/빈 Dashboard 추가 흐름은
+Xcode UI 테스트 runner가 UI automation mode 활성화 단계에서 66초 후 중단되어 화면에 진입하지 못했다.
+해당 실행은 앱 기능 FAIL이 아니라 `BLOCKED: UI AUTOMATION HANDOFF REQUIRED`이며 새 화면 증거는 없다.
 
 설치: Pelican 5.0.3(855), Car Scanner 2.1.46, ABRP 7.1.7(설치 5980, 설정 UI 6006),
 OBDeleven 2.12.0(1790149781). ABRP 설치/화면 build 차이는 관찰 사실이며 원인은 미확인이다.
@@ -186,6 +189,11 @@ BT4N이 광고되지 않는다는 확정 증거가 아니며 이름 없는 주�
 4. P1: Pelican의 실제 scanner pairing, 파라미터 정의/refresh, scan-session export는 사용자가 별도 비식별 로그를 승인하거나 테스트 차량/장치가 연결될 때만 검증.
 5. P1: ABRP의 목적지·충전기 결과·저장계획·Premium/실시간 차량 경로는 계정, 네트워크 및 위치/경로 데이터 처리 동의가 있을 때 검증.
 6. P1: OBDeleven 실제 장치와 차량 연결, live-data 값, DTC/배터리 확인 기능은 지원 차량과 요금제 증거가 있을 때 검증.
+
+추가 자동화 차단: iPhone 잠금을 푼 뒤 다시 실행했으나 `carscanner-config-branches-resume.log`에서
+XCTest runner 초기화가 `Timed out while enabling automation mode`로 실패했다. 앱 테스트 케이스가 시작되지 않았고
+사용자 정의 PID 폼/센서 필터/빈 Dashboard 위젯 추가는 미검증이다. iPhone에 별도 UI automation 확인창이
+표시될 경우 기기에서 직접 완료해야 한다. 암호/코드는 채팅으로 받지 않는다.
 
 실행하지 않은 작업: 차량 제어, coding/adaptation, One-Click App 실행, DTC 삭제, output test, 구매, 로그인/계정 연결, 사용자 위치/저장 목적지 조회. 이를 필요로 하는 기능은 이번 프로젝트 목표에 포함하지 않는다.
 

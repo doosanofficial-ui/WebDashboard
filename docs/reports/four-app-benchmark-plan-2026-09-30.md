@@ -105,3 +105,6 @@ screen repeatedly due to StaticText-only taps; those images are excluded as feat
 Corrected runs confirmed the dashboard, live-data modes, all-sensor list, DTC/readiness/freeze-frame,
 Pelican scan settings, and OBDeleven catalog. Hardware-only behavior, actual log export/replay, route
 generation, and remaining settings/detail branches are still not verified.
+After the user unlocked the iPhone, a follow-up runner attempt still timed out enabling UI automation
+before either test case began. Custom Sensor creation, sensor filters, and the empty-dashboard widget
+picker remain untested pending the on-device automation handoff.
