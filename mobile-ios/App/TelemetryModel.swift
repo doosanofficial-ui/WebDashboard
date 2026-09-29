@@ -57,6 +57,7 @@ final class TelemetryModel: NSObject {
     @ObservationIgnored private let locationService: LocationService
     @ObservationIgnored private let demoAdapter: DemoAdapterController
     @ObservationIgnored private let liveAdapter: LiveAdapterController
+    @ObservationIgnored private let diagnosticAdapter: DiagnosticAdapterController
     @ObservationIgnored private let bleDiscovery: BLEDiscoveryController
     @ObservationIgnored private let telemetryStore: TelemetryStore
     @ObservationIgnored private var conditionRuntimes: [String: DashboardConditionRuntime] = [:]
@@ -91,6 +92,7 @@ final class TelemetryModel: NSObject {
         locationService = LocationService()
         demoAdapter = DemoAdapterController()
         liveAdapter = LiveAdapterController()
+        diagnosticAdapter = DiagnosticAdapterController()
         bleDiscovery = BLEDiscoveryController()
         telemetryStore = TelemetryStore()
         super.init()
@@ -132,6 +134,12 @@ final class TelemetryModel: NSObject {
         }
         liveAdapter.onFrame = { [weak self] frame, decoded in
             self?.handleLiveFrame(frame, decoded: decoded)
+        }
+        diagnosticAdapter.onState = { [weak self] state in
+            self?.handleAdapterState(state)
+        }
+        diagnosticAdapter.onResult = { [weak self] result in
+            self?.handleDiagnosticResult(result)
         }
         bleDiscovery.onUpdate = { [weak self] devices, status in
             self?.bleDevices = devices
@@ -213,6 +221,7 @@ final class TelemetryModel: NSObject {
     func connect() {
         demoAdapter.stop()
         liveAdapter.stop()
+        diagnosticAdapter.stop()
         disconnect()
         do {
             let base = try endpoint()
@@ -335,12 +344,14 @@ final class TelemetryModel: NSObject {
     func startDemoAdapter() {
         disconnect()
         liveAdapter.stop()
+        diagnosticAdapter.stop()
         demoAdapter.start()
     }
 
     func stopDemoAdapter() {
         demoAdapter.stop()
         liveAdapter.stop()
+        diagnosticAdapter.stop()
         Task { await telemetryStore.disconnect() }
         adapterSignalValue = nil
         canSource = "None"
@@ -351,13 +362,20 @@ final class TelemetryModel: NSObject {
     func startLiveAdapter() {
         disconnect()
         demoAdapter.stop()
+        diagnosticAdapter.stop()
         guard let adapterProfile else {
             adapterProfileStatus = "No live adapter profile"
             adapterStatus = "Live adapter not configured"
             return
         }
         configureLocalSignalTimeouts(adapterProfile.signals)
-        liveAdapter.start(profile: adapterProfile)
+        configureDiagnosticSignalTimeouts(adapterProfile.diagnosticQueries)
+        if adapterProfile.diagnosticQueries.isEmpty {
+            liveAdapter.start(profile: adapterProfile)
+        } else {
+            liveAdapter.stop()
+            diagnosticAdapter.start(profile: adapterProfile)
+        }
     }
 
     func stopLiveAdapter() {
@@ -402,6 +420,7 @@ final class TelemetryModel: NSObject {
             adapterProfile = profile
             adapterProfileStatus = "Profile loaded: \(profile.name)"
             configureLocalSignalTimeouts(profile.signals)
+            configureDiagnosticSignalTimeouts(profile.diagnosticQueries)
             if let adapterProfileURL {
                 try data.write(to: adapterProfileURL, options: .atomic)
             }
@@ -427,13 +446,15 @@ final class TelemetryModel: NSObject {
                 notifyCharacteristicUUID: profile.notifyCharacteristicUUID,
                 host: profile.host,
                 port: profile.port,
-                signals: signals
+                signals: signals,
+                diagnosticQueries: profile.diagnosticQueries
             )
             let data = try JSONEncoder().encode(updated)
             try data.write(to: adapterProfileURL, options: .atomic)
             adapterProfile = updated
             adapterProfileStatus = "Profile saved: \(updated.name), \(signals.count) signals"
             configureLocalSignalTimeouts(signals)
+            configureDiagnosticSignalTimeouts(updated.diagnosticQueries)
             return true
         } catch {
             adapterProfileStatus = "Signal catalog invalid"
@@ -499,6 +520,30 @@ final class TelemetryModel: NSObject {
         publishCarPlayProjection()
     }
 
+    private func handleDiagnosticResult(_ result: OBDQueryResult) {
+        adapterStatus = "Diagnostic query monitoring"
+        adapterSignalValue = result.signals.first?.value
+        let values = Dictionary(uniqueKeysWithValues: result.signals.map { ($0.signalID, $0.value) })
+        let rawValues = Dictionary(uniqueKeysWithValues: result.signals.map { ($0.signalID, $0.rawValue) })
+        applyLocalDiagnosticSignals(
+            values: values,
+            rawValues: rawValues,
+            source: "Diagnostic",
+            sequence: result.response.sequence,
+            timestamp: result.response.receivedAtEpoch,
+            responseCANID: result.response.responseCANID
+        )
+        for signal in result.signals {
+            localSignalReceivedAt[signal.signalID] = signal.receivedAtEpoch
+            Task { await telemetryStore.ingest(diagnostic: signal) }
+        }
+        record(.diagnosticResponse(result.response))
+        for signal in result.signals {
+            record(.diagnosticSignal(signal))
+        }
+        publishCarPlayProjection()
+    }
+
     private func ingestLocal(frame: CANFrame, samples: [DecodedSignalSample]) {
         for sample in samples {
             localSignalReceivedAt[sample.signalID] = sample.receivedAtEpoch
@@ -510,9 +555,19 @@ final class TelemetryModel: NSObject {
     }
 
     private func configureLocalSignalTimeouts(_ definitions: [SignalDefinition]) {
-        let timeouts = Dictionary(uniqueKeysWithValues: definitions.map { ($0.id, $0.timeout) })
+        let timeouts = definitions.reduce(into: [String: Double]()) { result, definition in
+            result[definition.id] = definition.timeout
+        }
         localSignalTimeouts = timeouts
         Task { await telemetryStore.configureSignalTimeouts(timeouts) }
+    }
+
+    private func configureDiagnosticSignalTimeouts(_ queries: [OBDQueryDefinition]) {
+        let timeouts = queries.reduce(into: [String: Double]()) { result, query in
+            for signal in query.signals { result[signal.id] = signal.timeout }
+        }
+        localSignalTimeouts.merge(timeouts) { _, diagnostic in diagnostic }
+        Task { await telemetryStore.configureSignalTimeouts(localSignalTimeouts) }
     }
 
     private func applyLocalSignals(
@@ -534,6 +589,33 @@ final class TelemetryModel: NSObject {
         lastFrameAt = now
         canSource = source
         updateDashboardConditions(values: values, rawValues: rawValues, now: frame.receivedAtEpoch)
+        points.append(CanPoint(time: now, signals: values))
+        points.removeAll { $0.time < now.addingTimeInterval(-60) }
+        if points.count > 600 { points.removeFirst(points.count - 600) }
+    }
+
+    private func applyLocalDiagnosticSignals(
+        values: [String: Double],
+        rawValues: [String: UInt64],
+        source: String,
+        sequence: UInt64,
+        timestamp: Double,
+        responseCANID: UInt32
+    ) {
+        guard !values.isEmpty, sequence <= UInt64(Int.max),
+              let snapshot = try? ServerCANFrame(
+                version: 1,
+                serverTimestamp: timestamp,
+                signals: values,
+                status: .init(sequence: Int(sequence), drop: 0)
+              ) else { return }
+        let now = Date()
+        frame = snapshot
+        lastFrameAt = now
+        canSource = source
+        let width = responseCANID > 0x7FF ? 8 : 3
+        rawCANText = "DIAGNOSTIC RESPONSE 0x\(String(format: "%0*X", width, responseCANID))  (not passive CAN)"
+        updateDashboardConditions(values: values, rawValues: rawValues, now: timestamp)
         points.append(CanPoint(time: now, signals: values))
         points.removeAll { $0.time < now.addingTimeInterval(-60) }
         if points.count > 600 { points.removeFirst(points.count - 600) }

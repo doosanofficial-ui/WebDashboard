@@ -123,7 +123,7 @@ final class LiveAdapterController {
         }
     }
 
-    private static func makeTransport(_ profile: AdapterProfile) throws -> any CANTransport {
+    static func makeTransport(_ profile: AdapterProfile) throws -> any CANTransport {
         switch profile.transport {
         case .wifi:
             guard let host = profile.host, let port = profile.port else {

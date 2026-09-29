@@ -13,6 +13,7 @@ public enum AdapterProfileError: Error, Equatable, Sendable {
     case missingWiFiEndpoint
     case missingBLEProfile
     case invalidBLEUUID(String)
+    case duplicateDiagnosticQueryID(String)
 }
 
 public struct AdapterProfile: Codable, Equatable, Identifiable, Sendable {
@@ -27,6 +28,7 @@ public struct AdapterProfile: Codable, Equatable, Identifiable, Sendable {
     public let host: String?
     public let port: Int?
     public let signals: [SignalDefinition]
+    public let diagnosticQueries: [OBDQueryDefinition]
 
     public init(
         id: String,
@@ -38,14 +40,21 @@ public struct AdapterProfile: Codable, Equatable, Identifiable, Sendable {
         notifyCharacteristicUUID: String?,
         host: String?,
         port: Int?,
-        signals: [SignalDefinition]
+        signals: [SignalDefinition],
+        diagnosticQueries: [OBDQueryDefinition] = []
     ) throws {
         guard !id.isEmpty, !name.isEmpty else { throw AdapterProfileError.invalidProfile }
-        guard !signals.isEmpty else { throw AdapterProfileError.emptySignalCatalog }
+        guard !signals.isEmpty || !diagnosticQueries.isEmpty else { throw AdapterProfileError.emptySignalCatalog }
         var ids = Set<String>()
         for signal in signals {
             guard ids.insert(signal.id).inserted else {
                 throw AdapterProfileError.duplicateSignalID(signal.id)
+            }
+        }
+        var queryIDs = Set<String>()
+        for query in diagnosticQueries {
+            guard queryIDs.insert(query.id).inserted else {
+                throw AdapterProfileError.duplicateDiagnosticQueryID(query.id)
             }
         }
         switch transport {
@@ -66,7 +75,7 @@ public struct AdapterProfile: Codable, Equatable, Identifiable, Sendable {
                 throw AdapterProfileError.invalidBLEUUID(uuid)
             }
         }
-        schemaVersion = 1
+        schemaVersion = diagnosticQueries.isEmpty ? 1 : 2
         self.id = id
         self.name = name
         self.transport = transport
@@ -77,10 +86,15 @@ public struct AdapterProfile: Codable, Equatable, Identifiable, Sendable {
         self.host = host
         self.port = port
         self.signals = signals
+        self.diagnosticQueries = diagnosticQueries
     }
 
     public func signal(id: String) -> SignalDefinition? {
         signals.first { $0.id == id }
+    }
+
+    public func diagnosticQuery(id: String) -> OBDQueryDefinition? {
+        diagnosticQueries.first { $0.id == id }
     }
 
     private static func isValidBLEUUID(_ value: String) -> Bool {
@@ -98,13 +112,14 @@ public struct AdapterProfile: Codable, Equatable, Identifiable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case schemaVersion = "schema_version"
         case id, name, transport, peripheralID, serviceUUID,
-             writeCharacteristicUUID, notifyCharacteristicUUID, host, port, signals
+             writeCharacteristicUUID, notifyCharacteristicUUID, host, port, signals,
+             diagnosticQueries
     }
 
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         let version = try values.decode(Int.self, forKey: .schemaVersion)
-        guard version == 1 else { throw AdapterProfileError.unsupportedSchemaVersion(version) }
+        guard version == 1 || version == 2 else { throw AdapterProfileError.unsupportedSchemaVersion(version) }
         try self.init(
             id: values.decode(String.self, forKey: .id),
             name: values.decode(String.self, forKey: .name),
@@ -115,7 +130,8 @@ public struct AdapterProfile: Codable, Equatable, Identifiable, Sendable {
             notifyCharacteristicUUID: values.decodeIfPresent(String.self, forKey: .notifyCharacteristicUUID),
             host: values.decodeIfPresent(String.self, forKey: .host),
             port: values.decodeIfPresent(Int.self, forKey: .port),
-            signals: values.decode([SignalDefinition].self, forKey: .signals)
+            signals: values.decodeIfPresent([SignalDefinition].self, forKey: .signals) ?? [],
+            diagnosticQueries: values.decodeIfPresent([OBDQueryDefinition].self, forKey: .diagnosticQueries) ?? []
         )
     }
 
@@ -132,5 +148,6 @@ public struct AdapterProfile: Codable, Equatable, Identifiable, Sendable {
         try values.encodeIfPresent(host, forKey: .host)
         try values.encodeIfPresent(port, forKey: .port)
         try values.encode(signals, forKey: .signals)
+        try values.encodeIfPresent(diagnosticQueries.isEmpty ? nil : diagnosticQueries, forKey: .diagnosticQueries)
     }
 }

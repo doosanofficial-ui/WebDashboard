@@ -88,6 +88,35 @@ final class MeasurementRecorderTests: XCTestCase {
         XCTAssertTrue(row.payloadJSON.contains("127"))
     }
 
+    func testDiagnosticResponseAndSignalAreExportedAsSeparateKinds() async throws {
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("measurement-diagnostic-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: path) }
+        let recorder = try MeasurementRecorder(path: path, sessionID: "diagnostic-session", startedAt: 90)
+        let query = try SantaFeMX5HybridQueryCatalog.hvBatterySOC()
+        let response = try OBDResponseParser.parse(
+            "7EC 08 62 01 01 00 00 00 00 64\r",
+            for: query,
+            receivedAtEpoch: 100,
+            receivedAtMonotonicNanos: 1_000,
+            sequence: 4,
+            sourceAdapter: "NANICAR BT4N",
+            sourceTransport: "ble"
+        )
+        let decoded = try OBDSignalDecoder.decode(query.signals[0], response: response)
+
+        try await recorder.append(.diagnosticResponse(response))
+        try await recorder.append(.diagnosticSignal(decoded))
+
+        let rows = try await recorder.export()
+        XCTAssertEqual(rows.map(\.kind), ["DIAGNOSTIC_RESPONSE", "DIAGNOSTIC_SIGNAL"])
+        XCTAssertTrue(rows[0].payloadJSON.contains("220101") == false)
+        XCTAssertTrue(rows[0].payloadJSON.contains("sourceAdapter"))
+        XCTAssertTrue(rows[1].payloadJSON.contains("SANTAFEHYB_HVBAT_SOC"))
+        let csv = String(decoding: try await recorder.exportCSV(), as: UTF8.self)
+        XCTAssertTrue(csv.contains("DIAGNOSTIC_RESPONSE"))
+    }
+
     func testRecoveryClosesOpenSessionAndAddsInterruptionEvent() async throws {
         let path = FileManager.default.temporaryDirectory
             .appendingPathComponent("measurement-recovery-(UUID().uuidString).sqlite")

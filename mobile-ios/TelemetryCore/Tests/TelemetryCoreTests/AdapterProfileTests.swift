@@ -34,11 +34,36 @@ final class AdapterProfileTests: XCTestCase {
 
     func testUnsupportedSchemaVersionIsRejected() throws {
         let json = Data("""
-        {"schema_version":2,"id":"x","name":"X","transport":"wifi","host":"127.0.0.1","port":1,"signals":[]}
+        {"schema_version":3,"id":"x","name":"X","transport":"wifi","host":"127.0.0.1","port":1,"signals":[]}
         """.utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(AdapterProfile.self, from: json)) { error in
-            XCTAssertEqual(error as? AdapterProfileError, .unsupportedSchemaVersion(2))
+            XCTAssertEqual(error as? AdapterProfileError, .unsupportedSchemaVersion(3))
         }
+    }
+
+    func testDiagnosticQueriesUseSchemaTwoAndRoundTripWithoutRawSignals() throws {
+        let query = try SantaFeMX5HybridQueryCatalog.hvBatterySOC()
+        let profile = try AdapterProfile(
+            id: "santafe-mx5-hev",
+            name: "Santa Fe MX5 HEV diagnostic profile",
+            transport: .wifi,
+            peripheralID: nil,
+            serviceUUID: nil,
+            writeCharacteristicUUID: nil,
+            notifyCharacteristicUUID: nil,
+            host: "192.168.0.10",
+            port: 35000,
+            signals: [],
+            diagnosticQueries: [query]
+        )
+
+        XCTAssertEqual(profile.schemaVersion, 2)
+        let data = try JSONEncoder().encode(profile)
+        let decoded = try JSONDecoder().decode(AdapterProfile.self, from: data)
+
+        XCTAssertEqual(decoded, profile)
+        XCTAssertEqual(decoded.diagnosticQuery(id: query.id)?.requestString, "220101\r")
+        XCTAssertTrue(decoded.signals.isEmpty)
     }
 
     func testDuplicateSignalIDsAreRejected() throws {

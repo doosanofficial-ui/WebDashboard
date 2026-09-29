@@ -92,4 +92,26 @@ final class TelemetryStoreTests: XCTestCase {
         let invalid = await store.signalState(for: "invalid", now: 100.3)
         XCTAssertNil(invalid)
     }
+
+    func testDiagnosticSignalKeepsDiagnosticSourceSeparateFromRawCAN() async throws {
+        let query = try SantaFeMX5HybridQueryCatalog.hvBatterySOC()
+        let response = try OBDResponseParser.parse(
+            "7EC 08 62 01 01 00 00 00 00 64\r",
+            for: query,
+            receivedAtEpoch: 100,
+            receivedAtMonotonicNanos: 1_000,
+            sequence: 3,
+            sourceAdapter: "NANICAR BT4N",
+            sourceTransport: "ble"
+        )
+        let decoded = try OBDSignalDecoder.decode(query.signals[0], response: response)
+        let store = TelemetryStore(signalTimeouts: [decoded.signalID: 3])
+
+        await store.ingest(diagnostic: decoded)
+
+        let latest = await store.signalState(for: decoded.signalID, now: 100.1)
+        XCTAssertEqual(latest?.source, .diagnostic)
+        XCTAssertEqual(latest?.value, 50)
+        XCTAssertEqual(latest?.quality, .valid)
+    }
 }

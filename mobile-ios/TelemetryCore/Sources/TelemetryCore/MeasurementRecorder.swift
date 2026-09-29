@@ -310,6 +310,26 @@ public actor MeasurementRecorder {
                 receivedAtMonotonicNanos: sample.receivedAtMonotonicNanos,
                 payloadJSON: String(decoding: encoder.encode(sample), as: UTF8.self)
             )
+        case .diagnosticResponse(let response):
+            guard response.receivedAtEpoch.isFinite else { throw TelemetryError.invalidBatch }
+            return try EncodedRow(
+                kind: "DIAGNOSTIC_RESPONSE",
+                sourceTimestamp: response.receivedAtEpoch,
+                receivedAtEpoch: response.receivedAtEpoch,
+                receivedAtMonotonicNanos: response.receivedAtMonotonicNanos,
+                payloadJSON: String(decoding: encoder.encode(response), as: UTF8.self)
+            )
+        case .diagnosticSignal(let signal):
+            guard signal.receivedAtEpoch.isFinite, signal.value.isFinite else {
+                throw TelemetryError.invalidBatch
+            }
+            return try EncodedRow(
+                kind: "DIAGNOSTIC_SIGNAL",
+                sourceTimestamp: signal.receivedAtEpoch,
+                receivedAtEpoch: signal.receivedAtEpoch,
+                receivedAtMonotonicNanos: signal.receivedAtMonotonicNanos,
+                payloadJSON: String(decoding: encoder.encode(signal), as: UTF8.self)
+            )
         case .location(let sample):
             guard sample.originalTimestamp.isFinite, sample.receivedAtEpoch.isFinite else {
                 throw TelemetryError.invalidBatch

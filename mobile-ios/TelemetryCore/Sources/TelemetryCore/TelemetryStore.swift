@@ -7,6 +7,14 @@ public enum SignalQuality: String, Codable, Equatable, Sendable {
     case disconnected
 }
 
+public enum TelemetrySource: String, Codable, Equatable, Sendable {
+    case rawCAN = "rawCAN"
+    case diagnostic = "diagnostic"
+    case gps = "GPS"
+    case demo = "demo"
+    case replay = "replay"
+}
+
 public struct DecodedSignalSample: Codable, Equatable, Sendable {
     public let signalID: String
     public let value: Double
@@ -16,6 +24,7 @@ public struct DecodedSignalSample: Codable, Equatable, Sendable {
     public let frameSequence: UInt64
     public let receivedAtEpoch: Double
     public let receivedAtMonotonicNanos: UInt64
+    public let source: TelemetrySource
 
     public init(
         signalID: String,
@@ -25,7 +34,8 @@ public struct DecodedSignalSample: Codable, Equatable, Sendable {
         unit: String,
         frameSequence: UInt64,
         receivedAtEpoch: Double,
-        receivedAtMonotonicNanos: UInt64
+        receivedAtMonotonicNanos: UInt64,
+        source: TelemetrySource = .rawCAN
     ) {
         self.signalID = signalID
         self.value = value
@@ -35,6 +45,27 @@ public struct DecodedSignalSample: Codable, Equatable, Sendable {
         self.frameSequence = frameSequence
         self.receivedAtEpoch = receivedAtEpoch
         self.receivedAtMonotonicNanos = receivedAtMonotonicNanos
+        self.source = source
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case signalID, value, rawValue, enumName, unit, frameSequence
+        case receivedAtEpoch, receivedAtMonotonicNanos, source
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            signalID: try values.decode(String.self, forKey: .signalID),
+            value: try values.decode(Double.self, forKey: .value),
+            rawValue: try values.decode(UInt64.self, forKey: .rawValue),
+            enumName: try values.decodeIfPresent(String.self, forKey: .enumName),
+            unit: try values.decode(String.self, forKey: .unit),
+            frameSequence: try values.decode(UInt64.self, forKey: .frameSequence),
+            receivedAtEpoch: try values.decode(Double.self, forKey: .receivedAtEpoch),
+            receivedAtMonotonicNanos: try values.decode(UInt64.self, forKey: .receivedAtMonotonicNanos),
+            source: try values.decodeIfPresent(TelemetrySource.self, forKey: .source) ?? .rawCAN
+        )
     }
 }
 
@@ -49,6 +80,7 @@ public struct LocationSample: Codable, Equatable, Sendable {
     public let course: Double?
     public let horizontalAccuracy: Double?
     public let verticalAccuracy: Double?
+    public let source: TelemetrySource
 
     public init(
         originalTimestamp: Double,
@@ -60,7 +92,8 @@ public struct LocationSample: Codable, Equatable, Sendable {
         speed: Double?,
         course: Double?,
         horizontalAccuracy: Double?,
-        verticalAccuracy: Double?
+        verticalAccuracy: Double?,
+        source: TelemetrySource = .gps
     ) {
         self.originalTimestamp = originalTimestamp
         self.receivedAtEpoch = receivedAtEpoch
@@ -72,6 +105,30 @@ public struct LocationSample: Codable, Equatable, Sendable {
         self.course = course
         self.horizontalAccuracy = horizontalAccuracy
         self.verticalAccuracy = verticalAccuracy
+        self.source = source
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case originalTimestamp, receivedAtEpoch, receivedAtMonotonicNanos
+        case latitude, longitude, altitude, speed, course
+        case horizontalAccuracy, verticalAccuracy, source
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            originalTimestamp: try values.decode(Double.self, forKey: .originalTimestamp),
+            receivedAtEpoch: try values.decode(Double.self, forKey: .receivedAtEpoch),
+            receivedAtMonotonicNanos: try values.decode(UInt64.self, forKey: .receivedAtMonotonicNanos),
+            latitude: try values.decode(Double.self, forKey: .latitude),
+            longitude: try values.decode(Double.self, forKey: .longitude),
+            altitude: try values.decodeIfPresent(Double.self, forKey: .altitude),
+            speed: try values.decodeIfPresent(Double.self, forKey: .speed),
+            course: try values.decodeIfPresent(Double.self, forKey: .course),
+            horizontalAccuracy: try values.decodeIfPresent(Double.self, forKey: .horizontalAccuracy),
+            verticalAccuracy: try values.decodeIfPresent(Double.self, forKey: .verticalAccuracy),
+            source: try values.decodeIfPresent(TelemetrySource.self, forKey: .source) ?? .gps
+        )
     }
 }
 
@@ -85,6 +142,7 @@ public struct LatestSignalState: Equatable, Sendable {
     public let frameSequence: UInt64?
     public let receivedAtEpoch: Double
     public let receivedAtMonotonicNanos: UInt64
+    public let source: TelemetrySource
 
     public init(
         signalID: String,
@@ -95,7 +153,8 @@ public struct LatestSignalState: Equatable, Sendable {
         quality: SignalQuality,
         frameSequence: UInt64?,
         receivedAtEpoch: Double,
-        receivedAtMonotonicNanos: UInt64
+        receivedAtMonotonicNanos: UInt64,
+        source: TelemetrySource = .rawCAN
     ) {
         self.signalID = signalID
         self.value = value
@@ -106,12 +165,15 @@ public struct LatestSignalState: Equatable, Sendable {
         self.frameSequence = frameSequence
         self.receivedAtEpoch = receivedAtEpoch
         self.receivedAtMonotonicNanos = receivedAtMonotonicNanos
+        self.source = source
     }
 }
 
 public enum MeasurementEvent: Equatable, Sendable {
     case can(frame: CANFrame)
     case signal(DecodedSignalSample)
+    case diagnosticResponse(OBDResponse)
+    case diagnosticSignal(DecodedOBDSignal)
     case location(LocationSample)
     case system(name: String, timestamp: Double, monotonicNanos: UInt64)
 }
@@ -147,9 +209,24 @@ public actor TelemetryStore {
             quality: quality,
             frameSequence: sample.frameSequence,
             receivedAtEpoch: sample.receivedAtEpoch,
-            receivedAtMonotonicNanos: sample.receivedAtMonotonicNanos
+            receivedAtMonotonicNanos: sample.receivedAtMonotonicNanos,
+            source: sample.source
         )
         disconnected = false
+    }
+
+    public func ingest(diagnostic signal: DecodedOBDSignal) {
+        ingest(signal: DecodedSignalSample(
+            signalID: signal.signalID,
+            value: signal.value,
+            rawValue: signal.rawValue,
+            enumName: signal.enumName,
+            unit: signal.unit,
+            frameSequence: signal.sequence,
+            receivedAtEpoch: signal.receivedAtEpoch,
+            receivedAtMonotonicNanos: signal.receivedAtMonotonicNanos,
+            source: .diagnostic
+        ))
     }
 
     public func ingest(location: LocationSample) {
@@ -190,7 +267,8 @@ private extension LatestSignalState {
             quality: quality,
             frameSequence: frameSequence,
             receivedAtEpoch: receivedAtEpoch,
-            receivedAtMonotonicNanos: receivedAtMonotonicNanos
+            receivedAtMonotonicNanos: receivedAtMonotonicNanos,
+            source: source
         )
     }
 }
