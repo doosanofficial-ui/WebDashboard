@@ -16,7 +16,7 @@
 첫 교정 시도에서 자동화의 홈 판별 조건이 잘못되어 실패한 결과도 성공으로 승격하지 않았다.
 최종 직접 화면 증거는 `carscanner-visible-functions.xcresult`, `safe-deep-branches.xcresult`,
 `csc-custom-sensor-detail.xcresult`, `csc-sensor-filter-dashboard-add2.xcresult`,
-`csc-empty-dashboard-picker.xcresult`다. 앱 메뉴/데모 UI 관찰이지 Car Scanner 데이터 수집이나
+`csc-empty-dashboard-picker.xcresult`, `csc-home-restored.xcresult`다. 앱 메뉴/데모 UI 관찰이지 Car Scanner 데이터 수집이나
 싼타페 실차 측정 성공이 아니다. 사용자가 iPhone 잠금을 해제한 직후 한 번은 UI automation mode
 초기화가 timeout 되었으나, 후속 실행에서 선택자/화면 식별을 보정한 테스트가 시작되어 통과했다.
 
@@ -121,6 +121,10 @@ Car Scanner 공식 기록 설명은 화면에 표시되는 수치와 응답에 �
 최종 추가 직접 확인: Custom Sensors의 `+` 동작은 별도 폼을 바로 열지 않고 기본 행을 만든다. 해당 행을 눌러 편집기까지 열어 필드 구성을 확인했다.
 이 탐색에서만 생성한 빈 행은 확인 후 삭제했고 목록 비움을 다시 확인했다. All Sensors의 필터 아이콘은 검색과 `보이는 센서만 업데이트` 체크 옵션을 노출한다.
 Dashboard 2/3의 빈 공간을 두 번 탭하면 `선택 안 함`이 기본인 `센서 선택` 목록이 열린다. 위젯 바인딩은 변경하지 않았다.
+
+후속 UI 테스트 4건은 통과했다: Custom Sensor 편집기 진입/미저장 후 제거, visible-only 필터 화면, 빈 Dashboard 신호 선택,
+그리고 Car Scanner 홈 복귀. 임시 행 정리 테스트는 자동 생성 ID를 고정값으로 가정한 assertion 한 건이 실패했지만,
+사전 행 수 1을 확인한 뒤 삭제했고 사후 `New sensor` 개수 0은 통과했다. 다음 테스트도 빈 목록을 확인했다.
 
 ## 공식 문서 교차검증과 적용 한계
 
