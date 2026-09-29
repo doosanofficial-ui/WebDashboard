@@ -108,6 +108,7 @@ struct SessionsView: View {
     private var sessionStats: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: TelemetryTheme.Spacing.small) {
             sessionStat("DURATION", model.recordingElapsedSeconds.map(formatDuration) ?? "--:--", "timer")
+            sessionStat("MODE", model.runMode.rawValue, "switch.2")
             sessionStat("PENDING", String(model.queueDepth), "arrow.up.circle")
             sessionStat("GPS", model.locationStatus.uppercased(), "location.fill")
             sessionStat("LAST MARK", model.lastMarkAt?.formatted(date: .omitted, time: .shortened) ?? "NONE", "flag.fill")

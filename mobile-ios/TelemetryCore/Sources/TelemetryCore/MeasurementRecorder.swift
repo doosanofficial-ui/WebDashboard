@@ -33,11 +33,32 @@ public struct PersistedMeasurementSession: Codable, Equatable, Sendable {
     public let sessionID: String
     public let startedAt: Double
     public let endedAt: Double?
+    public let mode: TelemetryRunMode
 
-    public init(sessionID: String, startedAt: Double, endedAt: Double?) {
+    public init(
+        sessionID: String,
+        startedAt: Double,
+        endedAt: Double?,
+        mode: TelemetryRunMode = .live
+    ) {
         self.sessionID = sessionID
         self.startedAt = startedAt
         self.endedAt = endedAt
+        self.mode = mode
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case sessionID, startedAt, endedAt, mode
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            sessionID: try values.decode(String.self, forKey: .sessionID),
+            startedAt: try values.decode(Double.self, forKey: .startedAt),
+            endedAt: try values.decodeIfPresent(Double.self, forKey: .endedAt),
+            mode: try values.decodeIfPresent(TelemetryRunMode.self, forKey: .mode) ?? .live
+        )
     }
 }
 
@@ -57,8 +78,14 @@ public actor MeasurementRecorder {
     private static let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
     private let db: OpaquePointer
     private let sessionID: String
+    private let mode: TelemetryRunMode
 
-    public init(path: URL, sessionID: String, startedAt: Double) throws {
+    public init(
+        path: URL,
+        sessionID: String,
+        startedAt: Double,
+        mode: TelemetryRunMode = .live
+    ) throws {
         guard !sessionID.isEmpty, startedAt.isFinite else { throw TelemetryError.invalidBatch }
         try FileManager.default.createDirectory(
             at: path.deletingLastPathComponent(),
@@ -71,6 +98,7 @@ public actor MeasurementRecorder {
         }
         db = connection
         self.sessionID = sessionID
+        self.mode = mode
         try? FileManager.default.setAttributes(
             [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
             ofItemAtPath: path.path
@@ -82,7 +110,8 @@ public actor MeasurementRecorder {
         CREATE TABLE IF NOT EXISTS measurement_sessions (
           session_id TEXT PRIMARY KEY,
           started_at REAL NOT NULL,
-          ended_at REAL
+          ended_at REAL,
+          mode TEXT NOT NULL DEFAULT 'LIVE'
         );
         CREATE TABLE IF NOT EXISTS measurements (
           sequence INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,10 +129,21 @@ public actor MeasurementRecorder {
             sqlite3_close(connection)
             throw TelemetryError.storage
         }
-        let insert = try Self.prepare(connection, "INSERT OR IGNORE INTO measurement_sessions(session_id, started_at) VALUES (?, ?)")
+        // Existing sessions databases predate the mode column. SQLite reports
+        // a duplicate-column error when the migration already ran, which is
+        // intentionally harmless.
+        _ = sqlite3_exec(
+            connection,
+            "ALTER TABLE measurement_sessions ADD COLUMN mode TEXT NOT NULL DEFAULT 'LIVE'",
+            nil,
+            nil,
+            nil
+        )
+        let insert = try Self.prepare(connection, "INSERT OR IGNORE INTO measurement_sessions(session_id, started_at, mode) VALUES (?, ?, ?)")
         defer { sqlite3_finalize(insert) }
         try Self.bind(sessionID, to: insert, index: 1)
         sqlite3_bind_double(insert, 2, startedAt)
+        try Self.bind(mode.rawValue, to: insert, index: 3)
         guard sqlite3_step(insert) == SQLITE_DONE else { throw TelemetryError.storage }
     }
 
@@ -267,15 +307,23 @@ public actor MeasurementRecorder {
     }
 
     public func exportSession() throws -> PersistedMeasurementSession {
-        let query = try Self.prepare(db, "SELECT started_at, ended_at FROM measurement_sessions WHERE session_id=?")
+        let query = try Self.prepare(db, "SELECT started_at, ended_at, mode FROM measurement_sessions WHERE session_id=?")
         defer { sqlite3_finalize(query) }
         try Self.bind(sessionID, to: query, index: 1)
         guard sqlite3_step(query) == SQLITE_ROW else { throw TelemetryError.storage }
         let endedAt = sqlite3_column_type(query, 1) == SQLITE_NULL ? nil : sqlite3_column_double(query, 1)
+        let mode: TelemetryRunMode
+        if let modeText = sqlite3_column_text(query, 2),
+           let decodedMode = TelemetryRunMode(rawValue: String(cString: modeText)) {
+            mode = decodedMode
+        } else {
+            mode = .live
+        }
         return PersistedMeasurementSession(
             sessionID: sessionID,
             startedAt: sqlite3_column_double(query, 0),
-            endedAt: endedAt
+            endedAt: endedAt,
+            mode: mode
         )
     }
 

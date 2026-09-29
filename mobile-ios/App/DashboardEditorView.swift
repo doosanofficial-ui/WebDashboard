@@ -195,6 +195,18 @@ struct DashboardEditorView: View {
                     .foregroundStyle(.secondary)
                 HStack {
                     TextField("Label", text: $draftLabel)
+                    Menu("Bind signal") {
+                        if model.availableSignalIDs.isEmpty {
+                            Text("No profile signals")
+                        } else {
+                            ForEach(model.availableSignalIDs, id: \.self) { signalID in
+                                Button(signalID) { draftSignalID = signalID }
+                            }
+                        }
+                    }
+                    .accessibilityIdentifier("bind-dashboard-signal")
+                }
+                HStack {
                     TextField("Signal ID", text: $draftSignalID)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()

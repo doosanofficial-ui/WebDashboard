@@ -23,6 +23,18 @@ final class TelemetryModel: NSObject {
     var localRecordingStatus = "Preparing local recorder"
     var exportStatus = "No export generated"
     var localRecordingEnabled = false
+    var runMode: TelemetryRunMode = .live
+    var availableSignalIDs: [String] {
+        var ids: [String] = []
+        if let profile = adapterProfile {
+            ids.append(contentsOf: profile.signals.map(\.id))
+            ids.append(contentsOf: profile.diagnosticQueries.flatMap { query in
+                query.signals.map(\.id)
+            })
+        }
+        if let frame { ids.append(contentsOf: frame.sig.keys) }
+        return Array(Set(ids)).sorted()
+    }
     var dashboardProfile: DashboardProfile?
     var adapterProfile: AdapterProfile?
     var adapterStatus = "Adapter disconnected"
@@ -345,6 +357,7 @@ final class TelemetryModel: NSObject {
         disconnect()
         liveAdapter.stop()
         diagnosticAdapter.stop()
+        runMode = .demo
         demoAdapter.start()
     }
 
@@ -363,6 +376,7 @@ final class TelemetryModel: NSObject {
         disconnect()
         demoAdapter.stop()
         diagnosticAdapter.stop()
+        runMode = .live
         guard let adapterProfile else {
             adapterProfileStatus = "No live adapter profile"
             adapterStatus = "Live adapter not configured"
@@ -1035,7 +1049,12 @@ final class TelemetryModel: NSObject {
         do {
             let now = Date().timeIntervalSince1970
             let sessionID = "ios-\(Int(now))-\(clientID)"
-            let recorder = try MeasurementRecorder(path: measurementDBURL, sessionID: sessionID, startedAt: now)
+            let recorder = try MeasurementRecorder(
+                path: measurementDBURL,
+                sessionID: sessionID,
+                startedAt: now,
+                mode: runMode
+            )
             localRecorder = recorder
             completedRecorder = nil
             localRecordingEnabled = true

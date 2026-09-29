@@ -1,18 +1,18 @@
 # Diagnostic Signal E2E Implementation Checkpoint
 
 Date: 2026-09-30
-Main commit: `954cf86deae5ee79b35d9c4347fd3dec673616d6`
-App version/build: `0.22.0 (16)`
+Main commit: `pending commit for 0.22.1 software/UI improvements`
+App version/build: `0.22.1 (17)`
 Scope: iPhone 17 / iOS 27 / native SwiftUI / read-only ELM327 diagnostics
 
 ## Software Gate
 
 `PASS`
 
-- Core test suite: `108` tests, `0` failures.
+- Core test suite: `109` tests, `0` failures.
 - iOS 27 Simulator app build: `BUILD SUCCEEDED`.
 - Platform documentation validation: passed.
-- Fresh post-commit verification artifact: `/tmp/telemetry-ios-verify.yZNI7Y`.
+- Fresh verification artifact: `/tmp/telemetry-ios-verify.P3snWl`.
 
 Implemented path:
 
@@ -47,7 +47,7 @@ software/fixture result, not a physical Santa Fe result.
 | iPhone 17 build | `PASS` | device destination `00008150-000E39C43CDB401C` |
 | iPhone 17 install | `PASS` | `devicectl` installed `local.webdashboard.Telemetry` |
 | iPhone 17 launch | `PASS` | `devicectl` foreground launch |
-| Physical launch UI | `PASS` | `docs/reports/evidence/telemetry-ios27-physical-v0.22.0-launch.png` |
+| Physical launch UI | `PASS` | `docs/reports/evidence/telemetry-ios27-physical-v0.22.1-launch.png` |
 | Physical BLE scan path | `PASS` | `TelemetryUITests/testPhysicalBLEObservationCapture()` on iPhone 17 |
 | BT4N GATT profile | `BLOCKED` | 50 peripherals observed; NANICAR/ELM327/OBD name matches: 0 |
 | Santa Fe MX5 HEV response | `BLOCKED` | Physical adapter + stationary vehicle evidence required |

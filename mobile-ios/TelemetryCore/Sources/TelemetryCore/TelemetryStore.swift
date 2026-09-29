@@ -15,6 +15,12 @@ public enum TelemetrySource: String, Codable, Equatable, Sendable {
     case replay = "replay"
 }
 
+public enum TelemetryRunMode: String, Codable, Equatable, Sendable {
+    case live = "LIVE"
+    case demo = "DEMO"
+    case replay = "REPLAY"
+}
+
 public struct DecodedSignalSample: Codable, Equatable, Sendable {
     public let signalID: String
     public let value: Double

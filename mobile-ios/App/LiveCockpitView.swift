@@ -694,6 +694,9 @@ struct LiveCockpitView: View {
     }
 
     private var bitText: String {
+        if model.canSource == "Diagnostic" {
+            return "Diagnostic response; passive CAN bits unavailable"
+        }
         guard let payload = model.rawCANText.split(separator: "  ").last else { return "-" }
         return payload.split(separator: " ").compactMap { UInt8($0, radix: 16) }
             .map { String($0, radix: 2).leftPadded(to: 8) }

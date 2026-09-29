@@ -205,7 +205,8 @@ struct SignalsView: View {
     private func rawCANCard() -> some View {
         VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
             HStack {
-                Label("RAW CAN", systemImage: "hexagon")
+                Label(model.canSource == "Diagnostic" ? "DIAGNOSTIC RESPONSE" : "RAW CAN",
+                      systemImage: model.canSource == "Diagnostic" ? "arrow.left.arrow.right" : "hexagon")
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(.white)
                 Spacer()
@@ -264,7 +265,7 @@ struct SignalsView: View {
 
     private var signalRows: [SignalRow] {
         if let profile = model.adapterProfile {
-            return profile.signals.map {
+            let rawRows = profile.signals.map {
                 SignalRow(
                     id: $0.id,
                     name: $0.name,
@@ -273,6 +274,20 @@ struct SignalsView: View {
                     detail: "0x\(String($0.canID, radix: 16, uppercase: true)) · \($0.byteOrder.rawValue.uppercased()) · \($0.bitLength) bit"
                 )
             }
+            let diagnosticRows = profile.diagnosticQueries.flatMap { query in
+                query.signals.map { signal in
+                    SignalRow(
+                        id: signal.id,
+                        name: signal.name,
+                        unit: signal.unit,
+                        decimals: decimals(for: signal.factor),
+                        detail: "DIAGNOSTIC · 0x\(String(query.requestCANID, radix: 16, uppercase: true)) → 0x\(String(query.responseCANID, radix: 16, uppercase: true)) · \(query.service.rawValue) \(query.command) · \(query.pollInterval)s"
+                    )
+                }
+            }
+            var rowsByID: [String: SignalRow] = [:]
+            for row in rawRows + diagnosticRows { rowsByID[row.id] = row }
+            return rowsByID.values.sorted { $0.id < $1.id }
         }
         guard model.frame != nil || model.connection == "Connected" else { return [] }
         return ["ws_fl", "ws_fr", "ws_rl", "ws_rr", "yaw", "ax", "ay"].map { id in

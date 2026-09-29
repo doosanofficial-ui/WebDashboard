@@ -135,4 +135,30 @@ final class MeasurementRecorderTests: XCTestCase {
         XCTAssertEqual(rows.map(\.kind), ["CAN", "SYSTEM"])
         XCTAssertTrue(rows.last?.payloadJSON.contains("recording_interrupted") == true)
     }
+
+    func testSessionExecutionModeIsPersistedAndLegacyPayloadDefaultsToLive() async throws {
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("measurement-mode-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: path) }
+
+        let recorder = try MeasurementRecorder(
+            path: path,
+            sessionID: "demo-session",
+            startedAt: 90,
+            mode: .demo
+        )
+        try await recorder.finish(endedAt: 91)
+        let session = try await recorder.exportSession()
+        XCTAssertEqual(session.mode, .demo)
+
+        let legacy = Data("""
+        {
+          "schemaVersion": 1,
+          "session": {"sessionID":"legacy","startedAt":1,"endedAt":2},
+          "measurements": []
+        }
+        """.utf8)
+        let decoded = try JSONDecoder().decode(MeasurementExport.self, from: legacy)
+        XCTAssertEqual(decoded.session.mode, .live)
+    }
 }
