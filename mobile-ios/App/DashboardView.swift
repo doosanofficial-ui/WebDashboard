@@ -286,6 +286,7 @@ private struct SetupView: View {
                                 .buttonStyle(.bordered)
                             Button("Copy", action: model.copyBLEObservation)
                                 .buttonStyle(.bordered)
+                                .accessibilityIdentifier("copy-ble-observation")
                             Button("Save", action: model.saveBLEObservation)
                                 .buttonStyle(.bordered)
                                 .accessibilityIdentifier("save-ble-observation")
@@ -293,6 +294,7 @@ private struct SetupView: View {
                         Text(model.bleDiscoveryStatus)
                             .font(.caption)
                             .foregroundStyle(TelemetryTheme.mutedText)
+                            .accessibilityIdentifier("ble-discovery-status")
                         ForEach(model.bleDevices) { device in
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(device.name)

@@ -48,12 +48,21 @@ software/fixture result, not a physical Santa Fe result.
 | iPhone 17 install | `PASS` | `devicectl` installed `local.webdashboard.Telemetry` |
 | iPhone 17 launch | `PASS` | `devicectl` foreground launch |
 | Physical launch UI | `PASS` | `docs/reports/evidence/telemetry-ios27-physical-v0.22.0-launch.png` |
-| BT4N GATT profile | `NOT TESTED` | No current verified peripheral observation in this run |
+| Physical BLE scan path | `PASS` | `TelemetryUITests/testPhysicalBLEObservationCapture()` on iPhone 17 |
+| BT4N GATT profile | `BLOCKED` | 50 peripherals observed; NANICAR/ELM327/OBD name matches: 0 |
 | Santa Fe MX5 HEV response | `BLOCKED` | Physical adapter + stationary vehicle evidence required |
 | Diagnostic physical E2E | `BLOCKED` | Must prove real BT4N -> iPhone -> HV SOC response |
 
 The captured launch screen is evidence of this build being installed and
 running on the physical iPhone. It is not evidence of vehicle connectivity.
+
+The physical BLE scan evidence is split into a masked result and a screenshot:
+
+- Result: `docs/reports/evidence/telemetry-ios27-ble-scan-2026-09-30.json`
+- UI evidence: `docs/reports/evidence/telemetry-ios27-ble-scan-no-bt4n.png`
+
+The scan path and pasteboard export passed, but the adapter was not advertising
+during the capture. No UUID or compatibility claim is made.
 
 ## Separate Gates
 
@@ -65,7 +74,8 @@ running on the physical iPhone. It is not evidence of vehicle connectivity.
 
 ## Next Human Action
 
-1. On the iPhone, run BLE discovery with the NANICAR BT4N powered and record the
+1. Power the NANICAR BT4N from the vehicle OBD-II port with the vehicle awake;
+   keep it near the iPhone and run BLE discovery again. Record the
    actual peripheral/service/characteristic UUIDs and notify/write properties.
 2. Create/import an AdapterProfile schema 2 using those observed UUIDs and the
    included Santa Fe diagnostic query catalog; do not guess UUIDs.

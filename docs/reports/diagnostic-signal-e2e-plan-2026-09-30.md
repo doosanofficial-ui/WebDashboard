@@ -132,8 +132,11 @@ Status at implementation checkpoint: `SOFTWARE: PASS`.
   Simulator app build passed. `python3 scripts/validate_platform_docs.py`
   passed.
 
+The physical iPhone BLE scan path is now `PASS` (50 peripherals observed and
+pasteboard evidence exported), but `NANICAR/ELM327/OBD` matches were `0`.
 `PHYSICAL DIAGNOSTIC E2E`, `RAW CAN`, and `CARPLAY` remain `NOT TESTED` or
-`BLOCKED: PHYSICAL HARDWARE/ENTITLEMENT EVIDENCE REQUIRED` until a verified
-BT4N GATT profile and stationary Santa Fe response are captured on iPhone 17.
+`BLOCKED: PHYSICAL HARDWARE/ENTITLEMENT EVIDENCE REQUIRED` until the powered
+BT4N advertises, its GATT profile is inspected, and a stationary Santa Fe
+response is captured on iPhone 17.
 
 Detailed checkpoint and device evidence: `docs/reports/diagnostic-signal-e2e-implementation-2026-09-30.md`.

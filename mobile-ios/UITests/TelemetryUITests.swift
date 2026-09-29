@@ -191,6 +191,39 @@ final class TelemetryUITests: XCTestCase {
         XCTAssertTrue(app.buttons["scan-ble-adapters"].waitForExistence(timeout: 5))
     }
 
+    func testPhysicalBLEObservationCapture() {
+        let app = XCUIApplication()
+        let bluetoothPermission = addUIInterruptionMonitor(withDescription: "Bluetooth permission") { alert in
+            for label in ["Allow", "OK"] {
+                let button = alert.buttons[label]
+                if button.exists {
+                    button.tap()
+                    return true
+                }
+            }
+            return false
+        }
+        defer { _ = bluetoothPermission }
+
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
+        app.tabBars.buttons["Setup"].tap()
+        app.buttons["Developer / diagnostics"].tap()
+        app.buttons["BLE discovery (read-only)"].tap()
+        let scan = app.buttons["scan-ble-adapters"]
+        XCTAssertTrue(scan.waitForExistence(timeout: 5))
+        scan.tap()
+        sleep(15)
+        let copy = app.buttons["copy-ble-observation"]
+        XCTAssertTrue(copy.waitForExistence(timeout: 5))
+        copy.tap()
+
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Physical BLE discovery observation"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
     func testMeasurementExportControlIsVisible() {
         let app = XCUIApplication()
         app.launch()

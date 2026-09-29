@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-09-30",
+  "device_model": "iPhone 17",
+  "os_version": "iOS 27.0",
+  "device_id": "redacted",
+  "capture_method": "physical XCUITest testPhysicalBLEObservationCapture + device pasteboard",
+  "scan_duration_seconds": 15,
+  "discovered_peripheral_count": 50,
+  "named_peripheral_count": 17,
+  "nanicar_elm327_obd_name_matches": 0,
+  "gatt_inspections_completed": 0,
+  "result": "BT4N_NOT_OBSERVED",
+  "interpretation": "The phone scan path worked, but no peripheral advertised as NANICAR, ELM327, or OBD during this capture. This is not adapter compatibility evidence.",
+  "privacy": "Peripheral identifiers, RSSI values, and unrelated device names intentionally omitted."
+}
