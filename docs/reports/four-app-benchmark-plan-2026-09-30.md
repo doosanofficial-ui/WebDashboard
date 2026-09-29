@@ -8,14 +8,15 @@ Current device inventory confirms these installed apps:
 
 | App | Version | Bundle ID | Current direct exploration |
 | --- | --- | --- | --- |
-| Pelican | 5.0.3 (855) | com.featherless.apps.electricsidecar | BLOCKED: XCTest passcode prompt |
-| Car Scanner | 2.1.46 | ovz.Car-Scanner | BLOCKED: XCTest passcode prompt |
-| ABRP | 7.1.7 (5980) | com.iternio.abrpapp | BLOCKED: XCTest passcode prompt |
-| OBDeleven | 2.12.0 (1790149781) | com.voltasit.obdeleven.ios.basic | BLOCKED: XCTest passcode prompt |
+| Pelican | 5.0.3 (855) | com.featherless.apps.electricsidecar | PARTIAL: garage/demo, Logbook child screens, Settings and safe OBD scanning settings observed; no scanner connected |
+| Car Scanner | 2.1.46 | ovz.Car-Scanner | PARTIAL: all 13 top-level pages and selected dashboard/sensor/settings branches observed in demo; no live ECU data |
+| ABRP | 7.1.7 (5980) | com.iternio.abrpapp | PARTIAL: map/route panel, vehicle, charging, routing and privacy settings observed; no destination or route run |
+| OBDeleven | 2.12.0 (1790149781) | com.voltasit.obdeleven.ios.basic | PARTIAL: demo vehicle/ECU, disconnected live-data gate and read-only One-Click Apps catalog filters observed |
 
-The attached home-screen photos establish installation, not feature execution. Current
-capture shows “Enter iPhone Passcode for XCTest / Enable UI Automation”. The user must
-enter the passcode on the phone. No app feature was directly verified in this run yet.
+The attached home-screen photos establish installation, not feature execution. The initial
+XCTest attempt showed “Enter iPhone Passcode for XCTest / Enable UI Automation” and timed out.
+The user later enabled UI automation; see the authenticated exploration checkpoint below for
+the current direct-screen evidence. The initial prompt is historical, not a current blocker.
 The harness log is /tmp/vehicle-benchmark-20260930/entry.log with result bundle
 /tmp/vehicle-benchmark-20260930/entry.xcresult. The run terminated with exit 65: timed out while enabling automation mode. Retry only after device authentication.
 
@@ -97,6 +98,10 @@ No product code, version, or recorded measurement data changed for this benchmar
 
 User completed XCTest authentication. Current direct observations and adoption specifications:
 [four-app-benchmark-observed-2026-09-30.md](four-app-benchmark-observed-2026-09-30.md).
-The earlier blocked rows above describe the initial attempt, not current access status.
-Four apps were subsequently opened; 11 reviewed non-identifying screenshots are preserved.
-Hardware-only behavior, export behavior and the remaining child menus are not fully verified.
+The earlier initial attempt timed out at the passcode screen; it is not the current access status.
+Four apps were subsequently opened, nine more non-identifying screen captures were reviewed, and the
+evidence gallery now contains 20 reviewed screenshots. `carscanner-all` originally captured the home
+screen repeatedly due to StaticText-only taps; those images are excluded as feature-navigation proof.
+Corrected runs confirmed the dashboard, live-data modes, all-sensor list, DTC/readiness/freeze-frame,
+Pelican scan settings, and OBDeleven catalog. Hardware-only behavior, actual log export/replay, route
+generation, and remaining settings/detail branches are still not verified.

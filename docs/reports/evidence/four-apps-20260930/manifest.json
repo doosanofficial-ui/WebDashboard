@@ -108,5 +108,95 @@
     "status": "OBSERVED",
     "device": "physical iPhone 17",
     "note": "Navigation/screen evidence, not vehicle acquisition proof"
+  },
+  {
+    "screen": "CarScanner-all-sensors-demo",
+    "file": "CarScanner-all-sensors-demo.png",
+    "sha256": "70017385fb26d7e05dd3e2f5dd9e1eb22c9f50e88072169d4cf89c9ebdf94fc2",
+    "epoch": 1790708178.829,
+    "test": "BenchmarkTests/testCarScannerVisibleFunctionsVerified()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Synthetic/demo sensor values only; not vehicle telemetry"
+  },
+  {
+    "screen": "CarScanner-DTC-read-only",
+    "file": "CarScanner-DTC-read-only.png",
+    "sha256": "be2b7d635bedb4cb7feac749d51d759a6230a1a2ef9e47b09be6a1b9983df759",
+    "epoch": 1790708189.882,
+    "test": "BenchmarkTests/testCarScannerVisibleFunctionsVerified()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Read/delete controls are visible; neither was activated"
+  },
+  {
+    "screen": "CarScanner-readiness-demo",
+    "file": "CarScanner-readiness-demo.png",
+    "sha256": "61b5ce5720a569595d98c948f82dfa907a2890c7b06d09cc1f0a19f0e1f5f1a9",
+    "epoch": 1790708211.317,
+    "test": "BenchmarkTests/testCarScannerVisibleFunctionsVerified()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Demo readiness values only; not an emissions test result"
+  },
+  {
+    "screen": "CarScanner-freeze-frame-empty",
+    "file": "CarScanner-freeze-frame-empty.png",
+    "sha256": "9778f7c439858750ca35720a980ee0cb8b610c59cefdbf3496ff3fd6f693ec61",
+    "epoch": 1790708200.513,
+    "test": "BenchmarkTests/testCarScannerVisibleFunctionsVerified()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Demo reports no supported/available freeze frame"
+  },
+  {
+    "screen": "CarScanner-dashboard-page-2",
+    "file": "CarScanner-dashboard-page-2.png",
+    "sha256": "1acceba13d32ab87ea6106b20ed6823abd516bb094bc20b2a875a8f64eb84b5c",
+    "epoch": 1790708135.176,
+    "test": "BenchmarkTests/testCarScannerVisibleFunctionsVerified()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Empty page prompt; no layout was edited"
+  },
+  {
+    "screen": "CarScanner-live-data-chart-demo",
+    "file": "CarScanner-live-data-chart-demo.png",
+    "sha256": "9d84a9b8805b9068f6c45d764af7c964a3532a37c9799285fff86df76ae905a0",
+    "epoch": 1790708158.491,
+    "test": "BenchmarkTests/testCarScannerVisibleFunctionsVerified()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Demo chart screen; source values are synthetic"
+  },
+  {
+    "screen": "CarScanner-dashboard-actions",
+    "file": "CarScanner-dashboard-actions.png",
+    "sha256": "7c844656968b2d80bea3314e5d50a3d68bdc3bb76336c155c61159a8eb1ec9d3",
+    "epoch": 1790708659.698,
+    "test": "BenchmarkTests/testCarScannerDashboardEditorEntry()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Page-management menu; no action selected"
+  },
+  {
+    "screen": "Pelican-OBD-scanning-settings",
+    "file": "Pelican-OBD-scanning-settings.png",
+    "sha256": "e1f8e01e34789061167fe4569211eec68f4da0730e4f01f21efb49ca42fd456d",
+    "epoch": 1790708687.327,
+    "test": "BenchmarkTests/testPelicanReadOnlySettingsBranches()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Vehicle scanning is OFF; switch was not changed"
+  },
+  {
+    "screen": "OBDeleven-apps-catalogue",
+    "file": "OBDeleven-apps-catalogue.png",
+    "sha256": "4ffcb50ee918ae49fabfccaca3a7075e66d1c7d2926959c1ad1dd8b928a9f05a",
+    "epoch": 1790708671.613,
+    "test": "BenchmarkTests/testOBDelevenOneClickCatalogueReadOnly()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Catalog only; no vehicle customization was activated"
   }
 ]
