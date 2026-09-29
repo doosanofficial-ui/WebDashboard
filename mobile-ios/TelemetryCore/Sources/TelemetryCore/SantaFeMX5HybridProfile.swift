@@ -7,6 +7,10 @@ import Foundation
 /// a response from the physical vehicle proves support; `dbgfilter` metadata is
 /// deliberately not used as runtime proof.
 public enum SantaFeMX5HybridQueryCatalog {
+    public static func initialQueries() throws -> [OBDQueryDefinition] {
+        try baselineQueries() + [hvBatterySOC()]
+    }
+
     public static func hvBatterySOC() throws -> OBDQueryDefinition {
         try query(
             id: "santafe-mx5-hev-hv-soc",

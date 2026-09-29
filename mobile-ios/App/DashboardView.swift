@@ -306,6 +306,12 @@ private struct SetupView: View {
                                     model.inspectBLEDevice(device.id)
                                 }
                                 .buttonStyle(.bordered)
+                                Button("Use as Santa Fe diagnostic profile") {
+                                    model.createSantaFeDiagnosticProfile(from: device.id)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(device.services.isEmpty)
+                                .accessibilityIdentifier("use-ble-profile-\(device.id.uuidString)")
                                 ForEach(device.services) { service in
                                     Text("Service \(service.id)")
                                         .font(.caption2.monospaced())

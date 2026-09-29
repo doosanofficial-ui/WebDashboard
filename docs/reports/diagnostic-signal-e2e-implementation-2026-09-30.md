@@ -1,18 +1,18 @@
 # Diagnostic Signal E2E Implementation Checkpoint
 
 Date: 2026-09-30
-Main commit: `a8e515a048d98cc3fe83754dff743bc9b40e1407`
-App version/build: `0.22.1 (17)`
+Main commit: `pending commit for 0.22.2 profile-builder improvements`
+App version/build: `0.22.2 (18)`
 Scope: iPhone 17 / iOS 27 / native SwiftUI / read-only ELM327 diagnostics
 
 ## Software Gate
 
 `PASS`
 
-- Core test suite: `109` tests, `0` failures.
+- Core test suite: `110` tests, `0` failures.
 - iOS 27 Simulator app build: `BUILD SUCCEEDED`.
 - Platform documentation validation: passed.
-- Fresh verification artifact: `/tmp/telemetry-ios-verify.P3snWl`.
+- Fresh verification artifact: `/tmp/telemetry-ios-verify.mAWjWo`.
 
 Implemented path:
 
@@ -47,7 +47,7 @@ software/fixture result, not a physical Santa Fe result.
 | iPhone 17 build | `PASS` | device destination `00008150-000E39C43CDB401C` |
 | iPhone 17 install | `PASS` | `devicectl` installed `local.webdashboard.Telemetry` |
 | iPhone 17 launch | `PASS` | `devicectl` foreground launch |
-| Physical launch UI | `PASS` | `docs/reports/evidence/telemetry-ios27-physical-v0.22.1-launch.png` |
+| Physical launch UI | `PASS` | `docs/reports/evidence/telemetry-ios27-physical-v0.22.2-launch.png` |
 | Physical BLE scan path | `PASS` | `TelemetryUITests/testPhysicalBLEObservationCapture()` on iPhone 17 |
 | BT4N GATT profile | `BLOCKED` | 50 peripherals observed; NANICAR/ELM327/OBD name matches: 0 |
 | Santa Fe MX5 HEV response | `BLOCKED` | Physical adapter + stationary vehicle evidence required |
@@ -63,6 +63,11 @@ The physical BLE scan evidence is split into a masked result and a screenshot:
 
 The scan path and pasteboard export passed, but the adapter was not advertising
 during the capture. No UUID or compatibility claim is made.
+
+When a future GATT observation contains exactly one service and one distinct
+write plus notify/indicate characteristic, the app can now create the Santa Fe
+diagnostic schema-2 profile without guessing. Ambiguous observations are
+rejected and remain unconfigured.
 
 ## Separate Gates
 

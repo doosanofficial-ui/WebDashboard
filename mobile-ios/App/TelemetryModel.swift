@@ -428,6 +428,24 @@ final class TelemetryModel: NSObject {
         }
     }
 
+    func createSantaFeDiagnosticProfile(from peripheralID: UUID) {
+        do {
+            let queries = try SantaFeMX5HybridQueryCatalog.initialQueries()
+            let profile = try bleDiscovery.makeDiagnosticProfile(for: peripheralID, queries: queries)
+            let data = try JSONEncoder().encode(profile)
+            importAdapterProfile(data)
+            bleDiscoveryStatus = "Observed GATT profile converted to Santa Fe diagnostic profile"
+        } catch BLEObservedProfileError.serviceCountIsAmbiguous {
+            bleDiscoveryStatus = "Profile not created: service count is ambiguous"
+        } catch BLEObservedProfileError.writeCharacteristicIsAmbiguous {
+            bleDiscoveryStatus = "Profile not created: write characteristic is ambiguous"
+        } catch BLEObservedProfileError.notifyCharacteristicIsAmbiguous {
+            bleDiscoveryStatus = "Profile not created: notify characteristic is ambiguous"
+        } catch {
+            bleDiscoveryStatus = "Observed GATT profile could not be converted"
+        }
+    }
+
     func importAdapterProfile(_ data: Data) {
         do {
             let profile = try JSONDecoder().decode(AdapterProfile.self, from: data)

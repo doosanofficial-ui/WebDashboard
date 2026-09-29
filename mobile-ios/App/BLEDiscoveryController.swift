@@ -1,5 +1,6 @@
 import CoreBluetooth
 import Foundation
+import TelemetryCore
 
 struct BLEDiscoveredCharacteristic: Codable, Equatable, Identifiable {
     let id: String
@@ -17,6 +18,13 @@ struct BLEDiscoveredDevice: Codable, Equatable, Identifiable {
     var rssi: Int
     var state: String
     var services: [BLEDiscoveredService]
+}
+
+enum BLEObservedProfileError: Error, Equatable {
+    case deviceNotFound
+    case serviceCountIsAmbiguous
+    case writeCharacteristicIsAmbiguous
+    case notifyCharacteristicIsAmbiguous
 }
 
 /// Discovery-only BLE probe. It records observed GATT structure but never
@@ -85,6 +93,44 @@ final class BLEDiscoveryController: NSObject, @preconcurrency CBCentralManagerDe
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         return try? encoder.encode(devices.values.sorted { $0.name < $1.name })
+    }
+
+    func makeDiagnosticProfile(
+        for id: UUID,
+        queries: [OBDQueryDefinition]
+    ) throws -> AdapterProfile {
+        guard let device = devices[id] else { throw BLEObservedProfileError.deviceNotFound }
+        guard device.services.count == 1, let service = device.services.first else {
+            throw BLEObservedProfileError.serviceCountIsAmbiguous
+        }
+        let writeCandidates = service.characteristics.filter { characteristic in
+            characteristic.properties.contains("write")
+                || characteristic.properties.contains("write_without_response")
+        }
+        let notifyCandidates = service.characteristics.filter { characteristic in
+            characteristic.properties.contains("notify")
+                || characteristic.properties.contains("indicate")
+        }
+        guard writeCandidates.count == 1 else {
+            throw BLEObservedProfileError.writeCharacteristicIsAmbiguous
+        }
+        guard notifyCandidates.count == 1,
+              notifyCandidates[0].id != writeCandidates[0].id else {
+            throw BLEObservedProfileError.notifyCharacteristicIsAmbiguous
+        }
+        return try AdapterProfile(
+            id: "observed-\(device.id.uuidString.lowercased())",
+            name: "Observed \(device.name) Santa Fe diagnostic profile",
+            transport: .ble,
+            peripheralID: device.id,
+            serviceUUID: service.id,
+            writeCharacteristicUUID: writeCandidates[0].id,
+            notifyCharacteristicUUID: notifyCandidates[0].id,
+            host: nil,
+            port: nil,
+            signals: [],
+            diagnosticQueries: queries
+        )
     }
 
     func centralManagerDidUpdateState(_ central: CBCentralManager) {

@@ -203,6 +203,14 @@ final class OBDQueryTests: XCTestCase {
         XCTAssertEqual(query.signals[0].suggestedMetric, "stateOfCharge")
     }
 
+    func testInitialSantaFeCatalogChecksBaselineBeforeHVSignal() throws {
+        let queries = try SantaFeMX5HybridQueryCatalog.initialQueries()
+
+        XCTAssertEqual(queries.count, 5)
+        XCTAssertEqual(queries.prefix(4).map(\.service), [.mode01, .mode01, .mode01, .mode01])
+        XCTAssertEqual(queries.last?.id, "santafe-mx5-hev-hv-soc")
+    }
+
     func testInvalidQueryTimingAndEmptySignalsAreRejected() throws {
         let signal = try OBDSignalDefinition(
             id: "signal",
