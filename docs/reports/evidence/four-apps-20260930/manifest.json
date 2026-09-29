@@ -198,5 +198,85 @@
     "status": "OBSERVED",
     "device": "physical iPhone 17",
     "note": "Catalog only; no vehicle customization was activated"
+  },
+  {
+    "screen": "CarScanner-custom-sensor-editor-unsaved",
+    "file": "CarScanner-custom-sensor-editor-unsaved.png",
+    "sha256": "e4c73850ca8164c3e79c7ca9f168fabdc217acab28f1473cc17fe72e9cd15033",
+    "epoch": 1790711868.225,
+    "test": "BenchmarkTests/testCarScannerCustomSensorDetailWithoutSaving()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Blank temporary sensor editor; fields unchanged, item removed afterward"
+  },
+  {
+    "screen": "CarScanner-all-sensors-visible-only",
+    "file": "CarScanner-all-sensors-visible-only.png",
+    "sha256": "0d9a19d7601cdf427da6c675423e17ccec423544564d6b86b7b6e3037b335e80",
+    "epoch": 1790711443.923,
+    "test": "BenchmarkTests/testCarScannerSensorFilterAndEmptyDashboardAdd()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Visible-only update option and search UI; demo values, no option changed"
+  },
+  {
+    "screen": "CarScanner-dashboard-page-2-empty",
+    "file": "CarScanner-dashboard-page-2-empty.png",
+    "sha256": "c8105e710c10b19de798e60f49d3aaf7ba1330f26b688ddaf9e1068ab80681c1",
+    "epoch": 1790711734.665,
+    "test": "BenchmarkTests/testCarScannerEmptyDashboardWidgetPicker()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Page 2/3 empty-slot add hint; no widget selected"
+  },
+  {
+    "screen": "CarScanner-dashboard-signal-picker",
+    "file": "CarScanner-dashboard-signal-picker.png",
+    "sha256": "13c8cdf25d0bc95e610fe59e12ae3354279cb6110dbfdbc7624e16abe1d63f99",
+    "epoch": 1790711737.452,
+    "test": "BenchmarkTests/testCarScannerEmptyDashboardWidgetPicker()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Sensor selection list opened from blank page; no sensor was bound"
+  },
+  {
+    "screen": "CarScanner-custom-sensor-editor-unsaved",
+    "file": "CarScanner-custom-sensor-editor-unsaved.png",
+    "sha256": "e4c73850ca8164c3e79c7ca9f168fabdc217acab28f1473cc17fe72e9cd15033",
+    "epoch": 1790711868.225,
+    "test": "BenchmarkTests/testCarScannerCustomSensorDetailWithoutSaving()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Blank temporary sensor editor; fields unchanged and placeholder removed afterward"
+  },
+  {
+    "screen": "CarScanner-all-sensors-visible-only",
+    "file": "CarScanner-all-sensors-visible-only.png",
+    "sha256": "0d9a19d7601cdf427da6c675423e17ccec423544564d6b86b7b6e3037b335e80",
+    "epoch": 1790711443.923,
+    "test": "BenchmarkTests/testCarScannerSensorFilterAndEmptyDashboardAdd()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Visible-only update option and search UI; demo values, no option changed"
+  },
+  {
+    "screen": "CarScanner-dashboard-page-2-empty",
+    "file": "CarScanner-dashboard-page-2-empty.png",
+    "sha256": "c8105e710c10b19de798e60f49d3aaf7ba1330f26b688ddaf9e1068ab80681c1",
+    "epoch": 1790711734.665,
+    "test": "BenchmarkTests/testCarScannerEmptyDashboardWidgetPicker()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Empty 2/3 page prompt; no widget selected"
+  },
+  {
+    "screen": "CarScanner-dashboard-signal-picker",
+    "file": "CarScanner-dashboard-signal-picker.png",
+    "sha256": "13c8cdf25d0bc95e610fe59e12ae3354279cb6110dbfdbc7624e16abe1d63f99",
+    "epoch": 1790711737.452,
+    "test": "BenchmarkTests/testCarScannerEmptyDashboardWidgetPicker()",
+    "status": "OBSERVED",
+    "device": "physical iPhone 17",
+    "note": "Opened Sensor Select from blank page; None remained selected, no binding created"
   }
 ]

@@ -99,12 +99,14 @@ No product code, version, or recorded measurement data changed for this benchmar
 User completed XCTest authentication. Current direct observations and adoption specifications:
 [four-app-benchmark-observed-2026-09-30.md](four-app-benchmark-observed-2026-09-30.md).
 The earlier initial attempt timed out at the passcode screen; it is not the current access status.
-Four apps were subsequently opened, nine more non-identifying screen captures were reviewed, and the
-evidence gallery now contains 20 reviewed screenshots. `carscanner-all` originally captured the home
+Four apps were subsequently opened, seventeen more non-identifying screen captures were reviewed, and the
+evidence gallery now contains 28 reviewed screenshots. `carscanner-all` originally captured the home
 screen repeatedly due to StaticText-only taps; those images are excluded as feature-navigation proof.
 Corrected runs confirmed the dashboard, live-data modes, all-sensor list, DTC/readiness/freeze-frame,
-Pelican scan settings, and OBDeleven catalog. Hardware-only behavior, actual log export/replay, route
-generation, and remaining settings/detail branches are still not verified.
-After the user unlocked the iPhone, a follow-up runner attempt still timed out enabling UI automation
-before either test case began. Custom Sensor creation, sensor filters, and the empty-dashboard widget
-picker remain untested pending the on-device automation handoff.
+Pelican scan settings, OBDeleven catalog, Car Scanner custom-sensor editor, visible-only sensor option,
+and the blank Dashboard sensor picker. The custom-sensor plus action created a temporary blank row; it was
+removed and an empty-list assertion passed. No signal binding or definition was saved. Hardware-only
+behavior, actual log export/replay, route generation, and remaining settings/detail branches are still not verified.
+An immediate post-unlock runner attempt timed out enabling UI automation, but later runs began and passed
+after fixing accessibility selectors; this is no longer the current blocker. The remaining gates require
+hardware/account/route-data or further non-mutating screen exploration, not device unlock.

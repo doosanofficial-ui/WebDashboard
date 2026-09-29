@@ -14,11 +14,11 @@
 같은 홈 화면이었다. 이 결과들은 기능별 화면 진입 증거로 세지 않는다. 이후 명시적 데모 상태에서
 타일 버튼을 눌러 화면 제목·본문 접근성 트리·스크린샷이 바뀐 경우에만 아래 커버리지에 포함했다.
 첫 교정 시도에서 자동화의 홈 판별 조건이 잘못되어 실패한 결과도 성공으로 승격하지 않았다.
-최종 직접 화면 증거는 `carscanner-visible-functions.xcresult`와 `safe-deep-branches.xcresult`다.
-이 증거는 앱 메뉴/데모 UI의 관찰이지 Car Scanner 데이터 수집 또는 싼타페 실차 측정 성공이 아니다.
-사용자가 iPhone 잠금을 해제한 뒤 추가로 시도한 Custom Sensor 생성 폼/센서 필터/빈 Dashboard 추가 흐름은
-Xcode UI 테스트 runner가 UI automation mode 활성화 단계에서 66초 후 중단되어 화면에 진입하지 못했다.
-해당 실행은 앱 기능 FAIL이 아니라 `BLOCKED: UI AUTOMATION HANDOFF REQUIRED`이며 새 화면 증거는 없다.
+최종 직접 화면 증거는 `carscanner-visible-functions.xcresult`, `safe-deep-branches.xcresult`,
+`csc-custom-sensor-detail.xcresult`, `csc-sensor-filter-dashboard-add2.xcresult`,
+`csc-empty-dashboard-picker.xcresult`다. 앱 메뉴/데모 UI 관찰이지 Car Scanner 데이터 수집이나
+싼타페 실차 측정 성공이 아니다. 사용자가 iPhone 잠금을 해제한 직후 한 번은 UI automation mode
+초기화가 timeout 되었으나, 후속 실행에서 선택자/화면 식별을 보정한 테스트가 시작되어 통과했다.
 
 설치: Pelican 5.0.3(855), Car Scanner 2.1.46, ABRP 7.1.7(설치 5980, 설정 UI 6006),
 OBDeleven 2.12.0(1790149781). ABRP 설치/화면 build 차이는 관찰 사실이며 원인은 미확인이다.
@@ -31,8 +31,10 @@ OBDeleven 2.12.0(1790149781). ABRP 설치/화면 build 차이는 관찰 사실�
 
 원본 결과: `/tmp/vehicle-benchmark-20260930/` 아래 entry-inventory, menus, deep, branches,
 more, data, records, final, config, carscanner-visible-functions, safe-deep-branches,
-obdeleven-catalogue-filters의 log/xcresult. 개인 계정/VIN/위치 포함 원본은 Git에 넣지 않았다.
-비식별 대표 화면 20장은 [증거 갤러리](evidence/four-apps-20260930/index.html)와
+obdeleven-catalogue-filters, csc-custom-sensor-detail, csc-sensor-filter-dashboard-add2,
+csc-empty-dashboard-picker, csc-home-restored의 log/xcresult. 개인 계정/VIN/위치 포함 원본은
+Git에 넣지 않았다. 비식별 대표 화면 28장은
+[증거 갤러리](evidence/four-apps-20260930/index.html)와
 [증거 manifest](evidence/four-apps-20260930/manifest.json)에 SHA256, 시각, test ID로 연결한다.
 VIN/계정 이메일/위치/개인 로그가 있는 원본 캡처와 접근성 트리는 Git에 넣지 않았다.
 
@@ -87,12 +89,12 @@ VIN/계정 이메일/위치/개인 로그가 있는 원본 캡처와 접근성 �
 | Pelican 설정 | OBSERVED | 설정의 전체 스크롤 목록, OBD scanning, Personalization, Performance optimizations, Data & backups 화면. Vehicle scanning 토글은 OFF 상태였고 변경하지 않음. |
 | Pelican 스캔/매개변수/내보내기/Shortcuts | BLOCKED / NOT TESTED | BT4N이 연결되지 않았고 스캔이 비활성화되어 실제 세션이 없다. 로그 내보내기도 미실행. 제조사 명령 실행을 포함할 수 있는 Shortcut은 열거나 실행하지 않음. |
 | Car Scanner 홈 메뉴 | OBSERVED | 13개 타일을 여러 번의 보정된 실행으로 각각 실제 화면에 진입. 첫 잘못된 홈 반복 캡처는 제외. Settings와 Custom Sensors는 별도 테스트 결과로 교차 확인. |
-| Car Scanner Dashboard | OBSERVED | 3페이지 이동, HUD, Gauge/숫자 계기, 빈 페이지, 페이지 삭제/추가/템플릿/이름/순서/백그라운드 업데이트 메뉴를 관찰. 편집 명령은 선택하지 않음. |
-| Car Scanner Live Data / All Sensors | OBSERVED | 차트 화면 진입 전에 개별/통합 선택창이 나타남. 두 차트 모드와 스크롤 센서 목록/필터 버튼을 확인. 모든 수치는 데모다. |
+| Car Scanner Dashboard | OBSERVED | 3페이지 이동, HUD, Gauge/숫자 계기, 빈 2/3 페이지, 페이지 관리 메뉴를 관찰. 기존 게이지 두 번 탭은 User-defined/센서 선택/유형 변경/이동/스타일 복사 메뉴를 열고, 빈 페이지 두 번 탭은 `선택 안 함`이 기본인 `센서 선택` 목록을 연다. 아무 signal도 bind하지 않음. |
+| Car Scanner Live Data / All Sensors | OBSERVED | 차트 화면 진입 전에 개별/통합 선택창이 나타남. 두 차트 모드와 스크롤 센서 목록을 확인. 필터 아이콘은 검색/`보이는 센서만 업데이트` 체크 옵션을 노출했다. 옵션을 변경하지 않았고 값은 데모다. |
 | Car Scanner DTC / Freeze Frame / Readiness / ECU ID | PARTIAL | DTC 설명 및 읽기/삭제 선택, Freeze Frame의 #0/미지원 또는 데이터 없음, readiness 데모 모니터, ECU 모듈 선택 및 읽기/삭제 버튼을 확인. 읽기 요청과 삭제는 실행하지 않음. |
 | Car Scanner My Car / Statistics / Acceleration / Emissions | PARTIAL | 차량 프로필, 기간 선택과 통계 범주, 데모 가속 결과, readiness 상태 화면을 확인. 민감한 프로필 값은 보존하지 않고 데모값을 실차값으로 해석하지 않음. |
 | Car Scanner Data Recording | PARTIAL | 기록·위치·반올림 스위치, 가져오기, 기존 사용자 세션 항목을 확인. 해당 기존 로그의 재생/내보내기/삭제를 하지 않음. |
-| Car Scanner Settings / Sensors | PARTIAL | OBDII ELM327/Bluetooth LE 설정, 차량 프로필·단위·Dashboard·차량 옵션·연비·ABRP·Sensors·백업·터미널·사용자 정의 코딩 메뉴, Custom Sensors 화면을 확인. 기존 설정 변경, 터미널 명령, 코딩 및 사용자 PID 저장은 안 함. |
+| Car Scanner Settings / Sensors | PARTIAL | OBDII ELM327/Bluetooth LE 설정, 차량 프로필·단위·Dashboard·차량 옵션·연비·ABRP·Sensors·백업·터미널·사용자 정의 코딩 메뉴, Custom Sensors 편집기를 확인. `+`는 기본 `New sensor` 행을 즉시 생성하고 행 탭은 이름/약칭/명령어/헤더, 공식·바이트·비트·Action PID·VW TP 2.0 디코딩, 공식, 최소/최대, 단위, 우선순위/역할, init/exit 명령 및 text mapping 필드를 연다. 값 입력/Test/OK 저장은 하지 않았다. 임시 빈 행은 삭제했고 목록이 비었음을 검증했다. |
 | ABRP 홈/경로 설정 | PARTIAL | 지도+경로 패널, 목적지 입력, Home/Work/저장 목적지, 차량 추가, plan 선택을 화면에서 확인. 충전·경로·개인정보 옵션과 차량 목록은 직접 확인. 주소 입력/경로 계산/길안내는 시작하지 않음. |
 | ABRP 계정/유료/차량 데이터/주행 이력 | BLOCKED / NOT TESTED | 로그인 상태가 아니고 Premium/외부 차량/실시간 경로를 사용하지 않음. Home/Work 주소 또는 저장 경로가 노출될 수 있는 분기는 개인정보 보호를 위해 열지 않음. |
 | OBDeleven Home/Vehicle/Control Units | OBSERVED | Golf GTE 데모, 연결 안 됨 상태, ECU 목록·검색·상태 배지와 차량 기능 타일을 확인. 표시된 Faulty 배지는 데모이며 사용자 차량 고장이 아님. |
@@ -115,6 +117,10 @@ VIN/계정 이메일/위치/개인 로그가 있는 원본 캡처와 접근성 �
 Car Scanner 공식 기록 설명은 화면에 표시되는 수치와 응답에 같이 포함되는 수치를 기록하고, 숫자값 위주로 저장한다고 설명한다.
 이는 해당 앱의 동작 관찰에는 참고하지만, 우리 제품은 화면 이동/레이아웃과 무관하게 원본 CAN·진단 응답·GPS를 모두 저장해야 하므로
 기록 정책으로 그대로 채택하지 않는다. 해당 문서는 기록을 disconnect 또는 record off 시 저장하며 iOS export에서 CSV/BRC를 안내한다.
+
+최종 추가 직접 확인: Custom Sensors의 `+` 동작은 별도 폼을 바로 열지 않고 기본 행을 만든다. 해당 행을 눌러 편집기까지 열어 필드 구성을 확인했다.
+이 탐색에서만 생성한 빈 행은 확인 후 삭제했고 목록 비움을 다시 확인했다. All Sensors의 필터 아이콘은 검색과 `보이는 센서만 업데이트` 체크 옵션을 노출한다.
+Dashboard 2/3의 빈 공간을 두 번 탭하면 `선택 안 함`이 기본인 `센서 선택` 목록이 열린다. 위젯 바인딩은 변경하지 않았다.
 
 ## 공식 문서 교차검증과 적용 한계
 
@@ -183,17 +189,17 @@ BT4N이 광고되지 않는다는 확정 증거가 아니며 이름 없는 주�
 
 네 앱 모든 기능의 동작 시험을 완료했다고 표시하지 않는다. 잔여 조사 우선순위:
 
-1. P0: Car Scanner custom PID 작성·저장·import/export와 기존 사용자 로그 재생은 별도 비식별 샘플을 확보한 뒤 검증. 현재 기록 설정만 관찰했고 사용자 기록은 열거나 공유하지 않았다.
+1. P0: Car Scanner custom PID 편집기 필드는 관찰했지만 명령 해석/저장/센서 응답·import/export는 미검증. 기존 사용자 로그 재생은 별도 비식별 샘플을 확보한 뒤 검증한다. 사용자 기록은 열거나 공유하지 않았다.
 2. P0: NANICAR BT4N을 실제 차량과 분리/재연결해 GATT, Mode 01, 제조사 SOC/전압 후보를 확인. Pelican과 다른 OBD 앱은 동시에 scanner에 연결할 수 없으므로 순차 비교.
 3. P1: Car Scanner의 각 Settings 하위 항목·센서 필터/단위·편집 페이지 템플릿은 값을 바꾸지 않는 범위에서 계속 조사.
 4. P1: Pelican의 실제 scanner pairing, 파라미터 정의/refresh, scan-session export는 사용자가 별도 비식별 로그를 승인하거나 테스트 차량/장치가 연결될 때만 검증.
 5. P1: ABRP의 목적지·충전기 결과·저장계획·Premium/실시간 차량 경로는 계정, 네트워크 및 위치/경로 데이터 처리 동의가 있을 때 검증.
 6. P1: OBDeleven 실제 장치와 차량 연결, live-data 값, DTC/배터리 확인 기능은 지원 차량과 요금제 증거가 있을 때 검증.
 
-추가 자동화 차단: iPhone 잠금을 푼 뒤 다시 실행했으나 `carscanner-config-branches-resume.log`에서
-XCTest runner 초기화가 `Timed out while enabling automation mode`로 실패했다. 앱 테스트 케이스가 시작되지 않았고
-사용자 정의 PID 폼/센서 필터/빈 Dashboard 위젯 추가는 미검증이다. iPhone에 별도 UI automation 확인창이
-표시될 경우 기기에서 직접 완료해야 한다. 암호/코드는 채팅으로 받지 않는다.
+자동화 재시도 참고: `carscanner-config-branches-resume.log`는 iPhone unlock 직후 UI automation mode timeout으로
+중단됐지만, 뒤이은 실행에서 실제 화면 테스트가 시작되어 custom sensor editor, visible-only filter,
+Dashboard 2/3 sensor picker를 관찰했다. 접근성 label/identifier 혼용으로 실패한 임시 테스트는 화면 증거로 세지 않았고,
+최종 성공 테스트에서는 label 조건을 보정했다. 암호/코드는 채팅으로 받지 않았다.
 
 실행하지 않은 작업: 차량 제어, coding/adaptation, One-Click App 실행, DTC 삭제, output test, 구매, 로그인/계정 연결, 사용자 위치/저장 목적지 조회. 이를 필요로 하는 기능은 이번 프로젝트 목표에 포함하지 않는다.
 
@@ -207,4 +213,5 @@ VIN/계정명/위치 지도 screenshot은 로컬 원본에만 있으며 원격 �
 추가 탐색: Car Scanner Settings → Sensors → Custom Sensors에서 사용자 정의 센서 목록/가져오기·내보내기 진입점을 확인했다. 실제 PID를 저장하지 않았다.
 Pelican Settings의 OBD scanning, Personalization, Performance optimizations, Data & backups 각 화면과 Logbook의 Documents/Journeys/Records를 열어 보았다. 설정 토글과 backup/export 실행은 미검증이다.
 OBDeleven One-Click Apps 카탈로그의 All/Adjustment/Workshop/Retrofit, 빈 검색 및 정렬 UI를 직접 확인했고 아무 앱도 활성화하지 않았다.
+Car Scanner의 빈 sensor add 동작으로 만들어진 placeholder 1개는 탐색 직후 삭제했고, 후속 테스트 사전 조건에서 빈 목록으로 복원됨을 확인했다. 사용자 정의 PID나 dashboard signal binding은 저장하지 않았다.
 탐색 종료 시 설치된 Telemetry가 0.22.2(18)인 것을 다시 확인했다.
