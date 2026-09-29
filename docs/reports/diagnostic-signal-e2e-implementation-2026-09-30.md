@@ -48,6 +48,8 @@ software/fixture result, not a physical Santa Fe result.
 | iPhone 17 install | `PASS` | `devicectl` installed `local.webdashboard.Telemetry` |
 | iPhone 17 launch | `PASS` | `devicectl` foreground launch |
 | Physical launch UI | `PASS` | `docs/reports/evidence/telemetry-ios27-physical-v0.22.2-launch.png` |
+| Physical recording + GPS start UI | `PASS` | `docs/reports/evidence/telemetry-ios27-physical-gps-recording.png` |
+| Physical app transition and return | `PASS` | `telemetry-ios27-physical-lifecycle-2026-09-30.json` |
 | Physical BLE scan path | `PASS` | `TelemetryUITests/testPhysicalBLEObservationCapture()` on iPhone 17 |
 | BT4N GATT profile | `BLOCKED` | 50 peripherals observed; NANICAR/ELM327/OBD name matches: 0 |
 | Santa Fe MX5 HEV response | `BLOCKED` | Physical adapter + stationary vehicle evidence required |
@@ -63,6 +65,10 @@ The physical BLE scan evidence is split into a masked result and a screenshot:
 
 The scan path and pasteboard export passed, but the adapter was not advertising
 during the capture. No UUID or compatibility claim is made.
+
+The physical recording/GPS UI tests prove permission handling and visible
+session state only. They do not prove a valid GPS sample stream or vehicle
+measurement continuity without the adapter and a route.
 
 When a future GATT observation contains exactly one service and one distinct
 write plus notify/indicate characteristic, the app can now create the Santa Fe

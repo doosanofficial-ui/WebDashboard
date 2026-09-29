@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-09-30",
+  "device_model": "iPhone 17",
+  "os_version": "iOS 27.0",
+  "device_id": "redacted",
+  "tests": [
+    {
+      "name": "testSessionControlsCanStartRecordingAndGPS",
+      "result": "PASS",
+      "duration_seconds": 17.582,
+      "scope": "physical UI: recording start, location permission handling, GPS ON state"
+    },
+    {
+      "name": "testBackgroundTransitionReturnsToLiveCockpit",
+      "result": "PASS",
+      "duration_seconds": 30.162,
+      "scope": "physical UI: app switch to Home and return; screen lock excluded"
+    }
+  ],
+  "limitations": [
+    "No vehicle CAN or ELM327 adapter was connected during these tests.",
+    "UI GPS ON state is not proof of a valid location sample or continuous route recording."
+  ]
+}
