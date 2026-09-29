@@ -44,6 +44,27 @@ public struct CANFrame: Codable, Equatable, Sendable {
         self.sourceTransport = sourceTransport
         self.sequence = sequence
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case receivedAtEpoch, receivedAtMonotonicNanos, canID, isExtended, dlc
+        case payload, sourceAdapter, sourceTransport, sequence
+    }
+
+    /// Decoding must enforce the same invariants as a live frame constructor.
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self = try Self(
+            receivedAtEpoch: values.decode(Double.self, forKey: .receivedAtEpoch),
+            receivedAtMonotonicNanos: values.decode(UInt64.self, forKey: .receivedAtMonotonicNanos),
+            canID: values.decode(UInt32.self, forKey: .canID),
+            isExtended: values.decode(Bool.self, forKey: .isExtended),
+            dlc: values.decode(Int.self, forKey: .dlc),
+            payload: values.decode([UInt8].self, forKey: .payload),
+            sourceAdapter: values.decode(String.self, forKey: .sourceAdapter),
+            sourceTransport: values.decode(String.self, forKey: .sourceTransport),
+            sequence: values.decode(UInt64.self, forKey: .sequence)
+        )
+    }
 }
 
 public enum ByteOrder: String, Codable, Equatable, Sendable {
@@ -122,6 +143,34 @@ public struct SignalDefinition: Codable, Equatable, Sendable {
         self.enumMap = enumMap
     }
 
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, canID, isExtended, startBit, bitLength, byteOrder, isSigned
+        case factor, offset, minimum, maximum, unit, timeout, enumMap
+    }
+
+    /// Imported profiles cannot bypass the validated bit range and scaling.
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self = try Self(
+            id: values.decode(String.self, forKey: .id),
+            name: values.decode(String.self, forKey: .name),
+            canID: values.decode(UInt32.self, forKey: .canID),
+            isExtended: values.decode(Bool.self, forKey: .isExtended),
+            startBit: values.decode(Int.self, forKey: .startBit),
+            bitLength: values.decode(Int.self, forKey: .bitLength),
+            byteOrder: values.decode(ByteOrder.self, forKey: .byteOrder),
+            isSigned: values.decode(Bool.self, forKey: .isSigned),
+            factor: values.decode(Double.self, forKey: .factor),
+            offset: values.decode(Double.self, forKey: .offset),
+            minimum: values.decodeIfPresent(Double.self, forKey: .minimum),
+            maximum: values.decodeIfPresent(Double.self, forKey: .maximum),
+            unit: values.decode(String.self, forKey: .unit),
+            timeout: values.decode(Double.self, forKey: .timeout),
+            enumMap: values.decode([UInt64: String].self, forKey: .enumMap)
+        )
+    }
+
     static func isValidBitRange(startBit: Int, bitLength: Int, byteOrder: ByteOrder) -> Bool {
         guard startBit >= 0, startBit < 64, bitLength >= 1, bitLength <= 64 else { return false }
         if byteOrder == .intel {
@@ -198,6 +247,7 @@ public enum SignalDecoder {
         }
 
         let value = numericRaw * definition.factor + definition.offset
+        guard value.isFinite else { throw SignalDecodeError.valueOutOfRange }
         if let minimum = definition.minimum, value < minimum {
             throw SignalDecodeError.valueOutOfRange
         }

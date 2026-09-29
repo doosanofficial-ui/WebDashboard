@@ -66,7 +66,7 @@ public struct OBDSignalDefinition: Codable, Equatable, Sendable {
         path: String? = nil
     ) throws {
         guard !id.isEmpty, !name.isEmpty else { throw OBDQueryError.emptyIdentifier }
-        guard startBit >= 0, bitLength >= 1, bitLength <= 64,
+        guard startBit >= 0, startBit < 64, bitLength >= 1, bitLength <= 64,
               Self.isValidBitRange(startBit: startBit, bitLength: bitLength, byteOrder: byteOrder) else {
             throw OBDQueryError.invalidBitRange
         }
@@ -544,6 +544,7 @@ public enum OBDSignalDecoder {
             numericRaw = Double(raw)
         }
         let value = numericRaw * signal.factor + signal.offset
+        guard value.isFinite else { throw OBDSignalDecodeError.valueOutOfRange }
         if let minimum = signal.minimum, value < minimum { throw OBDSignalDecodeError.valueOutOfRange }
         if let maximum = signal.maximum, value > maximum { throw OBDSignalDecodeError.valueOutOfRange }
         return DecodedOBDSignal(signal: signal, rawValue: raw, signedRawValue: signedRawValue,
