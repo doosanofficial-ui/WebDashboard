@@ -1,7 +1,7 @@
 # Diagnostic Signal E2E Implementation Checkpoint
 
 Date: 2026-09-30
-Main commit: `pending commit for 0.22.2 profile-builder improvements`
+Main commit: `a9777a95e0df0c4768f8b930241a1a631ce58b9b`
 App version/build: `0.22.2 (18)`
 Scope: iPhone 17 / iOS 27 / native SwiftUI / read-only ELM327 diagnostics
 
