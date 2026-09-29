@@ -189,6 +189,9 @@ public actor TelemetryStore {
     private var signals: [String: LatestSignalState] = [:]
     private var lastFrame: CANFrame?
     private var lastLocation: LocationSample?
+    private var lastDiagnosticResponse: OBDResponse?
+    private var lastSystemEvent: MeasurementEvent?
+    private var lastReplayedSession: PersistedMeasurementSession?
     private var disconnected = false
 
     public init(signalTimeouts: [String: Double] = [:]) {
@@ -256,6 +259,37 @@ public actor TelemetryStore {
     public func latestFrame() -> CANFrame? { lastFrame }
 
     public func latestLocation() -> LocationSample? { lastLocation }
+
+    public func latestDiagnosticResponse() -> OBDResponse? { lastDiagnosticResponse }
+
+    public func latestSystemEvent() -> MeasurementEvent? { lastSystemEvent }
+
+    /// The original session metadata, including LIVE/DEMO/REPLAY provenance.
+    /// Legacy row-array exports do not contain session metadata and return nil.
+    public func replayedSession() -> PersistedMeasurementSession? { lastReplayedSession }
+
+    /// Replace a replay snapshot in one actor turn, after the entire input has
+    /// been validated. The caller owns stopping any live transport beforehand.
+    /// No recorder or transport is accessed here; source timestamps are unchanged.
+    func replaceForReplay(_ events: [MeasurementEvent], session: PersistedMeasurementSession?) {
+        signals.removeAll()
+        lastFrame = nil
+        lastLocation = nil
+        lastDiagnosticResponse = nil
+        lastSystemEvent = nil
+        lastReplayedSession = session
+        disconnected = false
+        for event in events {
+            switch event {
+            case .can(let frame): ingest(frame: frame)
+            case .signal(let sample): ingest(signal: sample)
+            case .diagnosticResponse(let response): lastDiagnosticResponse = response
+            case .diagnosticSignal(let signal): ingest(diagnostic: signal)
+            case .location(let sample): ingest(location: sample)
+            case .system: lastSystemEvent = event
+            }
+        }
+    }
 
     public func disconnect() {
         disconnected = true
