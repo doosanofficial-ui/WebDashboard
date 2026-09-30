@@ -35,6 +35,17 @@ struct DashboardEditorView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 12) {
+                if let error = model.dashboardSaveError {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label(error, systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                        Button("Retry save", action: model.retryDashboardSave)
+                            .accessibilityIdentifier("retry-dashboard-save")
+                    }
+                    .padding(.horizontal)
+                    .accessibilityIdentifier("dashboard-save-error")
+                }
                 if let profile = model.dashboardProfile, let page = selectedPage {
                     pageControls(profile: profile, page: page)
                     ScrollView {

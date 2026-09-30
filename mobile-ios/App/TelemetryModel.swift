@@ -20,6 +20,7 @@ final class TelemetryModel: NSObject {
     var locationStatus = "Not collecting"
     var uploadStatus = "Not paired"
     var storageStatus: String?
+    var dashboardSaveError: String?
     var localRecordingStatus = "Preparing local recorder"
     var exportStatus = "No export generated"
     var localRecordingEnabled = false
@@ -998,13 +999,24 @@ final class TelemetryModel: NSObject {
         persistDashboardProfile()
     }
 
+    func retryDashboardSave() {
+        persistDashboardProfile()
+    }
+
     private func persistDashboardProfile() {
-        guard let dashboardProfile, let dashboardURL,
-              let data = try? JSONEncoder().encode(dashboardProfile) else { return }
+        guard let dashboardProfile, let dashboardURL else {
+            dashboardSaveError = "Dashboard storage unavailable; changes are not saved"
+            return
+        }
         do {
+            let data = try JSONEncoder().encode(dashboardProfile)
             try data.write(to: dashboardURL, options: .atomic)
+            dashboardSaveError = nil
         } catch {
-            storageStatus = "Dashboard profile could not be saved"
+            // Layout persistence is independent of measurement durability.
+            // Keep the draft for retry without disabling GPS/MARK or clearing
+            // a genuine measurement storage failure.
+            dashboardSaveError = "Dashboard changes are not saved; retry when storage is available"
         }
     }
 
