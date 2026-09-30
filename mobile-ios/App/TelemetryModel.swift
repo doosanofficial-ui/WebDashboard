@@ -462,7 +462,10 @@ final class TelemetryModel: NSObject {
             let queries = try SantaFeMX5HybridQueryCatalog.initialQueries()
             let profile = try bleDiscovery.makeDiagnosticProfile(for: peripheralID, queries: queries)
             let data = try JSONEncoder().encode(profile)
-            importAdapterProfile(data)
+            guard importAdapterProfile(data) else {
+                bleDiscoveryStatus = "Profile not saved: " + adapterProfileStatus
+                return
+            }
             bleDiscoveryStatus = "Observed GATT profile converted to Santa Fe diagnostic profile"
         } catch BLEObservedProfileError.serviceCountIsAmbiguous {
             bleDiscoveryStatus = "Profile not created: service count is ambiguous"
@@ -475,20 +478,33 @@ final class TelemetryModel: NSObject {
         }
     }
 
-    func importAdapterProfile(_ data: Data) {
-        do {
-            let profile = try JSONDecoder().decode(AdapterProfile.self, from: data)
-            adapterProfile = profile
-            adapterProfileStatus = "Profile loaded: \(profile.name)"
-            configureLocalSignalTimeouts(profile.signals)
-            configureDiagnosticSignalTimeouts(profile.diagnosticQueries)
-            if let adapterProfileURL {
-                try data.write(to: adapterProfileURL, options: .atomic)
-            }
-        } catch {
-            adapterProfile = nil
-            adapterProfileStatus = "Adapter profile invalid"
+    @discardableResult
+    func importAdapterProfile(_ data: Data) -> Bool {
+        guard let adapterProfileURL else {
+            adapterProfileStatus = "Profile storage unavailable; previous profile retained"
+            return false
         }
+        let profile: AdapterProfile
+        do {
+            profile = try JSONDecoder().decode(AdapterProfile.self, from: data)
+        } catch {
+            adapterProfileStatus = "Adapter profile invalid; previous profile retained"
+            return false
+        }
+        do {
+            // Commit bytes before publishing the replacement or scheduling any
+            // timeout changes. A failed import must leave the working profile
+            // intact in memory, on disk and in the telemetry configuration.
+            try data.write(to: adapterProfileURL, options: .atomic)
+        } catch {
+            adapterProfileStatus = "Profile could not be saved; previous profile retained"
+            return false
+        }
+        adapterProfile = profile
+        configureLocalSignalTimeouts(profile.signals)
+        configureDiagnosticSignalTimeouts(profile.diagnosticQueries)
+        adapterProfileStatus = "Profile loaded: \(profile.name)"
+        return true
     }
 
     func replaceAdapterProfileSignals(_ signals: [SignalDefinition]) -> Bool {

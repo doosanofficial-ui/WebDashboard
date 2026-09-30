@@ -52,6 +52,8 @@ jobs:
       - run: swift test --package-path mobile-ios/TelemetryCore
       - name: Verify telemetry coordinator source harness
         run: python3 scripts/verify_telemetry_model.py
+      - name: Verify failure-atomic profile import control flow
+        run: python3 scripts/verify_profile_import.py
 
   native-app:
     runs-on: macos-15

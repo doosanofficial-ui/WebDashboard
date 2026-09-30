@@ -11,7 +11,7 @@ from pathlib import Path
 import subprocess
 import uuid
 
-EXPECTED_TEST_COUNT = 7
+EXPECTED_TEST_COUNT = 13
 
 
 def select_runtime_and_type(data):
