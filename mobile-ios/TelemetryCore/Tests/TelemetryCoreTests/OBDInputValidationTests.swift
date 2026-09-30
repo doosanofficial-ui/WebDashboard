@@ -14,7 +14,9 @@ final class OBDInputValidationTests: XCTestCase {
             command: "0101", payload: [2], sequence: 1, sourceAdapter: "fixture", sourceTransport: "test")
     }
     func testExtremeStartBitIsRejectedWithoutIntegerTrap() throws {
-        for start in [Int.max, Int.max - 1, 64, -1] {
+        // Diagnostic fields address the reassembled payload, not one CAN frame.
+        XCTAssertNoThrow(try signal(start: 64))
+        for start in [Int.max, Int.max - 1, 4095 * 8, -1] {
             XCTAssertThrowsError(try signal(start: start)) { error in
                 XCTAssertEqual(error as? OBDQueryError, .invalidBitRange)
             }
