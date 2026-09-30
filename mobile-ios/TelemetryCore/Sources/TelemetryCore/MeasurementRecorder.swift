@@ -177,6 +177,21 @@ public actor MeasurementRecorder {
             throw TelemetryError.storage
         }
         do {
+            // Opening a new file can precede schema creation when initialization
+            // is interrupted. Only a genuinely empty SQLite schema is a fresh
+            // start; other schemas must pass the normal recovery path below.
+            let schema = try Self.prepare(connection, "SELECT 1 FROM sqlite_master LIMIT 1")
+            let schemaResult = sqlite3_step(schema)
+            sqlite3_finalize(schema)
+            guard schemaResult == SQLITE_ROW || schemaResult == SQLITE_DONE else {
+                throw TelemetryError.storage
+            }
+            if schemaResult == SQLITE_DONE {
+                guard sqlite3_exec(connection, "COMMIT", nil, nil, nil) == SQLITE_OK else {
+                    throw TelemetryError.storage
+                }
+                return 0
+            }
             let query = try Self.prepare(connection,
                 "SELECT session_id FROM measurement_sessions WHERE ended_at IS NULL ORDER BY started_at")
             defer { sqlite3_finalize(query) }
