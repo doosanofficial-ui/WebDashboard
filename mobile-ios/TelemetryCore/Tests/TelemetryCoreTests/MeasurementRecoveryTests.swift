@@ -21,19 +21,36 @@ final class MeasurementRecoveryTests: XCTestCase {
         guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else { throw TelemetryError.storage }
     }
 
-    private func integer(_ sql: String, at path: URL) throws -> Int64 {
+    private struct SQLProbeError: Error, CustomStringConvertible {
+        let description: String
+        init(_ db: OpaquePointer?, stage: String, code: Int32) {
+            let message = db.map { String(cString: sqlite3_errmsg($0)) } ?? "no connection"
+            let extended = db.map { sqlite3_extended_errcode($0) } ?? code
+            description = "SQLite probe \(stage): rc=\(code), extended=\(extended), \(message)"
+        }
+    }
+
+    private func integer(_ sql: String, at path: URL, flags: Int32 = SQLITE_OPEN_READWRITE) throws -> Int64 {
+        // Match recovery's read/write connection mode, but never create a file
+        // during inspection. READONLY WAL setup has platform-specific sidecar
+        // requirements and is not the production recovery contract.
         var db: OpaquePointer?
-        guard sqlite3_open_v2(path.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let db else {
+        let opened = sqlite3_open_v2(path.path, &db, flags, nil)
+        guard opened == SQLITE_OK, let db else {
+            let error = SQLProbeError(db, stage: "open", code: opened)
             if let db { sqlite3_close(db) }
-            throw TelemetryError.storage
+            throw error
         }
         defer { sqlite3_close(db) }
+        sqlite3_busy_timeout(db, 5_000)
         var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
-            throw TelemetryError.storage
+        let prepared = sqlite3_prepare_v2(db, sql, -1, &statement, nil)
+        guard prepared == SQLITE_OK, let statement else {
+            throw SQLProbeError(db, stage: "prepare", code: prepared)
         }
         defer { sqlite3_finalize(statement) }
-        guard sqlite3_step(statement) == SQLITE_ROW else { throw TelemetryError.storage }
+        let stepped = sqlite3_step(statement)
+        guard stepped == SQLITE_ROW else { throw SQLProbeError(db, stage: "step", code: stepped) }
         return sqlite3_column_int64(statement, 0)
     }
 
@@ -70,6 +87,15 @@ final class MeasurementRecoveryTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: path.deletingLastPathComponent()) }
         try execute("PRAGMA journal_mode=WAL", at: path)
         XCTAssertGreaterThan(try Data(contentsOf: path).count, 0)
+        // Diagnostic only: the prior macOS failure occurred in this READONLY
+        // inspection before production recovery ran. Keep its exact SQL error
+        // visible; the actual recovery assertions below remain mandatory.
+        do {
+            let count = try integer("SELECT count(*) FROM sqlite_master", at: path, flags: SQLITE_OPEN_READONLY)
+            print("READONLY WAL precondition observation: schema count \(count)")
+        } catch {
+            print("READONLY WAL precondition observation (not a recovery verdict): \(error)")
+        }
         XCTAssertEqual(try integer("SELECT count(*) FROM sqlite_master", at: path), 0)
         XCTAssertEqual(try MeasurementRecorder.recoverUnfinishedSessions(path: path, endedAt: 200), 0)
         XCTAssertEqual(try integer("SELECT count(*) FROM sqlite_master", at: path), 0,
