@@ -50,6 +50,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: swift test --package-path mobile-ios/TelemetryCore
+      - name: Verify telemetry coordinator source harness
+        run: python3 scripts/verify_telemetry_model.py
 
   native-app:
     runs-on: macos-15

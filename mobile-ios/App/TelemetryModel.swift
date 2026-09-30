@@ -72,6 +72,7 @@ final class TelemetryModel: NSObject {
     @ObservationIgnored private let diagnosticAdapter: DiagnosticAdapterController
     @ObservationIgnored private let bleDiscovery: BLEDiscoveryController
     @ObservationIgnored private let telemetryStore: TelemetryStore
+    @ObservationIgnored private var localSignalSnapshot = LocalSignalSnapshot()
     @ObservationIgnored private var conditionRuntimes: [String: DashboardConditionRuntime] = [:]
     @ObservationIgnored private var outbox: DurableOutbox?
     @ObservationIgnored private var localRecorder: MeasurementRecorder?
@@ -184,8 +185,6 @@ final class TelemetryModel: NSObject {
                 adapterProfile = savedProfile
                 adapterProfileStatus = "Profile loaded: \(savedProfile.name)"
             }
-            let box = try DurableOutbox(path: root.appendingPathComponent("outbox.sqlite3"))
-            outbox = box
             let databaseURL = root.appendingPathComponent("measurements.sqlite3")
             measurementDBURL = databaseURL
             let recovered = try MeasurementRecorder.recoverUnfinishedSessions(
@@ -199,6 +198,19 @@ final class TelemetryModel: NSObject {
                     + " interrupted session" + suffix
             }
             publishCarPlayProjection()
+            configureOptionalUpload(at: root)
+        } catch {
+            localRecordingEnabled = false
+            storageStatus = "Storage unavailable. Collection is disabled."
+        }
+    }
+
+    private func configureOptionalUpload(at root: URL) {
+        // A corrupt/unavailable optional upload DB must not disable a healthy
+        // local measurement DB or Core Location. Never delete queued records.
+        do {
+            let box = try DurableOutbox(path: root.appendingPathComponent("outbox.sqlite3"))
+            outbox = box
             uploader = try BackgroundUploader(outbox: box, clientID: clientID,
                 directory: root.appendingPathComponent("uploads"))
             uploader?.onStatus = { [weak self] message in
@@ -208,8 +220,7 @@ final class TelemetryModel: NSObject {
             restoreBackgroundSession()
             Task { await refreshQueueDepth() }
         } catch {
-            localRecordingEnabled = false
-            storageStatus = "Storage unavailable. Collection is disabled."
+            uploadStatus = "Optional upload storage unavailable; local recording remains available"
         }
     }
 
@@ -234,6 +245,7 @@ final class TelemetryModel: NSObject {
 
     func connect() {
         guard prepareAcquisitionMode(.live) else { return }
+        resetLocalSignalSnapshot()
         demoAdapter.stop()
         liveAdapter.stop()
         diagnosticAdapter.stop()
@@ -367,6 +379,7 @@ final class TelemetryModel: NSObject {
 
     func startDemoAdapter() {
         guard prepareAcquisitionMode(.demo) else { return }
+        resetLocalSignalSnapshot()
         disconnect()
         liveAdapter.stop()
         diagnosticAdapter.stop()
@@ -375,6 +388,7 @@ final class TelemetryModel: NSObject {
     }
 
     func stopDemoAdapter() {
+        resetLocalSignalSnapshot()
         demoAdapter.stop()
         liveAdapter.stop()
         diagnosticAdapter.stop()
@@ -387,6 +401,7 @@ final class TelemetryModel: NSObject {
 
     func startLiveAdapter() {
         guard prepareAcquisitionMode(.live) else { return }
+        resetLocalSignalSnapshot()
         disconnect()
         demoAdapter.stop()
         diagnosticAdapter.stop()
@@ -577,7 +592,6 @@ final class TelemetryModel: NSObject {
             responseCANID: result.response.responseCANID
         )
         for signal in result.signals {
-            localSignalReceivedAt[signal.signalID] = signal.receivedAtEpoch
             Task { await telemetryStore.ingest(diagnostic: signal) }
         }
         record(contentsOf: [.diagnosticResponse(result.response)] + result.signals.map {
@@ -587,9 +601,6 @@ final class TelemetryModel: NSObject {
     }
 
     private func ingestLocal(frame: CANFrame, samples: [DecodedSignalSample]) {
-        for sample in samples {
-            localSignalReceivedAt[sample.signalID] = sample.receivedAtEpoch
-        }
         Task {
             await telemetryStore.ingest(frame: frame)
             for sample in samples { await telemetryStore.ingest(signal: sample) }
@@ -612,20 +623,50 @@ final class TelemetryModel: NSObject {
         Task { await telemetryStore.configureSignalTimeouts(localSignalTimeouts) }
     }
 
+    private func resetLocalSignalSnapshot() {
+        localSignalSnapshot.reset()
+        localSignalReceivedAt.removeAll()
+        frame = nil
+        lastFrameAt = nil
+        points.removeAll()
+        conditionRuntimes.removeAll()
+        conditionStates.removeAll()
+    }
+
+    private func mergeLocalSignals(
+        _ values: [String: Double], timestamp: Double, sequence: UInt64, source: String
+    ) -> CanFrame? {
+        guard !values.isEmpty, sequence <= UInt64(Int.max) else { return nil }
+        do {
+            var candidate = localSignalSnapshot
+            try candidate.merge(values, receivedAt: timestamp, source: source)
+            let snapshot = try ServerCANFrame(
+                version: 1, serverTimestamp: timestamp, signals: candidate.values,
+                status: .init(sequence: Int(sequence), drop: 0)
+            )
+            if localSignalSnapshot.source != source {
+                points.removeAll()
+                conditionRuntimes.removeAll()
+                conditionStates.removeAll()
+            }
+            localSignalSnapshot = candidate
+            localSignalReceivedAt = candidate.receivedAtEpoch
+            return snapshot
+        } catch {
+            adapterStatus = "Local display update rejected; raw recording remains independent"
+            return nil
+        }
+    }
+
     private func applyLocalSignals(
         _ frame: CANFrame,
         values: [String: Double],
         rawValues: [String: UInt64] = [:],
         source: String
     ) {
-        guard !values.isEmpty,
-              frame.sequence <= UInt64(Int.max),
-              let snapshot = try? ServerCANFrame(
-                version: 1,
-                serverTimestamp: frame.receivedAtEpoch,
-                signals: values,
-                status: .init(sequence: Int(frame.sequence), drop: 0)
-              ) else { return }
+        guard let snapshot = mergeLocalSignals(
+            values, timestamp: frame.receivedAtEpoch, sequence: frame.sequence, source: source
+        ) else { return }
         let now = Date()
         self.frame = snapshot
         lastFrameAt = now
@@ -644,13 +685,9 @@ final class TelemetryModel: NSObject {
         timestamp: Double,
         responseCANID: UInt32
     ) {
-        guard !values.isEmpty, sequence <= UInt64(Int.max),
-              let snapshot = try? ServerCANFrame(
-                version: 1,
-                serverTimestamp: timestamp,
-                signals: values,
-                status: .init(sequence: Int(sequence), drop: 0)
-              ) else { return }
+        guard let snapshot = mergeLocalSignals(
+            values, timestamp: timestamp, sequence: sequence, source: source
+        ) else { return }
         let now = Date()
         frame = snapshot
         lastFrameAt = now
@@ -706,7 +743,7 @@ final class TelemetryModel: NSObject {
     }
 
     func startLocation() {
-        guard outbox != nil, storageStatus == nil else { return }
+        guard storageStatus == nil else { return }
         locationService.start()
         record(.system(name: "gps_started", timestamp: Date().timeIntervalSince1970,
                        monotonicNanos: DispatchTime.now().uptimeNanoseconds))
@@ -757,17 +794,21 @@ final class TelemetryModel: NSObject {
     }
 
     private func store(_ event: TelemetryEvent) {
-        guard let outbox else { return }
+        if event.type == "MARK" { lastMarkAt = Date(timeIntervalSince1970: event.capturedAt) }
+        // Local measurement admission occurs independently in record(...).
+        // Do not fill the legacy upload queue when no upload is configured.
+        guard let configuredEndpoint = try? endpoint(),
+              let configuredCredential = CredentialStore.read(), !configuredCredential.isEmpty,
+              let outbox else { return }
         Task {
+            guard (try? endpoint()) == configuredEndpoint,
+                  CredentialStore.read() == configuredCredential else { return }
             do {
                 try await outbox.enqueue(event)
-                if event.type == "MARK" { lastMarkAt = Date(timeIntervalSince1970: event.capturedAt) }
                 await refreshQueueDepth()
                 await flush()
             } catch {
-                locationService.stop()
-                collecting = false
-                storageStatus = "Recording stopped: durable storage failed or queue is full. Existing records retained."
+                uploadStatus = "Upload queue unavailable or full; local recording continues. Queued records retained."
             }
         }
     }
@@ -1147,8 +1188,7 @@ final class TelemetryModel: NSObject {
             queueDepth = try await outbox.count()
         } catch {
             // Keep the last known count; zero would falsely imply a drained queue.
-            storageStatus = "Durable upload queue unavailable"
-            uploadStatus = "Durable queue unavailable"
+            uploadStatus = "Durable upload queue unavailable; local recording remains separate"
         }
     }
 
