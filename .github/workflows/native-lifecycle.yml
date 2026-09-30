@@ -1,0 +1,34 @@
+name: Native Recording Lifecycle
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: native-lifecycle-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  hosted-lifecycle:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check fail-closed lifecycle runner
+        run: python3 -m unittest discover -s scripts/tests -p test_ios_lifecycle_runner.py -v
+      - name: Install XcodeGen
+        run: |
+          if ! brew list xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+      - name: Run native hosted recording lifecycle tests
+        run: python3 scripts/verify_ios_lifecycle.py --result-directory "$RUNNER_TEMP/telemetry-lifecycle"
+      - name: Preserve native test evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-recording-lifecycle-${{ github.sha }}
+          path: ${{ runner.temp }}/telemetry-lifecycle
+          if-no-files-found: error
+          retention-days: 14

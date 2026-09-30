@@ -1,0 +1,44 @@
+# Opt-in test spec. The production target/project.yml remains unchanged.
+include: [project.yml]
+targets:
+  TelemetryLifecycleHost:
+    type: application
+    platform: iOS
+    sources: [App]
+    dependencies:
+      - package: TelemetryCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.webdashboard.Telemetry.LifecycleHost
+        TARGETED_DEVICE_FAMILY: '1'
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Telemetry Lifecycle Host
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: Simulator lifecycle test host; location is not requested.
+        INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription: Simulator lifecycle test host; location is not requested.
+        INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: Simulator lifecycle test host; Bluetooth is not requested.
+  TelemetryLifecycleTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [LifecycleTests]
+    dependencies:
+      - target: TelemetryLifecycleHost
+      - package: TelemetryCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.webdashboard.Telemetry.LifecycleTests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/TelemetryLifecycleHost.app/TelemetryLifecycleHost
+        BUNDLE_LOADER: $(TEST_HOST)
+schemes:
+  TelemetryLifecycle:
+    build:
+      targets:
+        TelemetryLifecycleHost: all
+        TelemetryLifecycleTests: [test]
+    test:
+      config: Debug
+      targets:
+        - name: TelemetryLifecycleTests
+          parallelizable: false
+          randomExecutionOrder: false
