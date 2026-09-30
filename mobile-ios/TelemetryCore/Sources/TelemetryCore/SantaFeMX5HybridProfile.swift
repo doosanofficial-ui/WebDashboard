@@ -52,8 +52,9 @@ public enum SantaFeMX5HybridQueryCatalog {
                 signals: [try signal(
                     id: "OBD_SUPPORTED_PIDS_00",
                     name: "Supported PIDs 01-20",
-                    startBit: 0,
+                    startBit: 7,
                     bitLength: 32,
+                    byteOrder: .motorola,
                     factor: 1,
                     minimum: 0,
                     maximum: 4_294_967_295,
@@ -74,8 +75,9 @@ public enum SantaFeMX5HybridQueryCatalog {
                 signals: [try signal(
                     id: "OBD_ENGINE_RPM",
                     name: "Engine speed",
-                    startBit: 0,
+                    startBit: 7,
                     bitLength: 16,
+                    byteOrder: .motorola,
                     factor: 0.25,
                     minimum: 0,
                     maximum: 16_383.75,

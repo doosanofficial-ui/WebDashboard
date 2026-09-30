@@ -23,6 +23,7 @@ public enum OBDQueryError: Error, Equatable, Sendable {
     case invalidResponseIdentifier
     case invalidTiming
     case emptySignalCatalog
+    case duplicateSignalID(String)
     case nonFiniteScaling
     case invalidLimits
     case invalidBitRange
@@ -32,6 +33,11 @@ public enum OBDQueryError: Error, Equatable, Sendable {
 /// A signal inside an OBD response payload. Bit numbering matches the CAN
 /// signal convention already used by TelemetryCore.
 public struct OBDSignalDefinition: Codable, Equatable, Sendable {
+    // Offsets refer to the reassembled diagnostic payload, not one CAN frame.
+    // Bound offsets by the 12-bit ISO-TP lengths supported by our parser;
+    // each decoded scalar still fits UInt64. This does not add CAN FD support.
+    private static let maximumPayloadBits = 4095 * 8
+
     public let id: String
     public let name: String
     public let startBit: Int
@@ -66,7 +72,7 @@ public struct OBDSignalDefinition: Codable, Equatable, Sendable {
         path: String? = nil
     ) throws {
         guard !id.isEmpty, !name.isEmpty else { throw OBDQueryError.emptyIdentifier }
-        guard startBit >= 0, startBit < 64, bitLength >= 1, bitLength <= 64,
+        guard startBit >= 0, startBit < Self.maximumPayloadBits, bitLength >= 1, bitLength <= 64,
               Self.isValidBitRange(startBit: startBit, bitLength: bitLength, byteOrder: byteOrder) else {
             throw OBDQueryError.invalidBitRange
         }
@@ -94,11 +100,11 @@ public struct OBDSignalDefinition: Codable, Equatable, Sendable {
 
     private static func isValidBitRange(startBit: Int, bitLength: Int, byteOrder: ByteOrder) -> Bool {
         if byteOrder == .intel {
-            return startBit + bitLength <= 64
+            return bitLength <= maximumPayloadBits - startBit
         }
         var bit = startBit
         for _ in 0..<bitLength {
-            guard bit >= 0, bit < 64 else { return false }
+            guard bit >= 0, bit < maximumPayloadBits else { return false }
             let bitInByte = bit % 8
             bit = bitInByte == 0 ? bit + 15 : bit - 1
         }
@@ -178,12 +184,22 @@ public struct OBDQueryDefinition: Codable, Equatable, Sendable {
         guard pollInterval.isFinite, pollInterval > 0,
               timeout.isFinite, timeout > 0,
               timeout >= pollInterval else { throw OBDQueryError.invalidTiming }
+        // The scheduler converts seconds to UInt64 nanoseconds. Finiteness in
+        // seconds alone does not prevent overflow or a zero-delay truncation.
+        guard let pollNanoseconds = UInt64(exactly: (pollInterval * 1_000_000_000).rounded(.towardZero)),
+              pollNanoseconds > 0 else { throw OBDQueryError.invalidTiming }
         let normalizedCommand = command.uppercased()
         guard normalizedCommand.count == service.commandByteCount * 2,
               normalizedCommand.unicodeScalars.allSatisfy(Self.isHexScalar) else {
             throw OBDQueryError.invalidCommand
         }
         guard !signals.isEmpty else { throw OBDQueryError.emptySignalCatalog }
+        var signalIDs = Set<String>()
+        for signal in signals {
+            guard signalIDs.insert(signal.id).inserted else {
+                throw OBDQueryError.duplicateSignalID(signal.id)
+            }
+        }
         self.id = id
         self.name = name
         self.requestCANID = requestCANID

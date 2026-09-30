@@ -56,6 +56,13 @@ public struct AdapterProfile: Codable, Equatable, Identifiable, Sendable {
             guard queryIDs.insert(query.id).inserted else {
                 throw AdapterProfileError.duplicateDiagnosticQueryID(query.id)
             }
+            // Dashboard bindings, recording and the store share a signal-ID
+            // namespace across raw frames and every diagnostic query.
+            for signal in query.signals {
+                guard ids.insert(signal.id).inserted else {
+                    throw AdapterProfileError.duplicateSignalID(signal.id)
+                }
+            }
         }
         switch transport {
         case .wifi:
