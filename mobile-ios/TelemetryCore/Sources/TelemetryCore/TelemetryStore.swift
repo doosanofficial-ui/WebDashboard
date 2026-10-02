@@ -258,6 +258,8 @@ public actor TelemetryStore {
 
     public func latestFrame() -> CANFrame? { lastFrame }
 
+    public func signalIDs() -> [String] { signals.keys.sorted() }
+
     public func latestLocation() -> LocationSample? { lastLocation }
 
     public func latestDiagnosticResponse() -> OBDResponse? { lastDiagnosticResponse }

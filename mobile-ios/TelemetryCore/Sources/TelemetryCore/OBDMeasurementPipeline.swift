@@ -9,6 +9,7 @@ public actor OBDMeasurementPipeline {
     private let store: TelemetryStore
     private let recorder: MeasurementRecorder?
     private var consumer: Task<Void, Never>?
+    private var shutdown: Task<Void, Never>?
 
     public private(set) var lastError: String?
 
@@ -44,10 +45,22 @@ public actor OBDMeasurementPipeline {
     }
 
     public func stop() async {
-        consumer?.cancel()
+        if let shutdown { await shutdown.value; return }
+        guard let pending = consumer else {
+            await scheduler.stop()
+            await store.disconnect()
+            return
+        }
+        pending.cancel()
+        let drain = Task { [scheduler, store] in
+            await scheduler.stop()
+            await pending.value
+            await store.disconnect()
+        }
+        shutdown = drain
+        await drain.value
         consumer = nil
-        await scheduler.stop()
-        await store.disconnect()
+        shutdown = nil
     }
 
     private func consume(_ outcome: OBDQueryOutcome) async {
@@ -59,10 +72,8 @@ public actor OBDMeasurementPipeline {
             }
             do {
                 if let recorder {
-                    try await recorder.append(.diagnosticResponse(result.response))
-                    for signal in result.signals {
-                        try await recorder.append(.diagnosticSignal(signal))
-                    }
+                    try await recorder.append(contentsOf: [.diagnosticResponse(result.response)]
+                        + result.signals.map { .diagnosticSignal($0) })
                 }
             } catch {
                 lastError = "diagnostic recorder failure"

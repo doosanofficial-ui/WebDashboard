@@ -11,6 +11,31 @@ public enum MeasurementReplayError: Error, Equatable, Sendable {
 /// recorder reference. Callers must stop live ingestion before starting replay.
 /// Invalid input never leaves a partially restored or mixed-session snapshot.
 public enum MeasurementReplay {
+    public struct Snapshot: Sendable {
+        public let timestamp: Double
+        public let signals: [LatestSignalState]
+        public let frame: CANFrame?
+        public let diagnostic: OBDResponse?
+        public let location: LocationSample?
+    }
+
+    /// A validated, recorded end-of-session snapshot, not new acquisition.
+    /// Original source times remain untouched and no transport/writer is used.
+    public static func snapshot(_ export: MeasurementExport) async throws -> Snapshot {
+        let store = TelemetryStore()
+        try await replay(export, into: store)
+        let timestamp = export.measurements.last?.receivedAtEpoch ?? export.session.startedAt
+        var signals: [LatestSignalState] = []
+        for id in await store.signalIDs() {
+            if let state = await store.signalState(for: id, now: timestamp) { signals.append(state) }
+        }
+        let lastSource = export.measurements.last { $0.kind == "CAN" || $0.kind == "DIAGNOSTIC_RESPONSE" }?.kind
+        return Snapshot(timestamp: timestamp, signals: signals,
+            frame: lastSource == "CAN" ? await store.latestFrame() : nil,
+            diagnostic: lastSource == "DIAGNOSTIC_RESPONSE" ? await store.latestDiagnosticResponse() : nil,
+            location: await store.latestLocation())
+    }
+
     public static func replay(_ data: Data, into store: TelemetryStore) async throws {
         let decoder = JSONDecoder()
         if let envelope = try? decoder.decode(MeasurementExport.self, from: data) {

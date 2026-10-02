@@ -11,6 +11,7 @@ public actor CANMeasurementPipeline {
     private let store: TelemetryStore
     private let recorder: MeasurementRecorder?
     private var consumer: Task<Void, Never>?
+    private var shutdown: Task<Void, Never>?
 
     public private(set) var lastError: String?
 
@@ -50,9 +51,17 @@ public actor CANMeasurementPipeline {
     }
 
     public func stop() async {
-        consumer?.cancel()
+        if let shutdown { await shutdown.value; return }
+        guard let pending = consumer else { await session.stop(); return }
+        pending.cancel()
+        let drain = Task { [session] in
+            await session.stop()
+            await pending.value
+        }
+        shutdown = drain
+        await drain.value
         consumer = nil
-        await session.stop()
+        shutdown = nil
     }
 
     @discardableResult
@@ -63,10 +72,7 @@ public actor CANMeasurementPipeline {
             await store.ingest(signal: item.sample)
         }
         if let recorder {
-            try await recorder.append(.can(frame: frame))
-            for item in decoded {
-                try await recorder.append(.signal(item.sample))
-            }
+            try await recorder.append(contentsOf: [.can(frame: frame)] + decoded.map { .signal($0.sample) })
         }
         return decoded
     }

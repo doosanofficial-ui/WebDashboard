@@ -358,8 +358,12 @@ public actor MeasurementRecorder {
     }
 
     public func exportCSV() throws -> Data {
+        Self.csvData(for: try export())
+    }
+
+    public static func csvData(for rows: [PersistedMeasurement]) -> Data {
         let header = "sequence,session_id,kind,source_timestamp,received_at,received_monotonic,payload_json"
-        let lines = try export().map { row in
+        let lines = rows.map { row in
             [
                 String(row.sequence),
                 row.sessionID,

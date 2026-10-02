@@ -3,6 +3,12 @@ import XCTest
 @testable import TelemetryCore
 
 final class OBDMeasurementPipelineTests: XCTestCase {
+    func testImmediateStopRepeatedlyCompletesAcceptedResponseSignalBatch() async throws {
+        for _ in 0..<10 {
+            try await testSchedulerPipelineFeedsStoreAndDurableRecorder()
+        }
+    }
+
     func testSchedulerPipelineFeedsStoreAndDurableRecorder() async throws {
         let transport = MockCANTransport()
         let query = try SantaFeMX5HybridQueryCatalog.hvBatterySOC()
@@ -47,7 +53,9 @@ final class OBDMeasurementPipelineTests: XCTestCase {
                 break
             }
         }
-        await pipeline.stop()
+        async let firstStop: Void = pipeline.stop()
+        async let secondStop: Void = pipeline.stop()
+        _ = await (firstStop, secondStop)
 
         let pipelineError = await pipeline.lastError
         XCTAssertEqual(latest?.value, 50)
