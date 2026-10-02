@@ -10,8 +10,15 @@ import platform
 from pathlib import Path
 import subprocess
 import uuid
+import shutil
+import tempfile
 
-EXPECTED_TEST_COUNT = 16
+EXPECTED_TEST_COUNT = 18
+
+
+def stage_sources(root, destination):
+    shutil.copytree(root / "mobile-ios", destination,
+                    ignore=shutil.ignore_patterns("*.xcodeproj", ".build", ".swiftpm", ".DS_Store"))
 
 
 def select_runtime_and_type(data):
@@ -56,7 +63,10 @@ def main():
     results = args.result_directory.resolve()
     results.mkdir(parents=True, exist_ok=False)
     simulator = None
+    workspace = tempfile.TemporaryDirectory(prefix="telemetry-lifecycle-source-")
     try:
+        staged = Path(workspace.name) / "source"
+        stage_sources(root, staged)
         versions = output(["xcodebuild", "-version"])
         (results / "xcode-version.txt").write_text(versions, encoding="utf-8")
         print(versions, flush=True)
@@ -71,12 +81,13 @@ def main():
         print(json.dumps(evidence), flush=True)
         output(["xcrun", "simctl", "boot", simulator])
         output(["xcrun", "simctl", "bootstatus", simulator, "-b"], timeout=180)
-        output(["xcodegen", "generate", "--spec", str(root / "mobile-ios/lifecycle-tests.yml")], timeout=120)
+        output(["xcodegen", "generate", "--spec", str(staged / "lifecycle-tests.yml")], timeout=120)
         bundle = results / "Lifecycle.xcresult"
-        command = ["xcodebuild", "-project", str(root / "mobile-ios/Telemetry.xcodeproj"),
+        command = ["xcodebuild", "-project", str(staged / "Telemetry.xcodeproj"),
                    "-scheme", "TelemetryLifecycle", "-configuration", "Debug",
                    "-destination", "platform=iOS Simulator,id=" + simulator,
                    "-parallel-testing-enabled", "NO", "-resultBundlePath", str(bundle),
+                   "-derivedDataPath", str(Path(workspace.name) / "derived"),
                    "CODE_SIGNING_ALLOWED=NO", "test"]
         (results / "command.json").write_text(json.dumps(command, indent=2), encoding="utf-8")
         log = results / "xcodebuild.log"
@@ -94,6 +105,7 @@ def main():
             # Only the UUID returned by this run's create command is touched.
             subprocess.run(["xcrun", "simctl", "shutdown", simulator], capture_output=True, timeout=60)
             subprocess.run(["xcrun", "simctl", "delete", simulator], check=True, capture_output=True, timeout=60)
+        workspace.cleanup()
 
 
 if __name__ == "__main__":

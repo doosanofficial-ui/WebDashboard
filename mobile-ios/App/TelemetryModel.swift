@@ -23,6 +23,13 @@ final class TelemetryModel: NSObject {
     var dashboardSaveError: String?
     var localRecordingStatus = "Preparing local recorder"
     var exportStatus = "No export generated"
+    var savedSessions: [PersistedMeasurementSession] = []
+    var selectedSavedSessionID: String?
+    var archiveStatus = "No saved session selected"
+    var replayTimestamp: Double?
+    var replaySignalUnits: [String: String] = [:]
+    @ObservationIgnored private var archiveBusy = false
+    @ObservationIgnored private var replayGeneration = UUID()
     var localRecordingEnabled = false
     var runMode: TelemetryRunMode = .live
     var availableSignalIDs: [String] {
@@ -44,6 +51,9 @@ final class TelemetryModel: NSObject {
     var bleDevices: [BLEDiscoveredDevice] = []
     var adapterSignalValue: Double?
     var rawCANText = "-"
+    var showingDiagnosticResponse: Bool {
+        canSource == "Diagnostic" || (runMode == .replay && rawCANText.hasPrefix("REPLAY DIAGNOSTIC"))
+    }
     var frame: CanFrame?
     var lastFrameAt: Date?
     var canSource = "Server"
@@ -370,6 +380,10 @@ final class TelemetryModel: NSObject {
     }
 
     private func prepareAcquisitionMode(_ mode: TelemetryRunMode) -> Bool {
+        guard runMode != .replay else {
+            adapterStatus = "Stop Replay before starting acquisition"
+            return false
+        }
         guard !recordingClosing, localRecorder == nil || runMode == mode else {
             adapterStatus = "Stop recording before changing LIVE/DEMO mode"
             return false
@@ -541,6 +555,7 @@ final class TelemetryModel: NSObject {
     }
 
     private func handleDemoFrame(_ frame: CANFrame, decoded: DecodedSignal) {
+        guard runMode != .replay else { return }
         adapterStatus = "Demo adapter monitoring"
         adapterSignalValue = decoded.value
         rawCANText = String(format: "0x%03X  %@", frame.canID,
@@ -568,6 +583,7 @@ final class TelemetryModel: NSObject {
     }
 
     private func handleAdapterState(_ state: String) {
+        guard runMode != .replay else { return }
         adapterStatus = state
         let event = AdapterRuntimeEvent(state: state).rawValue
         record(.system(name: event, timestamp: Date().timeIntervalSince1970,
@@ -576,6 +592,7 @@ final class TelemetryModel: NSObject {
     }
 
     private func handleLiveFrame(_ frame: CANFrame, decoded: [LiveDecodedSignal]) {
+        guard runMode != .replay else { return }
         adapterStatus = "Live adapter monitoring"
         adapterSignalValue = decoded.first?.decoded.value
         let idFormat = frame.isExtended ? "0x%08X  %@" : "0x%03X  %@"
@@ -596,6 +613,7 @@ final class TelemetryModel: NSObject {
     }
 
     private func handleDiagnosticResult(_ result: OBDQueryResult) {
+        guard runMode != .replay else { return }
         adapterStatus = "Diagnostic query monitoring"
         adapterSignalValue = result.signals.first?.value
         let values = Dictionary(uniqueKeysWithValues: result.signals.map { ($0.signalID, $0.value) })
@@ -745,8 +763,8 @@ final class TelemetryModel: NSObject {
         let recordingState: String = storageStatus != nil
             ? "failed"
             : recordingLifecycle.state.rawValue
-        var values = frame?.sig ?? [:]
-        if let adapterSignalValue { values["adapter"] = adapterSignalValue }
+        var values = runMode == .replay ? [:] : frame?.sig ?? [:]
+        if runMode != .replay, let adapterSignalValue { values["adapter"] = adapterSignalValue }
         CarPlayProjectionBridge.shared.update(CarPlayProjectionState(
             adapterState: adapterStatus,
             recordingState: recordingState,
@@ -760,6 +778,7 @@ final class TelemetryModel: NSObject {
     }
 
     func startLocation() {
+        guard runMode != .replay else { return }
         guard storageStatus == nil else { return }
         locationService.start()
         record(.system(name: "gps_started", timestamp: Date().timeIntervalSince1970,
@@ -1081,6 +1100,7 @@ final class TelemetryModel: NSObject {
     }
 
     func mark() {
+        guard runMode != .replay else { return }
         if let event = try? TelemetryEvent.mark(note: "", capturedAt: Date().timeIntervalSince1970,
             background: UIApplication.shared.applicationState != .active, source: "ios-native",
             appVersion: eventAppVersion, device: eventDevice) {
@@ -1103,11 +1123,15 @@ final class TelemetryModel: NSObject {
     }
 
     func flush(force: Bool = false) async {
+        guard runMode != .replay else { return }
         guard let endpoint = try? endpoint(), let credential = CredentialStore.read() else { return }
         await uploader?.flush(to: endpoint, credential: credential, force: force)
     }
 
     func exportMeasurementJSON() async -> Data? {
+        if selectedSavedSessionID != nil {
+            return await selectedArchiveData(csv: false)
+        }
         guard let recorder = localRecorder ?? completedRecorder else {
             exportStatus = "Local recorder unavailable"
             return nil
@@ -1125,6 +1149,9 @@ final class TelemetryModel: NSObject {
     }
 
     func exportMeasurementCSV() async -> Data? {
+        if selectedSavedSessionID != nil {
+            return await selectedArchiveData(csv: true)
+        }
         guard let recorder = localRecorder ?? completedRecorder else {
             exportStatus = "Local recorder unavailable"
             return nil
@@ -1146,6 +1173,10 @@ final class TelemetryModel: NSObject {
     }
 
     func startRecording() {
+        guard runMode != .replay else {
+            localRecordingStatus = "Stop Replay before recording"
+            return
+        }
         guard localRecorder == nil, !recordingClosing, let measurementDBURL,
               recordingLifecycle.start() else { return }
         do {
@@ -1162,6 +1193,7 @@ final class TelemetryModel: NSObject {
             localRecorder = recorder
             recordingWriteQueue = writer
             completedRecorder = nil
+            selectedSavedSessionID = nil
             localRecordingEnabled = true
             recordingStartedAt = Date(timeIntervalSince1970: now)
             localRecordingStatus = "Local recorder ready"
@@ -1208,6 +1240,130 @@ final class TelemetryModel: NSObject {
 
     func restoreBackgroundSession() {
         uploader?.restoreSession(baseURL: try? endpoint(), credential: CredentialStore.read())
+    }
+
+    func refreshSavedSessions() async {
+        guard let measurementDBURL else { return }
+        do {
+            let archive = try MeasurementArchive(path: measurementDBURL)
+            savedSessions = try await archive.sessions()
+            archiveStatus = savedSessions.isEmpty ? "No saved sessions" : "Choose a closed session to export or replay"
+        } catch {
+            archiveStatus = "Saved sessions unavailable; measurement data was not modified"
+        }
+    }
+
+    private func selectedArchiveExport() async -> MeasurementExport? {
+        guard !localRecordingEnabled, !recordingClosing, let measurementDBURL,
+              let selectedSavedSessionID else {
+            exportStatus = "Stop recording before loading a saved session"
+            return nil
+        }
+        do {
+            let archive = try MeasurementArchive(path: measurementDBURL)
+            let saved = try await archive.load(sessionID: selectedSavedSessionID)
+            guard self.selectedSavedSessionID == selectedSavedSessionID else { return nil }
+            exportStatus = "Saved export ready: \(saved.measurements.count) rows"
+            return saved
+        } catch {
+            exportStatus = "Saved session unavailable, open or too large; no data was modified"
+            return nil
+        }
+    }
+
+    private func selectedArchiveData(csv: Bool) async -> Data? {
+        guard !localRecordingEnabled, !recordingClosing, let measurementDBURL,
+              let selectedSavedSessionID else { return nil }
+        do {
+            let archive = try MeasurementArchive(path: measurementDBURL)
+            let data = try await (csv ? archive.exportCSV(sessionID: selectedSavedSessionID)
+                : archive.exportJSON(sessionID: selectedSavedSessionID))
+            guard self.selectedSavedSessionID == selectedSavedSessionID else { return nil }
+            exportStatus = "Saved \(csv ? "CSV" : "JSON") export ready: \(data.count) bytes"
+            return data
+        } catch {
+            exportStatus = "Saved session export failed; no recording data was modified"
+            return nil
+        }
+    }
+
+    func replaySelectedSession() async {
+        guard !archiveBusy, !localRecordingEnabled, !recordingClosing else { return }
+        archiveBusy = true
+        defer { archiveBusy = false }
+        let generation = UUID()
+        replayGeneration = generation
+        guard let saved = await selectedArchiveExport() else { return }
+        do {
+            let snapshot = try await MeasurementReplay.snapshot(saved)
+            guard replayGeneration == generation, selectedSavedSessionID == saved.session.sessionID,
+                  !localRecordingEnabled, !recordingClosing else { return }
+            let values = Dictionary(uniqueKeysWithValues: snapshot.signals.compactMap { state in
+                state.value.map { (state.signalID, $0) }
+            })
+            let displayFrame = values.isEmpty ? nil : try ServerCANFrame(version: 1,
+                serverTimestamp: snapshot.timestamp, signals: values,
+                status: .init(sequence: Int(saved.measurements.last?.sequence ?? 0), drop: 0))
+            let recordedLocation = try snapshot.location.map { location in
+                try TelemetryEvent.gps(latitude: location.latitude, longitude: location.longitude,
+                    speed: location.speed, heading: location.course, accuracy: location.horizontalAccuracy,
+                    altitude: location.altitude, capturedAt: location.originalTimestamp, background: false, source: "replay")
+            }
+            disconnect()
+            demoAdapter.stop()
+            liveAdapter.stop()
+            diagnosticAdapter.stop()
+            bleDiscovery.stop()
+            locationService.stop()
+            collecting = false
+            resetLocalSignalSnapshot()
+            runMode = .replay
+            adapterSignalValue = nil
+            replayTimestamp = snapshot.timestamp
+            replaySignalUnits = Dictionary(uniqueKeysWithValues: snapshot.signals.map { ($0.signalID, $0.unit) })
+            localSignalReceivedAt = Dictionary(uniqueKeysWithValues: snapshot.signals.map { ($0.signalID, $0.receivedAtEpoch) })
+            if let displayFrame {
+                frame = displayFrame
+                lastFrameAt = Date(timeIntervalSince1970: snapshot.signals.map(\.receivedAtEpoch).max() ?? snapshot.timestamp)
+            }
+            canSource = "Replay"
+            adapterStatus = "Replay snapshot (not acquisition)"
+            if let response = snapshot.diagnostic {
+                rawCANText = "REPLAY DIAGNOSTIC 0x\(String(response.responseCANID, radix: 16, uppercase: true)) · "
+                    + response.payload.map { String(format: "%02X", $0) }.joined(separator: " ")
+            } else if let raw = snapshot.frame {
+                rawCANText = "REPLAY CAN 0x\(String(raw.canID, radix: 16, uppercase: true)) · "
+                    + raw.payload.map { String(format: "%02X", $0) }.joined(separator: " ")
+            } else { rawCANText = "-" }
+            lastLocation = recordedLocation
+            locationTrack.removeAll()
+            if let location = snapshot.location {
+                locationTrack = [.init(latitude: location.latitude, longitude: location.longitude)]
+            }
+            locationStatus = "Replay recorded GPS; not current position"
+            archiveStatus = "Replay snapshot: \(saved.measurements.count) original rows; no acquisition or recording"
+            publishCarPlayProjection()
+        } catch {
+            archiveStatus = "Replay rejected; choose a valid recording"
+        }
+    }
+
+    func stopReplay() {
+        replayGeneration = UUID()
+        guard runMode == .replay else { return }
+        runMode = .live
+        replayTimestamp = nil
+        replaySignalUnits.removeAll()
+        resetLocalSignalSnapshot()
+        lastLocation = nil
+        locationTrack.removeAll()
+        canSource = "None"
+        adapterStatus = "Adapter disconnected"
+        rawCANText = "-"
+        locationStatus = "Not collecting"
+        archiveStatus = "Replay stopped; acquisition remains off"
+        adapterSignalValue = nil
+        publishCarPlayProjection()
     }
 
     private func refreshQueueDepth() async {

@@ -1,12 +1,34 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import tempfile
 
 SPEC = importlib.util.spec_from_file_location("ios_lifecycle_runner", Path(__file__).resolve().parents[1] / "verify_ios_lifecycle.py")
 runner = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(runner)
 
 class LifecycleRunnerTests(unittest.TestCase):
+    def test_ascii_staging_preserves_sources_and_excludes_generated_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "workspace\u00a0name"
+            source = root / "mobile-ios"
+            source.mkdir(parents=True)
+            (source / "project.yml").write_text("version: fixture")
+            (source / "Fixture.xcodeproj").mkdir()
+            (source / ".build").mkdir()
+            destination = Path(directory) / "ascii-stage"
+            runner.stage_sources(root, destination)
+            self.assertEqual((destination / "project.yml").read_text(), "version: fixture")
+            self.assertFalse((destination / "Fixture.xcodeproj").exists())
+            self.assertFalse((destination / ".build").exists())
+            self.assertTrue((source / "Fixture.xcodeproj").is_dir())
+
+    def test_staging_cannot_overwrite_existing_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "mobile-ios").mkdir()
+            with self.assertRaises(FileExistsError):
+                runner.stage_sources(root, root)
     def test_selects_latest_available_ios_and_compatible_iphone(self):
         data = {"runtimes": [
             {"identifier": "com.apple.CoreSimulator.SimRuntime.iOS-18-0", "version": "18.0", "isAvailable": True, "supportedDeviceTypes": [{"identifier": "iphone", "productFamily": "iPhone"}]},

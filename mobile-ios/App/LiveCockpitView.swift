@@ -11,14 +11,20 @@ struct LiveCockpitView: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.1)) { timeline in
+            let displayDate = model.replayTimestamp.map(Date.init(timeIntervalSince1970:)) ?? timeline.date
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: TelemetryTheme.Spacing.medium) {
-                    connectionStrip(at: timeline.date)
-                    primaryMetric(at: timeline.date)
-                    wheelSpeedRail(at: timeline.date)
-                    dynamicsCharts(at: timeline.date)
-                    locationCard(at: timeline.date)
-                    profileDisclosure(at: timeline.date)
+                    if model.runMode == .replay {
+                        Label("REPLAY SNAPSHOT · recorded, not live", systemImage: "clock.arrow.circlepath")
+                            .font(.headline).telemetrySurface(.standard)
+                            .accessibilityIdentifier("replay-banner")
+                    }
+                    connectionStrip(at: displayDate)
+                    primaryMetric(at: displayDate)
+                    wheelSpeedRail(at: displayDate)
+                    dynamicsCharts(at: displayDate)
+                    locationCard(at: displayDate)
+                    profileDisclosure(at: displayDate)
 
                     if let error = model.storageStatus {
                         Label(error, systemImage: "exclamationmark.triangle.fill")
@@ -65,25 +71,25 @@ struct LiveCockpitView: View {
                         .foregroundStyle(stateColor)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("LIVE TELEMETRY")
+                    Text(model.runMode == .replay ? "RECORDED TELEMETRY" : "LIVE TELEMETRY")
                         .font(.caption2.weight(.bold))
                         .tracking(1.0)
                         .foregroundStyle(TelemetryTheme.mutedText)
-                    Text((adapterLive ? "ADAPTER LIVE" : model.connection).uppercased())
+                    Text(model.runMode == .replay ? "REPLAY SNAPSHOT" : (adapterLive ? "ADAPTER LIVE" : model.connection).uppercased())
                         .font(.headline.weight(.bold))
                         .foregroundStyle(.white)
                 }
                 Spacer(minLength: TelemetryTheme.Spacing.small)
                 TelemetryStatusBadge(
-                    title: fresh ? "Live" : "Stale",
+                    title: model.runMode == .replay ? "Replay" : fresh ? "Live" : "Stale",
                     color: stateColor,
                     symbol: fresh ? "checkmark.circle.fill" : "pause.circle.fill"
                 )
             }
             HStack(spacing: TelemetryTheme.Spacing.small) {
-                telemetryStat("SEQ", model.frame?.status.seq.description ?? "-")
-                telemetryStat("DROP", String(model.clientDrops + (model.frame?.status.drop ?? 0)))
-                telemetryStat("RTT", model.serverRTTMilliseconds.map { String(format: "%.0f ms", $0) } ?? "-")
+                telemetryStat(model.runMode == .replay ? "ROW" : "SEQ", model.frame?.status.seq.description ?? "-")
+                telemetryStat("DROP", model.runMode == .replay ? "-" : String(model.clientDrops + (model.frame?.status.drop ?? 0)))
+                telemetryStat("RTT", model.runMode == .replay ? "-" : model.serverRTTMilliseconds.map { String(format: "%.0f ms", $0) } ?? "-")
                 telemetryStat("AGE", age.map { String(format: "%.0f ms", max(0, $0 * 1000)) } ?? "-")
             }
         }
@@ -125,7 +131,7 @@ struct LiveCockpitView: View {
                         .foregroundStyle(TelemetryTheme.mutedText)
                 }
                 Spacer()
-                Text("CAN 10 HZ")
+                Text(model.runMode == .replay ? "RECORDED" : "UI TARGET 10 HZ")
                     .font(.caption2.weight(.bold))
                     .tracking(0.8)
                     .foregroundStyle(TelemetryTheme.mutedText)
@@ -274,7 +280,7 @@ struct LiveCockpitView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(TelemetryTheme.warning)
-                .disabled(model.storageStatus != nil)
+                .disabled(model.storageStatus != nil || model.runMode == .replay)
                 .accessibilityIdentifier("mark-event")
 
                 Button {
@@ -293,6 +299,7 @@ struct LiveCockpitView: View {
                 .buttonStyle(.bordered)
                 .tint(model.localRecordingEnabled ? TelemetryTheme.critical : TelemetryTheme.valid)
                 .accessibilityIdentifier("toggle-recording")
+                .disabled(model.runMode == .replay)
 
                 Button {
                     if model.collecting {
@@ -308,7 +315,7 @@ struct LiveCockpitView: View {
                 }
                 .buttonStyle(.bordered)
                 .tint(model.collecting ? TelemetryTheme.accent : TelemetryTheme.mutedText)
-                .disabled(model.storageStatus != nil)
+                .disabled(model.storageStatus != nil || model.runMode == .replay)
                 .accessibilityLabel(model.collecting ? "Stop GPS" : "Start GPS")
                 .accessibilityIdentifier("toggle-gps")
             }
@@ -414,6 +421,7 @@ struct LiveCockpitView: View {
         }
         .frame(minHeight: page.orientation == .portrait ? 420 : 300,
                maxHeight: page.orientation == .portrait ? 660 : 500)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("dashboard-canvas-\(page.id)")
     }
 
@@ -659,7 +667,7 @@ struct LiveCockpitView: View {
 
     private func canDataIsFresh(at now: Date) -> Bool {
         let adapterLive = model.adapterStatus.localizedCaseInsensitiveContains("monitoring")
-        guard (model.connection == "Connected" || adapterLive),
+        guard (model.runMode == .replay || model.connection == "Connected" || adapterLive),
               let lastFrameAt = model.lastFrameAt else { return false }
         return now.timeIntervalSince(lastFrameAt) <= 1.5
     }
@@ -670,7 +678,7 @@ struct LiveCockpitView: View {
               let receivedAt = model.localSignalReceivedAt[signalID] else {
             return fallback
         }
-        guard model.adapterStatus.localizedCaseInsensitiveContains("monitoring") else {
+        guard model.runMode == .replay || model.adapterStatus.localizedCaseInsensitiveContains("monitoring") else {
             return false
         }
         return now.timeIntervalSince1970 >= receivedAt
@@ -694,7 +702,7 @@ struct LiveCockpitView: View {
     }
 
     private var bitText: String {
-        if model.canSource == "Diagnostic" {
+        if model.showingDiagnosticResponse {
             return "Diagnostic response; passive CAN bits unavailable"
         }
         guard let payload = model.rawCANText.split(separator: "  ").last else { return "-" }

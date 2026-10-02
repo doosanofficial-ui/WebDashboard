@@ -4,6 +4,7 @@ import Foundation
 enum TelemetrySetupError: Error { case invalidEndpoint }
 enum TestFailure: Error { case queueFull, storage }
 enum TelemetrySource { case rawCAN, diagnostic, gps, demo }
+enum TelemetryRunMode { case live, demo, replay }
 struct TelemetryEvent {
     let type: String
     let capturedAt: Double
@@ -143,6 +144,7 @@ actor TelemetryStore {
     var uploader: BackgroundUploader?
     func restoreBackgroundSession() {}
     var serverText = ""
+    var runMode: TelemetryRunMode = .live
     var storageStatus: String?
     var uploadStatus = "Not paired"
     var queueDepth = 0

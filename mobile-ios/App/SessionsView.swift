@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import TelemetryCore
 
 struct SessionsView: View {
     @Bindable var model: TelemetryModel
@@ -16,6 +17,7 @@ struct SessionsView: View {
                         sessionHero
                         sessionControls
                         sessionStats
+                        savedSessionCard
                         exportCard
                     }
                     .padding(.horizontal, TelemetryTheme.Spacing.medium)
@@ -26,6 +28,15 @@ struct SessionsView: View {
             }
             .navigationTitle("Sessions")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if model.runMode == .replay {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Stop Replay", action: model.stopReplay)
+                            .accessibilityIdentifier("stop-replay-header")
+                    }
+                }
+            }
+            .task { await model.refreshSavedSessions() }
             .fileExporter(
                 isPresented: $exportPresented,
                 document: exportDocument,
@@ -45,15 +56,51 @@ struct SessionsView: View {
         }
     }
 
+    private var savedSessionCard: some View {
+        VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
+            Label("SAVED SESSIONS", systemImage: "archivebox")
+                .font(.headline)
+            Picker("Session", selection: $model.selectedSavedSessionID) {
+                Text("Current recording / last stopped").tag(nil as String?)
+                ForEach(model.savedSessions, id: \.sessionID) { session in
+                    Text("\(Date(timeIntervalSince1970: session.startedAt).formatted(date: .abbreviated, time: .standard)) · \(session.mode.rawValue)\(session.endedAt == nil ? " · OPEN" : "")")
+                        .tag(Optional(session.sessionID))
+                }
+            }
+            .disabled(model.localRecordingEnabled)
+            .accessibilityIdentifier("saved-session-picker")
+            HStack {
+                Button("Refresh") { Task { await model.refreshSavedSessions() } }
+                    .accessibilityIdentifier("refresh-saved-sessions")
+                Button("Replay snapshot") { Task { await model.replaySelectedSession() } }
+                    .disabled(model.selectedSavedSessionID == nil || model.localRecordingEnabled)
+                    .accessibilityIdentifier("replay-saved-session")
+            }
+            .buttonStyle(.bordered)
+            if model.runMode == .replay {
+                Button("Stop Replay", action: model.stopReplay)
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("stop-replay")
+            }
+            Text(model.archiveStatus).font(.caption)
+            Text("Replay shows the recorded final snapshot, not live data. Select a saved session for CSV/JSON export. Playback and seeking are not yet supported.")
+                .font(.caption2).foregroundStyle(TelemetryTheme.mutedText)
+        }
+        .telemetrySurface(.standard)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("saved-sessions-card")
+        .onChange(of: model.selectedSavedSessionID) { _, _ in model.stopReplay() }
+    }
+
     private var sessionHero: some View {
         VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(model.localRecordingEnabled ? "RECORDING" : "READY TO RECORD")
+                    Text(model.runMode == .replay ? "REPLAY SNAPSHOT" : model.localRecordingEnabled ? "RECORDING" : "READY TO RECORD")
                         .font(.caption.weight(.bold))
                         .tracking(1.1)
                         .foregroundStyle(model.localRecordingEnabled ? TelemetryTheme.critical : TelemetryTheme.accent)
-                    Text(model.localRecordingEnabled ? "Measurement session active" : "Local-first measurement storage")
+                    Text(model.runMode == .replay ? "Saved recording; acquisition is off" : model.localRecordingEnabled ? "Measurement session active" : "Local-first measurement storage")
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(.white)
                 }
@@ -62,7 +109,7 @@ struct SessionsView: View {
                     .font(.title2)
                     .foregroundStyle(model.localRecordingEnabled ? TelemetryTheme.critical : TelemetryTheme.valid)
             }
-            Text(model.localRecordingStatus)
+            Text(model.runMode == .replay ? "Acquisition and recording are off" : model.localRecordingStatus)
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(TelemetryTheme.mutedText)
             if let storageStatus = model.storageStatus {
@@ -88,7 +135,7 @@ struct SessionsView: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(model.localRecordingEnabled ? TelemetryTheme.critical : TelemetryTheme.valid)
-            .disabled(model.storageStatus != nil)
+            .disabled(model.storageStatus != nil || model.runMode == .replay)
             .accessibilityIdentifier("sessions-toggle-recording")
 
             Button(action: model.mark) {
@@ -99,7 +146,7 @@ struct SessionsView: View {
             }
             .buttonStyle(.bordered)
             .tint(TelemetryTheme.warning)
-            .disabled(model.storageStatus != nil)
+            .disabled(model.storageStatus != nil || model.runMode == .replay)
             .accessibilityIdentifier("sessions-mark-event")
         }
         .telemetrySurface(.standard, padding: TelemetryTheme.Spacing.small)
@@ -110,7 +157,7 @@ struct SessionsView: View {
             sessionStat("DURATION", model.recordingElapsedSeconds.map(formatDuration) ?? "--:--", "timer")
             sessionStat("MODE", model.runMode.rawValue, "switch.2")
             sessionStat("PENDING", String(model.queueDepth), "arrow.up.circle")
-            sessionStat("GPS", model.locationStatus.uppercased(), "location.fill")
+            sessionStat("GPS", model.runMode == .replay ? (model.lastLocation == nil ? "NO SAMPLE" : "RECORDED") : model.locationStatus.uppercased(), "location.fill")
             sessionStat("LAST MARK", model.lastMarkAt?.formatted(date: .omitted, time: .shortened) ?? "NONE", "flag.fill")
         }
         .accessibilityIdentifier("sessions-stats")

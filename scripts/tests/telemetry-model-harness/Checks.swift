@@ -94,6 +94,13 @@ import Foundation
         raw.applyLocalDiagnosticSignals(values: ["soc": 50], rawValues: [:], source: "Diagnostic",
             sequence: 3, timestamp: 202, responseCANID: 0x7EC)
         expect(raw.frame?.sig == ["soc": 50], "diagnostic snapshot cannot inherit raw source values")
+        let replay = Coordinator()
+        replay.collecting = false
+        replay.runMode = .replay
+        replay.startLocation()
+        replay.mark()
+        expect(!replay.collecting, "Replay cannot start GPS collection")
+        expect(replay.recorded.isEmpty, "Replay MARK cannot add recorded events")
         print("APP COORDINATOR SOURCE HARNESS: \(checks) assertions, \(failures) failures (not UIKit/device evidence)")
         if failures > 0 { exit(1) }
     }

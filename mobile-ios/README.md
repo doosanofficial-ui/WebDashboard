@@ -177,8 +177,40 @@ status-only system template, not a copy of the high-frequency phone dashboard.
 
 ## Remaining release gates
 
-Xcode 27/iOS 27 SDK build, real-device 30-minute logs, automatic pairing/provisioning,
-live BT4N profile capture, vehicle signal validation, full upload recovery fault
-testing, native Naver map/roadview integration if required, CarPlay templates/entitlement,
-Android parity, Windows packaging and real CAN adapter acceptance.
-See ../docs/production-plan.md for the full completion criteria.
+Current scope is iPhone/native iOS and CarPlay. iPad/Android and screen-lock
+validation are not acceptance gates. Vector/CANoe/CANape are future options.
+The 2026-10-02 physical OBDII capture and remaining RPM/SOC comparison,
+native export/Replay/device regression, app-transition acquisition, 10-minute
+and one-hour endurance gates are documented in
+`../docs/reports/vehicle-first-diagnostic-capture-2026-10-02.md`.
+CarPlay entitlement and actual head-unit runtime remain separate gates.
+Vehicle tests are on user-requested hold until power/connection is re-confirmed.
+
+## Saved sessions and offline Replay
+
+`Sessions > Saved Sessions > Session` lists the most recent 100 stored sessions.
+Choose a closed session, then use CSV/JSON to export it even after app restart.
+The archive is read-only; it never creates a missing session or changes data.
+Saved snapshots are bounded to 200,000 rows and larger/open sessions fail visibly
+instead of being silently truncated. Current recording export retains its
+existing drain-before-export behavior.
+
+`Replay snapshot` restores the recorded final values and GPS into Signals and
+the existing custom Dashboard widgets. This is NOT live acquisition and NOT
+continuous playback/seeking. Original timestamps/provenance remain in exports;
+display freshness is evaluated at the recorded reference time. GPS means recorded
+GPS, never the current position. Recording, MARK, GPS start, connection and upload
+are blocked until `Stop Replay`; stopping does not automatically reconnect.
+
+Software-only checks (no physical device, radio or real GPS measurement):
+
+```bash
+python3 scripts/verify_ios_lifecycle.py --result-directory /tmp/telemetry-hosted-check
+python3 scripts/verify_offline_replay.py --result-directory /tmp/telemetry-replay-ui-check
+```
+
+Use new result directories for each run. Both runners build an ASCII-path source
+copy and create/delete only their own Simulator. Replay UI uses an explicitly
+DEMO-labelled captured-payload fixture, not a vehicle measurement. It fails if
+the dedicated test is skipped or zero tests execute. Actual physical records and
+GPS coordinates must stay in private local backups, not Git/CI artifacts.

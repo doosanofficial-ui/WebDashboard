@@ -57,6 +57,27 @@ jobs:
       - name: Verify observed BLE profile selection
         run: python3 scripts/verify_ble_profile.py
 
+  native-replay-ui:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install XcodeGen
+        run: |
+          if ! brew list xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+      - name: Verify offline Replay on isolated Simulator
+        run: python3 scripts/verify_offline_replay.py --result-directory "$RUNNER_TEMP/offline-replay"
+      - name: Preserve offline UI evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: offline-replay-${{ github.sha }}
+          path: ${{ runner.temp }}/offline-replay
+          if-no-files-found: error
+          retention-days: 14
+
   native-app:
     runs-on: macos-15
     timeout-minutes: 20

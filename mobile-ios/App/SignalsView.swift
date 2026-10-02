@@ -12,11 +12,12 @@ struct SignalsView: View {
     var body: some View {
         NavigationStack {
             TimelineView(.periodic(from: .now, by: 0.5)) { timeline in
+                let displayDate = model.replayTimestamp.map(Date.init(timeIntervalSince1970:)) ?? timeline.date
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: TelemetryTheme.Spacing.medium) {
-                        healthCard(at: timeline.date)
+                        healthCard(at: displayDate)
                         filterBar()
-                        signalCatalog(at: timeline.date)
+                        signalCatalog(at: displayDate)
                         rawCANCard()
                         developerControls()
                     }
@@ -58,7 +59,7 @@ struct SignalsView: View {
                     .foregroundStyle(TelemetryTheme.accent)
                 Spacer()
                 TelemetryStatusBadge(
-                    title: live ? "Live" : "Idle",
+                    title: model.runMode == .replay ? "Replay" : live ? "Live" : "Idle",
                     color: color,
                     symbol: live ? "checkmark.circle.fill" : "pause.circle.fill"
                 )
@@ -84,8 +85,8 @@ struct SignalsView: View {
                 }
             }
             HStack(spacing: TelemetryTheme.Spacing.small) {
-                healthValue("BAD", String(model.invalidFrameCount))
-                healthValue("DROP", String(model.clientDrops + (model.frame?.status.drop ?? 0)))
+                healthValue("BAD", model.runMode == .replay ? "-" : String(model.invalidFrameCount))
+                healthValue("DROP", model.runMode == .replay ? "-" : String(model.clientDrops + (model.frame?.status.drop ?? 0)))
                 healthValue("PROFILE", model.adapterProfile?.name ?? "None")
             }
         }
@@ -188,6 +189,7 @@ struct SignalsView: View {
                     .font(.system(size: 25, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(fresh ? .white : TelemetryTheme.mutedText)
+                    .lineLimit(1)
                     .minimumScaleFactor(0.65)
                 HStack(spacing: 4) {
                     Text(row.unit.isEmpty ? "-" : row.unit)
@@ -205,8 +207,8 @@ struct SignalsView: View {
     private func rawCANCard() -> some View {
         VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
             HStack {
-                Label(model.canSource == "Diagnostic" ? "DIAGNOSTIC RESPONSE" : "RAW CAN",
-                      systemImage: model.canSource == "Diagnostic" ? "arrow.left.arrow.right" : "hexagon")
+                Label(model.showingDiagnosticResponse ? "DIAGNOSTIC RESPONSE" : "RAW CAN",
+                      systemImage: model.showingDiagnosticResponse ? "arrow.left.arrow.right" : "hexagon")
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(.white)
                 Spacer()
@@ -264,6 +266,12 @@ struct SignalsView: View {
     }
 
     private var signalRows: [SignalRow] {
+        if model.runMode == .replay {
+            return model.replaySignalUnits.keys.sorted().map { id in
+                SignalRow(id: id, name: id, unit: model.replaySignalUnits[id] ?? "", decimals: 1,
+                    detail: "REPLAY · original timestamps · not live acquisition")
+            }
+        }
         if let profile = model.adapterProfile {
             let rawRows = profile.signals.map {
                 SignalRow(
@@ -309,7 +317,7 @@ struct SignalsView: View {
 
     private func isFresh(_ row: SignalRow, at now: Date) -> Bool {
         if let received = model.localSignalReceivedAt[row.id],
-           model.adapterStatus.localizedCaseInsensitiveContains("monitoring") {
+           (model.runMode == .replay || model.adapterStatus.localizedCaseInsensitiveContains("monitoring")) {
             let timeout = model.localSignalTimeouts[row.id] ?? 1.5
             return now.timeIntervalSince1970 >= received && now.timeIntervalSince1970 - received <= timeout
         }
