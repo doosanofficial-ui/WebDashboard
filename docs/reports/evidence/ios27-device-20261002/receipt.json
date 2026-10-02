@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "collected_at": "2026-10-02T14:36:00+09:00",
+  "source_sha": "17441ce999cfc4ee14bc16d634fd8703ac83c158",
+  "bundle_id": "local.webdashboard.Telemetry",
+  "app_version": "0.22.2",
+  "app_build": "18",
+  "device": {"model": "iPhone 17", "product_type": "iPhone18,3", "os": "27.0", "os_build": "24A437", "reality": "physical"},
+  "toolchain": {"xcode": "27.0", "build": "27A266a", "iphoneos_sdk": "27.0"},
+  "local_final_executable_sha256": "abe5a4fa7a45dd01373a04bc4dbb1e040256730e6cb6ffd8da7dd376bf3c6f40",
+  "gates": {
+    "device_build": "PASS", "install": "PASS", "launch_observed_process": "PASS",
+    "physical_top_level_ui": "PASS", "idle_app_return": "PASS",
+    "existing_record_preservation": "PASS", "dashboard_bytes_preservation": "PASS",
+    "active_collection_app_switch": "NOT TESTED", "real_gps_recording": "NOT TESTED",
+    "physical_diagnostic_e2e": "BLOCKED", "physical_raw_can": "BLOCKED",
+    "carplay_entitlement": "NOT TESTED", "carplay_head_unit": "NOT TESTED",
+    "simulator": "NOT TESTED", "ipad_android_screen_lock": "OUT OF SCOPE"
+  },
+  "tests": {"core_tests": 207, "core_failures": 0, "coordinator_assertions": 23, "profile_assertions": 12, "physical_ui_tests": 1, "physical_ui_failures": 0, "physical_ui_duration_seconds": 28.552},
+  "preservation": {"sessions_before": 23, "sessions_after": 23, "rows_before": 6394, "rows_after": 6394, "missing_or_changed_measurements": 0, "missing_or_changed_sessions": 0, "sqlite_quick_check": "ok"},
+  "screenshots": [
+    {"file": "live.png", "epoch": 1790919129.897, "sha256": "a4215b81f7cf993e7aff7adea7f788fa38c54b52a94ec11f36d3ea5a729154c1"},
+    {"file": "signals.png", "epoch": 1790919134.227, "sha256": "f7c61d02c7a98a6e7b899453b39e46ff8d1994319d40b9e8a01939f921ae454d"},
+    {"file": "sessions.png", "epoch": 1790919137.410, "sha256": "dea5a7a6df654c619709e3ba95e99ebb824bffe0be2c5f26f42ba3d02e8c8e78"},
+    {"file": "idle-return.png", "epoch": 1790919150.487, "sha256": "826ff8b882f8b87541877638252728382e5988104d85602fd6837d0235394b71"}
+  ],
+  "notes": ["No acquisition, GPS, REC, MARK, connect, export or replay action was performed.", "Raw logs and container backups remain private outside Git.", "BLOCKED means PHYSICAL HARDWARE REQUIRED, powered vehicle adapter setup pending confirmation.", "Initial locator failure was corrected in a temporary test only; production source unchanged."]
+}
