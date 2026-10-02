@@ -85,7 +85,9 @@ public actor OBDQuerySession {
                 }
             }
             try await issue("AT H1\r")
-            try await issue("AT CAF0\r")
+            // Queries contain service/PID/DID only: ELM327 must insert the PCI
+            // byte. H1 preserves raw CAN headers/PCI on received responses.
+            try await issue("AT CAF1\r")
             state = .ready
         } catch is CancellationError {
             await stop()

@@ -3,18 +3,30 @@ import XCTest
 @testable import TelemetryCore
 
 final class OBDQuerySessionTests: XCTestCase {
-    func testDiagnosticSessionOwnsTransportAndRunsReadOnlyQuery() async throws {
+    func testDiagnosticSessionEnablesTransmitFormattingBeforeReadOnlyQuery() async throws {
         let transport = MockCANTransport()
         let query = try SantaFeMX5HybridQueryCatalog.hvBatterySOC()
         let responder = Task {
             var handledWrites = 0
+            var automaticFormatting = true
             while !Task.isCancelled {
                 let writes = await transport.writes()
                 while handledWrites < writes.count {
                     let write = writes[handledWrites]
                     handledWrites += 1
-                    if write == query.requestString {
-                        await transport.push(Data("7EC 08 62 01 01 00 00 00 00 64\r>".utf8))
+                    if write == "AT CAF0\r" {
+                        automaticFormatting = false
+                        await transport.push(Data("OK\r>".utf8))
+                    } else if write == "AT CAF1\r" {
+                        automaticFormatting = true
+                        await transport.push(Data("OK\r>".utf8))
+                    } else if write == query.requestString {
+                        // ELM327DS p14: CAF0 does not add the ISO-TP PCI byte.
+                        // This request contains only service/DID; H1 keeps raw response headers.
+                        let reply = automaticFormatting
+                            ? "7EC 08 62 01 01 00 00 00 00 64\r>"
+                            : "NO DATA\r>"
+                        await transport.push(Data(reply.utf8))
                     } else {
                         await transport.push(Data("OK\r>".utf8))
                     }
@@ -40,7 +52,8 @@ final class OBDQuerySessionTests: XCTestCase {
 
         let writes = await transport.writes()
         XCTAssertTrue(writes.contains("AT H1\r"))
-        XCTAssertTrue(writes.contains("AT CAF0\r"))
+        XCTAssertTrue(writes.contains("AT CAF1\r"))
+        XCTAssertFalse(writes.contains("AT CAF0\r"))
         XCTAssertTrue(writes.contains("AT SH 7E4\r"))
         XCTAssertTrue(writes.contains("AT CRA 7EC\r"))
         XCTAssertTrue(writes.contains(query.requestString))

@@ -100,7 +100,18 @@ final class BLEDiscoveryController: NSObject, @preconcurrency CBCentralManagerDe
         queries: [OBDQueryDefinition]
     ) throws -> AdapterProfile {
         guard let device = devices[id] else { throw BLEObservedProfileError.deviceNotFound }
-        guard device.services.count == 1, let service = device.services.first else {
+        // Ancillary services may be read-only or one-way. Never combine their
+        // characteristics, and fail closed if more than one duplex service exists.
+        let candidates = device.services.filter { service in
+            let hasWrite = service.characteristics.contains {
+                $0.properties.contains("write") || $0.properties.contains("write_without_response")
+            }
+            let hasNotify = service.characteristics.contains {
+                $0.properties.contains("notify") || $0.properties.contains("indicate")
+            }
+            return hasWrite && hasNotify
+        }
+        guard candidates.count == 1, let service = candidates.first else {
             throw BLEObservedProfileError.serviceCountIsAmbiguous
         }
         let writeCandidates = service.characteristics.filter { characteristic in
