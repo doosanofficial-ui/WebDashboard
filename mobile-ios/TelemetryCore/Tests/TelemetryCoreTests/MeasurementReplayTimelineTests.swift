@@ -110,9 +110,12 @@ final class MeasurementReplayTimelineTests: XCTestCase {
     }
 
     func testDefaultSixtySecondWindowAndSixHundredCapApplyTogether() async throws {
-        let rows = try (0..<700).map { index in
-            try signal(Int64(index + 1), Double(index), 100 + Double(index) / 100,
-                       UInt64(index) * 10_000_000)
+        let rows: [PersistedMeasurement] = try (0..<700).map { (index: Int) -> PersistedMeasurement in
+            let sequence = Int64(index + 1)
+            let value = Double(index)
+            let epoch = 100.0 + value / 100.0
+            let nanos = UInt64(index) * 10_000_000
+            return try signal(sequence, value, epoch, nanos)
         }
         let t = try await MeasurementReplay.timeline(envelope(rows))
         let h = try t.signalHistory(signalID: "soc", at: t.duration)
