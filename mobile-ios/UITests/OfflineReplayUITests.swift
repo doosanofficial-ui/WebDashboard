@@ -189,16 +189,16 @@ final class OfflineReplayUITests: XCTestCase {
         typeProof.name = "DEMO-observed-content-size-category"; typeProof.lifetime = .keepAlways; add(typeProof)
         func captureHistory(expectedCount: Int, name: String) {
             app.tabBars.buttons["Live"].tap()
-            let title = app.staticTexts["Recorded GPS route fixture"]
+            let title = app.staticTexts.matching(NSPredicate(format: "label == %@", "Recorded GPS route fixture")).firstMatch
             let revealed = revealHistoryElement(title, in: app, upperHalf: true)
             XCTAssertEqual(app.state, .runningForeground)
             let shot = XCTAttachment(screenshot: app.screenshot())
             shot.name = name + "-" + category; shot.lifetime = .keepAlways; add(shot)
             XCTAssertTrue(revealed, app.debugDescription)
-            let count = app.staticTexts["Recorded fixes: \(expectedCount)"]
+            let count = app.staticTexts.matching(NSPredicate(format: "label == %@", "Recorded fixes: \(expectedCount)")).firstMatch
             XCTAssertTrue(revealHistoryElement(count, in: app), app.debugDescription)
             if expectedCount == 2 {
-                let quality = app.staticTexts["Latest recorded fix not plottable"]
+                let quality = app.staticTexts.matching(NSPredicate(format: "label == %@", "Latest recorded fix not plottable")).firstMatch
                 XCTAssertTrue(revealHistoryElement(quality, in: app), app.debugDescription)
                 let controls = app.otherElements["replay-cockpit-controls"]
                 let visibleTop = app.navigationBars.firstMatch.frame.maxY + 8
@@ -224,7 +224,7 @@ final class OfflineReplayUITests: XCTestCase {
             XCTAssertTrue(app.staticTexts[seconds + " / 5.0 seconds"].waitForExistence(timeout: 5), app.debugDescription)
         }
         captureHistory(expectedCount: 2, name: "DEMO-recorded-route-end-two-original-samples")
-        XCTAssertTrue(app.staticTexts["Latest recorded fix not plottable"].exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label == %@", "Latest recorded fix not plottable")).firstMatch.exists)
         seek("2.5")
         captureHistory(expectedCount: 1, name: "DEMO-recorded-route-backward-one-original-sample")
         seek("0.0")
