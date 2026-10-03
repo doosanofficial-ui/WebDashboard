@@ -47,50 +47,18 @@ struct SignalsView: View {
     }
 
     private func healthCard(at now: Date) -> some View {
-        let serverLive = model.connection == "Connected"
-        let adapterLive = model.adapterStatus.localizedCaseInsensitiveContains("monitoring")
-        let live = serverLive || adapterLive
-        let color = live ? TelemetryTheme.valid : TelemetryTheme.warning
-        return VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
-            HStack(spacing: TelemetryTheme.Spacing.small) {
-                Label("ACQUISITION HEALTH", systemImage: "waveform.path.ecg")
-                    .font(.caption.weight(.bold))
-                    .tracking(1.0)
-                    .foregroundStyle(TelemetryTheme.accent)
-                Spacer()
-                TelemetryStatusBadge(
-                    title: model.runMode == .replay ? "Replay" : live ? "Live" : "Idle",
-                    color: color,
-                    symbol: live ? "checkmark.circle.fill" : "pause.circle.fill"
-                )
-            }
+        VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
+            TelemetryRunStatusView(model: model)
+            Text(model.runMode == .replay ? "Recorded values · acquisition off" : model.adapterStatus)
+                .font(.caption).foregroundStyle(TelemetryTheme.mutedText)
             HStack {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(adapterLive ? "Local adapter" : model.canSource.uppercased())
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.white)
-                    Text("Server \(model.connection) · Adapter \(model.adapterStatus)")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(TelemetryTheme.mutedText)
-                        .lineLimit(2)
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 3) {
-                    Text(frameAge(at: now))
-                        .font(.headline.monospacedDigit().weight(.semibold))
-                        .foregroundStyle(.white)
-                    Text("FRAME AGE")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(TelemetryTheme.quietText)
-                }
-            }
-            HStack(spacing: TelemetryTheme.Spacing.small) {
-                healthValue("BAD", model.runMode == .replay ? "-" : String(model.invalidFrameCount))
-                healthValue("DROP", model.runMode == .replay ? "-" : String(model.clientDrops + (model.frame?.status.drop ?? 0)))
-                healthValue("PROFILE", model.adapterProfile?.name ?? "None")
+                healthValue(model.runMode == .replay ? "RECORDED AGE" : "FRAME AGE", frameAge(at: now))
+                healthValue("PROFILE", model.runMode == .replay ? "Recorded signals" : model.adapterProfile?.name ?? "None")
+                if model.runMode != .replay { healthValue("INVALID FRAMES", String(model.invalidFrameCount)) }
             }
         }
         .telemetrySurface(.raised, padding: TelemetryTheme.Spacing.small)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("signals-health-card")
     }
 
@@ -129,6 +97,7 @@ struct SignalsView: View {
             .accessibilityLabel(showStaleOnly ? "Show all signals" : "Show stale signals")
             .accessibilityIdentifier("signals-stale-filter")
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("signals-filter-bar")
     }
 
@@ -145,21 +114,31 @@ struct SignalsView: View {
                     .font(.caption2.monospacedDigit().weight(.bold))
                     .foregroundStyle(TelemetryTheme.quietText)
             }
-            if model.adapterProfile == nil && model.frame == nil && model.connection != "Connected" {
+            if (model.runMode == .replay && signalRows.isEmpty) || (model.adapterProfile == nil && model.frame == nil && model.connection != "Connected") {
                 VStack(alignment: .leading, spacing: 6) {
-                    Label("No signal source", systemImage: "waveform.slash")
+                    Label(model.runMode == .replay ? "No recorded signal at this time" : "No signal source", systemImage: "waveform.slash")
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(.white)
-                    Text("Connect the server or import an observed adapter profile. No placeholder values are shown.")
+                    Text(model.runMode == .replay ? "Seek forward to a recorded signal. Acquisition remains off." : "Choose a saved recording or import a verified adapter profile. No placeholder values are shown.")
                         .font(.caption)
                         .foregroundStyle(TelemetryTheme.mutedText)
                 }
                 .telemetrySurface(.standard, padding: TelemetryTheme.Spacing.small)
                 .accessibilityIdentifier("signal-source-empty")
             } else if rows.isEmpty {
-                ContentUnavailableView("No matching signals", systemImage: "line.3.horizontal.decrease.circle")
-                    .frame(maxWidth: .infinity)
-                    .telemetrySurface(.standard, padding: TelemetryTheme.Spacing.small)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(showStaleOnly && searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                         ? "No confirmed stale signals" : "No matching signals")
+                        .font(.headline)
+                    if showStaleOnly && model.runMode == .replay && model.replaySignalFreshness.values.contains(.unknown) {
+                        Text("Freshness is unknown for this recording.")
+                            .font(.caption).foregroundStyle(TelemetryTheme.mutedText)
+                    }
+                    Button("Show all signals") { searchText = ""; showStaleOnly = false }
+                        .buttonStyle(.bordered).controlSize(.large)
+                        .accessibilityIdentifier("signals-clear-filters")
+                }
+                .telemetrySurface(.standard, padding: TelemetryTheme.Spacing.small)
             } else {
                 ForEach(rows) { row in
                     signalRow(row, at: now)
@@ -172,32 +151,28 @@ struct SignalsView: View {
     private func signalRow(_ row: SignalRow, at now: Date) -> some View {
         let value = model.frame?.sig[row.id]
         let fresh = isFresh(row, at: now)
-        let color = fresh ? TelemetryTheme.valid : TelemetryTheme.warning
-        return HStack(spacing: TelemetryTheme.Spacing.small) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(row.name)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                Text(row.detail)
-                    .font(.caption2.monospaced())
-                    .foregroundStyle(TelemetryTheme.quietText)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: TelemetryTheme.Spacing.small)
-            VStack(alignment: .trailing, spacing: 4) {
+        let label = TelemetryDisplayState.signalLabel(value, liveFresh: fresh,
+            isReplay: model.runMode == .replay, replayQuality: model.replaySignalQuality[row.id])
+        let color = label.contains("INVALID") ? TelemetryTheme.critical
+            : model.runMode == .replay ? TelemetryTheme.mutedText : fresh ? TelemetryTheme.valid : TelemetryTheme.warning
+        return VStack(alignment: .leading, spacing: 7) {
+            Text(row.name)
+                .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(format(value, decimals: row.decimals))
-                    .font(.system(size: 25, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(fresh ? .white : TelemetryTheme.mutedText)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.65)
-                HStack(spacing: 4) {
-                    Text(row.unit.isEmpty ? "-" : row.unit)
-                    Text(fresh ? "VALID" : "STALE")
-                        .foregroundStyle(color)
-                }
-                .font(.caption2.monospacedDigit().weight(.bold))
+                    .font(.system(size: 30, weight: .semibold, design: .rounded)).monospacedDigit()
+                    .foregroundStyle(value?.isFinite == true ? .white : TelemetryTheme.mutedText)
+                Text(row.unit.isEmpty ? "-" : row.unit)
+                    .font(.caption).foregroundStyle(TelemetryTheme.mutedText)
             }
+            Text(label).font(.caption.weight(.semibold)).foregroundStyle(color)
+            if model.runMode == .replay {
+                Text(TelemetryDisplayState.freshnessLabel(model.replaySignalFreshness[row.id]))
+                    .font(.caption).foregroundStyle(TelemetryTheme.mutedText)
+            }
+            Text(row.detail).font(.caption2.monospaced()).foregroundStyle(TelemetryTheme.quietText)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .telemetrySurface(.standard, padding: TelemetryTheme.Spacing.small)
         .accessibilityElement(children: .combine)
@@ -262,6 +237,7 @@ struct SignalsView: View {
         }
         .padding(TelemetryTheme.Spacing.small)
         .background(TelemetryTheme.surface, in: RoundedRectangle(cornerRadius: TelemetryTheme.Radius.medium, style: .continuous))
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("adapter-controls")
     }
 
@@ -270,6 +246,13 @@ struct SignalsView: View {
             return model.replaySignalUnits.keys.sorted().map { id in
                 SignalRow(id: id, name: id, unit: model.replaySignalUnits[id] ?? "", decimals: 1,
                     detail: "REPLAY · original timestamps · not live acquisition")
+            }
+        }
+        if model.runMode == .demo {
+            return (model.frame?.sig.keys.sorted() ?? []).map { id in
+                SignalRow(id: id, name: id == "demo.signal" ? "Demo signal" : id,
+                    unit: id == "demo.signal" ? "demo" : unit(for: id), decimals: 1,
+                    detail: "Synthetic CAN · generated demo signal")
             }
         }
         if let profile = model.adapterProfile {
@@ -311,11 +294,14 @@ struct SignalsView: View {
                 || row.name.lowercased().contains(query)
                 || row.detail.lowercased().contains(query)
                 || row.unit.lowercased().contains(query)
-            return matchesQuery && (!showStaleOnly || !isFresh(row, at: now))
+            return matchesQuery && (!showStaleOnly || TelemetryDisplayState.matchesStaleFilter(
+                model.frame?.sig[row.id], liveFresh: isFresh(row, at: now), isReplay: model.runMode == .replay,
+                replayFreshness: model.replaySignalFreshness[row.id]))
         }
     }
 
     private func isFresh(_ row: SignalRow, at now: Date) -> Bool {
+        if model.runMode == .replay { return model.replaySignalFreshness[row.id] == .fresh }
         if let received = model.localSignalReceivedAt[row.id],
            (model.runMode == .replay || model.adapterStatus.localizedCaseInsensitiveContains("monitoring")) {
             let timeout = model.localSignalTimeouts[row.id] ?? 1.5

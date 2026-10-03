@@ -4,27 +4,26 @@ import MapKit
 import TelemetryCore
 
 struct LiveCockpitView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var showingReplayDetails = false
     @Bindable var model: TelemetryModel
     @Binding var editorPresented: Bool
     @Binding var selectedPageID: String?
-    @State private var profileExpanded = false
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.1)) { timeline in
             let displayDate = model.replayTimestamp.map(Date.init(timeIntervalSince1970:)) ?? timeline.date
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: TelemetryTheme.Spacing.medium) {
-                    if model.runMode == .replay {
-                        Label("REPLAY SNAPSHOT · recorded, not live", systemImage: "clock.arrow.circlepath")
-                            .font(.headline).telemetrySurface(.standard)
-                            .accessibilityIdentifier("replay-banner")
-                    }
                     connectionStrip(at: displayDate)
-                    primaryMetric(at: displayDate)
-                    wheelSpeedRail(at: displayDate)
-                    dynamicsCharts(at: displayDate)
+                    if model.dashboardProfile != nil {
+                        profileSection(at: displayDate)
+                    } else {
+                        primaryMetric(at: displayDate)
+                        wheelSpeedRail(at: displayDate)
+                        dynamicsCharts(at: displayDate)
+                    }
                     locationCard(at: displayDate)
-                    profileDisclosure(at: displayDate)
 
                     if let error = model.storageStatus {
                         Label(error, systemImage: "exclamationmark.triangle.fill")
@@ -56,46 +55,26 @@ struct LiveCockpitView: View {
     }
 
     private func connectionStrip(at now: Date) -> some View {
-        let age = model.lastFrameAt.map { now.timeIntervalSince($0) }
-        let adapterLive = model.adapterStatus.localizedCaseInsensitiveContains("monitoring")
-        let fresh = (model.connection == "Connected" || adapterLive) && (age ?? .infinity) <= 1.5
-        let stateColor = fresh ? TelemetryTheme.valid : TelemetryTheme.warning
+        let age = model.lastFrameAt.map { max(0, now.timeIntervalSince($0)) }
         return VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
-            HStack(spacing: TelemetryTheme.Spacing.small) {
-                ZStack {
-                    Circle()
-                        .fill(stateColor.opacity(0.16))
-                        .frame(width: 36, height: 36)
-                    Image(systemName: fresh ? "antenna.radiowaves.left.and.right" : "wifi.exclamationmark")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(stateColor)
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(model.runMode == .replay ? "RECORDED TELEMETRY" : "LIVE TELEMETRY")
-                        .font(.caption2.weight(.bold))
-                        .tracking(1.0)
-                        .foregroundStyle(TelemetryTheme.mutedText)
-                    Text(model.runMode == .replay ? "REPLAY SNAPSHOT" : (adapterLive ? "ADAPTER LIVE" : model.connection).uppercased())
-                        .font(.headline.weight(.bold))
-                        .foregroundStyle(.white)
-                }
-                Spacer(minLength: TelemetryTheme.Spacing.small)
-                TelemetryStatusBadge(
-                    title: model.runMode == .replay ? "Replay" : fresh ? "Live" : "Stale",
-                    color: stateColor,
-                    symbol: fresh ? "checkmark.circle.fill" : "pause.circle.fill"
-                )
+            TelemetryRunStatusView(model: model)
+            if model.runMode != .replay {
+                Text(model.adapterStatus)
+                    .font(.caption).foregroundStyle(TelemetryTheme.mutedText)
             }
             HStack(spacing: TelemetryTheme.Spacing.small) {
                 telemetryStat(model.runMode == .replay ? "ROW" : "SEQ", model.frame?.status.seq.description ?? "-")
-                telemetryStat("DROP", model.runMode == .replay ? "-" : String(model.clientDrops + (model.frame?.status.drop ?? 0)))
-                telemetryStat("RTT", model.runMode == .replay ? "-" : model.serverRTTMilliseconds.map { String(format: "%.0f ms", $0) } ?? "-")
-                telemetryStat("AGE", age.map { String(format: "%.0f ms", max(0, $0 * 1000)) } ?? "-")
+                telemetryStat(model.runMode == .replay ? "RECORDED AGE" : "FRAME AGE",
+                    age.map { String(format: "%.0f ms", $0 * 1000) } ?? "NO SAMPLE")
+                if TelemetryProductScope.allowsRemoteDelivery {
+                    telemetryStat("DROP", String(model.clientDrops + (model.frame?.status.drop ?? 0)))
+                    telemetryStat("RTT", model.serverRTTMilliseconds.map { String(format: "%.0f ms", $0) } ?? "-")
+                }
             }
         }
         .telemetrySurface(.raised, padding: TelemetryTheme.Spacing.small)
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("live-status-strip")
+        .accessibilityIdentifier(model.runMode == .replay ? "replay-banner" : "live-status-strip")
     }
 
     private func telemetryStat(_ label: String, _ value: String) -> some View {
@@ -107,7 +86,7 @@ struct LiveCockpitView: View {
                 .font(.caption2.monospacedDigit().weight(.semibold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -138,22 +117,21 @@ struct LiveCockpitView: View {
             }
             HStack(alignment: .lastTextBaseline, spacing: 10) {
                 Text(format(value, decimals: 1))
-                    .font(.system(size: 58, weight: .semibold, design: .rounded))
+                    .font(TelemetryTypography.primaryMeasurement)
                     .monospacedDigit()
                     .foregroundStyle(fresh ? TelemetryTheme.accent : TelemetryTheme.mutedText)
                     .contentTransition(.numericText())
-                    .minimumScaleFactor(0.6)
                 Text("km/h")
                     .font(.title3.weight(.medium))
                     .foregroundStyle(TelemetryTheme.mutedText)
                 Spacer()
                 TelemetryStatusBadge(
-                    title: fresh ? "Valid" : "Stale",
+                    title: TelemetryDisplayState.signalLabel(value, liveFresh: fresh, isReplay: model.runMode == .replay, replayQuality: model.replaySignalQuality["ws_fl"]),
                     color: fresh ? TelemetryTheme.valid : TelemetryTheme.warning,
                     symbol: fresh ? "checkmark.seal.fill" : "exclamationmark.triangle.fill"
                 )
             }
-            Text("Frame age \(formatAge(model.lastFrameAt, now: now))  ·  \(model.serverRecording?.text ?? "Server recording unknown")")
+            Text("Frame age \(formatAge(model.lastFrameAt, now: now)) · Local recording \(model.localRecordingEnabled ? "on" : "off")")
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(TelemetryTheme.quietText)
         }
@@ -176,7 +154,7 @@ struct LiveCockpitView: View {
                     label: "WHEEL \(metric.0)",
                     value: format(model.frame?.sig[metric.1], decimals: 1),
                     unit: "km/h",
-                    state: fresh ? "VALID" : "STALE",
+                    state: signalState(metric.1, value: model.frame?.sig[metric.1], fresh: fresh),
                     accent: fresh ? .white : TelemetryTheme.mutedText
                 )
             }
@@ -199,9 +177,10 @@ struct LiveCockpitView: View {
 
     private func locationCard(at now: Date) -> some View {
         let fix = model.lastLocation
-        let age = fix.map { max(0, now.timeIntervalSince1970 - $0.capturedAt) }
-        let fresh = (age ?? .infinity) <= 4
-        let color = fresh ? TelemetryTheme.valid : TelemetryTheme.warning
+        let age = fix.map { now.timeIntervalSince1970 - $0.capturedAt }
+        let state = TelemetryDisplayState.gpsLabel(hasSample: fix != nil, isReplay: model.runMode == .replay, age: age)
+        let fresh = state == "FRESH FIX"
+        let color = model.runMode == .replay ? TelemetryTheme.accent : fresh ? TelemetryTheme.valid : TelemetryTheme.warning
         return VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
             HStack {
                 Label("GPS POSITION", systemImage: "location.fill")
@@ -209,28 +188,29 @@ struct LiveCockpitView: View {
                     .foregroundStyle(.white)
                 Spacer()
                 TelemetryStatusBadge(
-                    title: fresh ? "Fresh" : "No fix",
+                    title: state,
                     color: color,
                     symbol: fresh ? "location.fill" : "location.slash.fill"
                 )
             }
-            HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("\(number(fix?.data.lat, digits: 6)), \(number(fix?.data.lon, digits: 6))")
                     .font(.callout.monospacedDigit())
                     .foregroundStyle(.white)
                     .textSelection(.enabled)
-                Spacer()
                 Text(model.locationStatus.uppercased())
                     .font(.caption2.weight(.bold))
                     .tracking(0.6)
                     .foregroundStyle(color)
             }
-            HStack(spacing: TelemetryTheme.Spacing.small) {
+            (dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: TelemetryTheme.Spacing.small))
+                : AnyLayout(HStackLayout(spacing: TelemetryTheme.Spacing.small))) {
                 locationValue("SPEED", number(fix?.data.spd.map { $0 * 3.6 }) + " km/h")
                 locationValue("HEADING", number(fix?.data.hdg) + "°")
                 locationValue("ACCURACY", "±" + number(fix?.data.acc) + " m")
             }
-            Text("Age \(number(age)) s  ·  Pending \(model.queueDepth)  ·  \(model.uploadStatus)")
+            Text(model.runMode == .replay ? "Recorded GPS · not current position" : "Age \(number(age)) s · Stored locally")
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(TelemetryTheme.quietText)
         }
@@ -249,109 +229,78 @@ struct LiveCockpitView: View {
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.white)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    @ViewBuilder
     private func sessionBar() -> some View {
-        VStack(spacing: TelemetryTheme.Spacing.xSmall) {
-            HStack(spacing: TelemetryTheme.Spacing.small) {
-                Text(model.localRecordingEnabled ? "RECORDING" : "REC OFF")
-                    .font(.caption2.weight(.bold))
-                    .tracking(0.7)
-                    .foregroundStyle(model.localRecordingEnabled ? TelemetryTheme.critical : TelemetryTheme.valid)
-                Text(model.collecting ? "GPS ON" : "GPS OFF")
-                    .font(.caption2.weight(.bold))
-                    .tracking(0.7)
-                    .foregroundStyle(model.collecting ? TelemetryTheme.accent : TelemetryTheme.quietText)
-                Spacer()
-                Text(model.lastMarkAt.map { "Last mark " + $0.formatted(date: .omitted, time: .shortened) } ?? "No mark")
-                    .font(.caption2)
-                    .foregroundStyle(TelemetryTheme.mutedText)
-                    .lineLimit(1)
-            }
-            HStack(spacing: TelemetryTheme.Spacing.xSmall) {
-                Button(action: model.mark) {
-                    Label("MARK", systemImage: "flag.fill")
-                        .font(.headline.weight(.bold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 11)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(TelemetryTheme.warning)
-                .disabled(model.storageStatus != nil || model.runMode == .replay)
-                .accessibilityIdentifier("mark-event")
-
-                Button {
-                    if model.localRecordingEnabled {
-                        model.stopRecording()
-                    } else {
-                        model.startRecording()
-                    }
-                } label: {
-                    Label(model.localRecordingEnabled ? "STOP" : "REC",
-                          systemImage: model.localRecordingEnabled ? "stop.fill" : "record.circle")
-                        .font(.headline.weight(.bold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 11)
-                }
-                .buttonStyle(.bordered)
-                .tint(model.localRecordingEnabled ? TelemetryTheme.critical : TelemetryTheme.valid)
-                .accessibilityIdentifier("toggle-recording")
-                .disabled(model.runMode == .replay)
-
-                Button {
-                    if model.collecting {
-                        model.stopLocation()
-                    } else {
-                        model.startLocation()
-                    }
-                } label: {
-                    Label("GPS", systemImage: model.collecting ? "location.fill" : "location")
-                        .font(.headline.weight(.bold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 11)
-                }
-                .buttonStyle(.bordered)
-                .tint(model.collecting ? TelemetryTheme.accent : TelemetryTheme.mutedText)
-                .disabled(model.storageStatus != nil || model.runMode == .replay)
-                .accessibilityLabel(model.collecting ? "Stop GPS" : "Start GPS")
-                .accessibilityIdentifier("toggle-gps")
-            }
-        }
-        .padding(.horizontal, TelemetryTheme.Spacing.small)
-        .padding(.vertical, TelemetryTheme.Spacing.xSmall)
-        .background(TelemetryTheme.surfaceRaised, in: RoundedRectangle(cornerRadius: TelemetryTheme.Radius.medium, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: TelemetryTheme.Radius.medium, style: .continuous)
-                .stroke(TelemetryTheme.warning.opacity(0.24), lineWidth: 1)
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("session-mark")
+        if model.runMode == .replay { replaySessionBar() }
+        else { recordingSessionBar() }
     }
 
-    @ViewBuilder
-    private func profileDisclosure(at now: Date) -> some View {
-        if let profile = model.dashboardProfile {
-            VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
-                HStack {
-                    Label(profile.name, systemImage: "rectangle.3.group")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
-                    Spacer()
-                    Text("\(profile.pages.count) page\(profile.pages.count == 1 ? "" : "s")")
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(TelemetryTheme.quietText)
-                }
-                DisclosureGroup("Open custom profile", isExpanded: $profileExpanded) {
-                    profileSection(at: now)
-                }
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(TelemetryTheme.accent)
+    private func replaySessionBar() -> some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: 8))
+        return VStack(alignment: .leading, spacing: 4) {
+            layout {
+                Text("REPLAY" + (model.replayController.recordingMode.map { " · " + $0.rawValue } ?? ""))
+                    .font(.caption2.weight(.bold)).foregroundStyle(TelemetryTheme.accent)
+                Text(String(format: "%.1f / %.1f s", model.replayController.position, model.replayController.duration))
+                .font(.caption.monospacedDigit()).foregroundStyle(TelemetryTheme.mutedText)
+                .accessibilityLabel("Recorded time")
+                .accessibilityValue(String(format: "%.1f of %.1f seconds", model.replayController.position, model.replayController.duration))
+                .accessibilityIdentifier("cockpit-replay-position")
             }
-            .telemetrySurface(.standard, padding: TelemetryTheme.Spacing.small)
+            HStack(spacing: 4) {
+                if model.replayController.isPlaying {
+                    Button(action: model.pauseReplayPlayback) {
+                        Image(systemName: "pause.fill").frame(minWidth: 44, minHeight: 44)
+                    }.accessibilityLabel("Pause").accessibilityIdentifier("cockpit-replay-pause")
+                } else {
+                    Button(action: model.playReplay) {
+                        Image(systemName: "play.fill").frame(minWidth: 44, minHeight: 44)
+                    }.accessibilityLabel("Play").accessibilityIdentifier("cockpit-replay-play")
+                        .disabled(model.replayController.position >= model.replayController.duration)
+                }
+                Button { Task { await model.seekReplay(to: 0) } } label: {
+                    Image(systemName: "backward.end.fill").frame(minWidth: 44, minHeight: 44)
+                }.accessibilityLabel("Start").accessibilityIdentifier("cockpit-replay-start")
+                    .disabled(model.replayController.duration <= 0)
+                Button(action: model.stopReplay) {
+                    Image(systemName: "stop.fill").frame(minWidth: 44, minHeight: 44)
+                }.accessibilityLabel("Stop Replay").accessibilityIdentifier("cockpit-replay-stop")
+                Button { showingReplayDetails = true } label: {
+                    Image(systemName: "info.circle").frame(minWidth: 44, minHeight: 44)
+                }.accessibilityLabel("Playback details").accessibilityIdentifier("cockpit-replay-details")
+            }
+            .font(.body).buttonStyle(.bordered).controlSize(.small)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(8)
+        .background(TelemetryTheme.surfaceRaised, in: RoundedRectangle(cornerRadius: TelemetryTheme.Radius.medium))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("replay-cockpit-controls")
+        .sheet(isPresented: $showingReplayDetails) {
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(TelemetryDisplayState.modeTitle(.replay, recordingMode: model.replayController.recordingMode))
+                        Text(String(format: "%.1f / %.1f recorded seconds", model.replayController.position, model.replayController.duration))
+                        Text("Vehicle and GPS acquisition are off during replay")
+                        Text("Playback rate: \(model.replayController.playbackRate)x")
+                    }.padding()
+                }
+                .navigationTitle("Playback details").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingReplayDetails = false } } }
+            }
+        }
+    }
+
+    func recordingSessionBar() -> some View {
+        RecordingSessionBar(model: model)
     }
 
     @ViewBuilder
@@ -361,7 +310,7 @@ struct LiveCockpitView: View {
             VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("CUSTOM PROFILE")
+                        Text("SELECTED DASHBOARD")
                             .font(.caption.weight(.bold))
                             .tracking(1.0)
                             .foregroundStyle(TelemetryTheme.accent)
@@ -398,11 +347,26 @@ struct LiveCockpitView: View {
         }
     }
 
+    @ViewBuilder
     private func dashboardCanvas(_ page: DashboardPage, now: Date) -> some View {
         let columns = page.orientation == .portrait ? 4 : 6
         let maxRow = max(4, (page.widgets.map { $0.rect.y + $0.rect.height }.max() ?? 4) + 1)
-        return GeometryReader { proxy in
-            let cell = max(42, proxy.size.width / CGFloat(columns))
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
+                ForEach(page.widgets.sorted {
+                    ($0.rect.y, $0.rect.x, $0.zIndex, $0.id) < ($1.rect.y, $1.rect.x, $1.zIndex, $1.id)
+                }) { widget in
+                    dashboardWidget(widget, now: now)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(minHeight: widget.type == .verticalBar ? 180 : nil)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("dashboard-canvas-\(page.id)")
+        } else {
+        GeometryReader { proxy in
+            let cell = proxy.size.width / CGFloat(columns)
             ZStack(alignment: .topLeading) {
                 RoundedRectangle(cornerRadius: TelemetryTheme.Radius.medium, style: .continuous)
                     .fill(TelemetryTheme.plot)
@@ -419,14 +383,15 @@ struct LiveCockpitView: View {
             }
             .frame(height: cell * CGFloat(maxRow), alignment: .top)
         }
-        .frame(minHeight: page.orientation == .portrait ? 420 : 300,
-               maxHeight: page.orientation == .portrait ? 660 : 500)
+        .aspectRatio(CGFloat(columns) / CGFloat(maxRow), contentMode: .fit)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("dashboard-canvas-\(page.id)")
+        }
     }
 
     @ViewBuilder
-    private func dashboardWidget(_ widget: DashboardWidgetDefinition, now: Date) -> some View {
+    // Internal so hosted display tests render the production widget without a lazy scroll container.
+    func dashboardWidget(_ widget: DashboardWidgetDefinition, now: Date) -> some View {
         let value = widget.signalID.flatMap { model.frame?.sig[$0] }
         let fresh = signalDataIsFresh(widget.signalID, at: now, fallback: canDataIsFresh(at: now))
         switch widget.type {
@@ -443,7 +408,7 @@ struct LiveCockpitView: View {
         case .led:
             ledWidget(widget, value: value, fresh: fresh)
         case .statusIcon:
-            statusWidget(widget, fresh: fresh)
+            statusWidget(widget, value: value, fresh: fresh)
         case .rawCANHex:
             textWidget(widget, value: model.rawCANText, status: model.adapterStatus)
         case .bitView:
@@ -460,7 +425,7 @@ struct LiveCockpitView: View {
             label: widget.configuration.label,
             value: format(value, decimals: widget.configuration.decimals),
             unit: widget.configuration.unit,
-            state: fresh ? "VALID" : "STALE",
+            state: signalState(widget.signalID, value: value, fresh: fresh),
             accent: valueColor(value, configuration: widget.configuration, fresh: fresh)
         )
         .accessibilityIdentifier("profile-widget-\(widget.id)")
@@ -482,7 +447,7 @@ struct LiveCockpitView: View {
                     .stroke(color, style: StrokeStyle(lineWidth: 11, lineCap: .round))
                     .rotationEffect(.degrees(semi ? 0 : -90))
                 Text(format(value, decimals: widget.configuration.decimals))
-                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    .font(TelemetryTypography.gaugeMeasurement)
                     .monospacedDigit()
                     .foregroundStyle(.white)
             }
@@ -516,7 +481,7 @@ struct LiveCockpitView: View {
                 ProgressView(value: progress)
                     .tint(color)
                 Text(format(value, decimals: widget.configuration.decimals))
-                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    .font(TelemetryTypography.gaugeMeasurement)
                     .monospacedDigit()
                     .foregroundStyle(.white)
             }
@@ -530,17 +495,15 @@ struct LiveCockpitView: View {
 
     private func ledWidget(_ widget: DashboardWidgetDefinition,
                            value: Double?, fresh: Bool) -> some View {
-        let conditionActive = widget.configuration.condition != nil
-            ? model.conditionStates[widget.id] ?? false
-            : false
+        let hasCondition = widget.configuration.condition != nil
+        let conditionActive = model.conditionStates[widget.id]
+        let state = hasCondition
+            ? TelemetryDisplayState.conditionLabel(isReplay: model.runMode == .replay, evaluatedActive: conditionActive, fresh: fresh)
+            : signalState(widget.signalID, value: value, fresh: fresh)
         let color: Color
-        if !fresh {
-            color = TelemetryTheme.quietText
-        } else if widget.configuration.condition != nil {
-            color = conditionActive ? TelemetryTheme.warning : TelemetryTheme.valid
-        } else {
-            color = valueColor(value, configuration: widget.configuration, fresh: fresh)
-        }
+        if state == "NOT EVALUATED" || !fresh { color = TelemetryTheme.quietText }
+        else if hasCondition { color = conditionActive == true ? TelemetryTheme.warning : TelemetryTheme.valid }
+        else { color = valueColor(value, configuration: widget.configuration, fresh: fresh) }
         return HStack(spacing: 10) {
             Circle()
                 .fill(color)
@@ -550,11 +513,12 @@ struct LiveCockpitView: View {
                 Text(widget.configuration.label)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
-                Text(!fresh ? "STALE" : widget.configuration.condition != nil
-                     ? (conditionActive ? "ACTIVE" : "CLEAR")
-                     : format(value, decimals: widget.configuration.decimals))
+                Text(hasCondition ? state : format(value, decimals: widget.configuration.decimals))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(TelemetryTheme.mutedText)
+                if !hasCondition {
+                    Text(state).font(.caption2).foregroundStyle(TelemetryTheme.mutedText)
+                }
             }
             Spacer()
         }
@@ -562,16 +526,20 @@ struct LiveCockpitView: View {
         .accessibilityIdentifier("profile-widget-\(widget.id)")
     }
 
-    private func statusWidget(_ widget: DashboardWidgetDefinition, fresh: Bool) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: fresh ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                .foregroundStyle(fresh ? TelemetryTheme.valid : TelemetryTheme.warning)
+    private func statusWidget(_ widget: DashboardWidgetDefinition, value: Double?, fresh: Bool) -> some View {
+        let state = signalState(widget.signalID, value: value, fresh: fresh)
+        let neutral = value == nil || value?.isFinite == false || state.contains("INVALID") || state.contains("UNKNOWN")
+        let recordedFresh = widget.signalID.flatMap { model.replaySignalFreshness[$0] } == .fresh
+        let valid = !neutral && fresh && (model.runMode != .replay || recordedFresh)
+        return HStack(spacing: 10) {
+            Image(systemName: neutral ? "questionmark.circle" : valid ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .foregroundStyle(neutral ? TelemetryTheme.quietText : valid ? TelemetryTheme.valid : TelemetryTheme.warning)
                 .font(.title2)
             VStack(alignment: .leading, spacing: 3) {
                 Text(widget.configuration.label)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
-                Text(fresh ? "VALID" : "STALE / DISCONNECTED")
+                Text(state)
                     .font(.caption.weight(.bold))
                     .foregroundStyle(TelemetryTheme.mutedText)
             }
@@ -599,29 +567,36 @@ struct LiveCockpitView: View {
         .accessibilityIdentifier("profile-widget-\(widget.id)")
     }
 
+    @ViewBuilder
     private func timeSeriesWidget(_ widget: DashboardWidgetDefinition) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(widget.configuration.label)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(TelemetryTheme.mutedText)
-            Chart(model.points) { point in
-                if let signalID = widget.signalID, let value = point.signals[signalID] {
-                    LineMark(x: .value("Time", point.time), y: .value("Value", value))
-                        .foregroundStyle(TelemetryTheme.accent)
+        if model.runMode == .replay {
+            RecordedSignalHistoryView(title: widget.configuration.label,
+                history: widget.signalID.flatMap { model.replayController.recordedHistory(for: $0) })
+                .accessibilityIdentifier("profile-widget-\(widget.id)")
+        } else {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(widget.configuration.label).font(.subheadline.weight(.semibold))
+                    .foregroundStyle(TelemetryTheme.mutedText)
+                Chart(model.points) { point in
+                    if let signalID = widget.signalID, let value = point.signals[signalID] {
+                        LineMark(x: .value("Time", point.time), y: .value("Value", value))
+                            .foregroundStyle(TelemetryTheme.accent)
+                    }
                 }
+                .chartXAxis(.hidden).chartYAxis(.hidden).frame(height: 90)
             }
-            .chartXAxis(.hidden)
-            .chartYAxis(.hidden)
-            .frame(height: 90)
+            .telemetrySurface(.standard, padding: TelemetryTheme.Spacing.small)
+            .accessibilityIdentifier("profile-widget-\(widget.id)")
         }
-        .telemetrySurface(.standard, padding: TelemetryTheme.Spacing.small)
-        .accessibilityIdentifier("profile-widget-\(widget.id)")
     }
 
     @ViewBuilder
     private func gpsWidget(_ widget: DashboardWidgetDefinition, map: Bool) -> some View {
         let fix = model.lastLocation
-        if map {
+        if map && model.runMode == .replay {
+            RecordedRouteView(title: widget.configuration.label, history: model.replayController.recordedLocations())
+                .accessibilityIdentifier("profile-widget-\(widget.id)")
+        } else if map {
             TrackMapView(
                 title: widget.configuration.label,
                 coordinate: fix.flatMap { coordinate(from: $0) },
@@ -654,18 +629,29 @@ struct LiveCockpitView: View {
     }
 
     private func widgetHeader(_ widget: DashboardWidgetDefinition, fresh: Bool) -> some View {
-        HStack {
+        let value = widget.signalID.flatMap { model.frame?.sig[$0] }
+        let state = signalState(widget.signalID, value: value, fresh: fresh)
+        return VStack(alignment: .leading, spacing: 4) {
             Text(widget.configuration.label)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(TelemetryTheme.mutedText)
-            Spacer()
-            Text(fresh ? "VALID" : "STALE")
+            Text(state)
                 .font(.caption2.weight(.bold))
-                .foregroundStyle(fresh ? TelemetryTheme.valid : TelemetryTheme.warning)
+                .foregroundStyle(state.contains("INVALID") ? TelemetryTheme.critical : TelemetryTheme.mutedText)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
+    private func signalState(_ id: String?, value: Double?, fresh: Bool) -> String {
+        let quality = id.flatMap { model.replaySignalQuality[$0] }
+        let label = TelemetryDisplayState.signalLabel(value, liveFresh: fresh,
+            isReplay: model.runMode == .replay, replayQuality: quality)
+        guard model.runMode == .replay, let value, value.isFinite else { return label }
+        return label + "\n" + TelemetryDisplayState.freshnessLabel(id.flatMap { model.replaySignalFreshness[$0] })
+    }
+
     private func canDataIsFresh(at now: Date) -> Bool {
+        if model.runMode == .replay { return model.frame != nil }
         let adapterLive = model.adapterStatus.localizedCaseInsensitiveContains("monitoring")
         guard (model.runMode == .replay || model.connection == "Connected" || adapterLive),
               let lastFrameAt = model.lastFrameAt else { return false }
@@ -673,6 +659,7 @@ struct LiveCockpitView: View {
     }
 
     private func signalDataIsFresh(_ signalID: String?, at now: Date, fallback: Bool) -> Bool {
+        if model.runMode == .replay { return signalID.flatMap { model.replaySignalQuality[$0] } == .valid }
         guard let signalID,
               let timeout = model.localSignalTimeouts[signalID],
               let receivedAt = model.localSignalReceivedAt[signalID] else {
@@ -789,5 +776,118 @@ private struct TrackMapView: View {
 private extension String {
     func leftPadded(to length: Int, with character: Character = "0") -> String {
         String(repeating: String(character), count: max(0, length - count)) + self
+    }
+}
+
+/// Evaluates content-size-dependent footer layout inside the SwiftUI environment.
+private struct RecordingSessionBar: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Bindable var model: TelemetryModel
+
+    var body: some View {
+        VStack(spacing: TelemetryTheme.Spacing.xSmall) {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(model.runMode == .demo ? "DEMO" : "LIVE")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(TelemetryTheme.accent)
+                        .accessibilityIdentifier("cockpit-recording-mode")
+                    Text((model.localRecordingEnabled ? "RECORDING" : "REC OFF") + " · " + (model.collecting ? "GPS ON" : "GPS OFF"))
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(TelemetryTheme.mutedText)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(model.lastMarkAt.map { "Last mark " + $0.formatted(date: .omitted, time: .shortened) } ?? "No mark")
+                        .font(.caption2).foregroundStyle(TelemetryTheme.mutedText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                HStack(spacing: TelemetryTheme.Spacing.small) {
+                    Text(model.runMode == .demo ? "DEMO" : "LIVE")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(TelemetryTheme.accent)
+                        .accessibilityIdentifier("cockpit-recording-mode")
+                    Text(model.localRecordingEnabled ? "RECORDING" : "REC OFF")
+                        .font(.caption2.weight(.bold))
+                        .tracking(0.7)
+                        .foregroundStyle(model.localRecordingEnabled ? TelemetryTheme.critical : TelemetryTheme.valid)
+                    Text(model.collecting ? "GPS ON" : "GPS OFF")
+                        .font(.caption2.weight(.bold))
+                        .tracking(0.7)
+                        .foregroundStyle(model.collecting ? TelemetryTheme.accent : TelemetryTheme.quietText)
+                    Spacer()
+                    Text(model.lastMarkAt.map { "Last mark " + $0.formatted(date: .omitted, time: .shortened) } ?? "No mark")
+                        .font(.caption2)
+                        .foregroundStyle(TelemetryTheme.mutedText)
+                        .lineLimit(1)
+                }
+            }
+            if dynamicTypeSize.isAccessibilitySize {
+                recordingActions().labelStyle(.iconOnly)
+            } else {
+                recordingActions()
+            }
+
+        }
+        .padding(.horizontal, TelemetryTheme.Spacing.small)
+        .padding(.vertical, TelemetryTheme.Spacing.xSmall)
+        .background(TelemetryTheme.surfaceRaised, in: RoundedRectangle(cornerRadius: TelemetryTheme.Radius.medium, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: TelemetryTheme.Radius.medium, style: .continuous)
+                .stroke(TelemetryTheme.warning.opacity(0.24), lineWidth: 1)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("session-mark")
+    }
+
+    private func recordingActions() -> some View {
+        HStack(spacing: TelemetryTheme.Spacing.xSmall) {
+            Button(action: model.mark) {
+                Label("MARK", systemImage: "flag.fill")
+                    .font(.headline.weight(.bold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 4 : 11)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(TelemetryTheme.warning)
+            .disabled(model.storageStatus != nil || model.runMode == .replay)
+            .accessibilityIdentifier("mark-event")
+
+            Button {
+                if model.localRecordingEnabled {
+                    model.stopRecording()
+                } else {
+                    model.startRecording()
+                }
+            } label: {
+                Label(model.localRecordingEnabled ? "STOP" : "REC",
+                      systemImage: model.localRecordingEnabled ? "stop.fill" : "record.circle")
+                    .font(.headline.weight(.bold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 4 : 11)
+            }
+            .buttonStyle(.bordered)
+            .tint(model.localRecordingEnabled ? TelemetryTheme.critical : TelemetryTheme.valid)
+            .accessibilityIdentifier("toggle-recording")
+            .disabled(model.runMode == .replay)
+
+            Button {
+                if model.collecting {
+                    model.stopLocation()
+                } else {
+                    model.startLocation()
+                }
+            } label: {
+                Label("GPS", systemImage: model.collecting ? "location.fill" : "location")
+                    .font(.headline.weight(.bold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 4 : 11)
+            }
+            .buttonStyle(.bordered)
+            .tint(model.collecting ? TelemetryTheme.accent : TelemetryTheme.mutedText)
+            .disabled(model.storageStatus != nil || model.runMode == .replay)
+            .accessibilityLabel(model.collecting ? "Stop GPS" : "Start GPS")
+            .accessibilityIdentifier("toggle-gps")
+        }
     }
 }

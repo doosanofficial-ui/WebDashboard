@@ -57,7 +57,6 @@ private struct SetupView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: TelemetryTheme.Spacing.medium) {
-                    serverCard
                     firstRunCard
                     permissionsCard
                     adapterCard
@@ -127,17 +126,21 @@ private struct SetupView: View {
 
     private var firstRunCard: some View {
         VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
+            TelemetryRunStatusView(model: model)
             Text("FIRST-RUN CHECKLIST")
                 .font(.caption.weight(.bold))
                 .tracking(1.0)
                 .foregroundStyle(TelemetryTheme.accent)
+            Text("CAN diagnostics, GPS, recording, CSV/JSON and Replay work locally without a server or account.")
+                .font(.caption)
+                .foregroundStyle(TelemetryTheme.mutedText)
             setupStep(
                 number: "1",
-                title: "Connect to server",
-                detail: model.connection,
-                ready: model.connection == "Connected"
+                title: "Start recording",
+                detail: model.localRecordingEnabled ? model.localRecordingStatus : "Open a local SQLite session",
+                ready: model.localRecordingEnabled
             ) {
-                model.connect()
+                if model.localRecordingEnabled { model.stopRecording() } else { model.startRecording() }
             }
             setupStep(
                 number: "2",
@@ -147,16 +150,12 @@ private struct SetupView: View {
             ) {
                 if model.collecting { model.stopLocation() } else { model.startLocation() }
             }
-            setupStep(
-                number: "3",
-                title: "Start recording",
-                detail: model.localRecordingEnabled ? model.localRecordingStatus : "Open a local SQLite session before driving",
-                ready: model.localRecordingEnabled
-            ) {
-                if model.localRecordingEnabled { model.stopRecording() } else { model.startRecording() }
-            }
+            Text("Use the verified adapter profile below for local CAN diagnostics. Saved recordings and exports are in Sessions.")
+                .font(.caption)
+                .foregroundStyle(TelemetryTheme.mutedText)
         }
         .telemetrySurface(.standard)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("setup-first-run")
     }
 
@@ -194,40 +193,17 @@ private struct SetupView: View {
 
     private var permissionsCard: some View {
         VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
-            DisclosureGroup {
-                VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
-                    SecureField("Pairing credential", text: $credential)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .textFieldStyle(.roundedBorder)
-                    Button("Store securely") {
-                        model.saveCredential(credential)
-                        credential = ""
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(credential.isEmpty)
-                    Text(model.credentialSaved ? "Credential saved in Keychain" : "Not paired")
-                        .font(.caption)
-                        .foregroundStyle(TelemetryTheme.mutedText)
-                    Text("GPS is recorded locally first. Only server-acknowledged events leave the pending queue.")
-                        .font(.caption)
-                        .foregroundStyle(TelemetryTheme.mutedText)
-                    Button("Open system settings") {
-                        if let url = URL(string: UIApplication.openSettingsURLString) {
-                            UIApplication.shared.open(url)
-                        }
-                    }
-                    .buttonStyle(.bordered)
-                }
-                .padding(.top, TelemetryTheme.Spacing.xSmall)
-            } label: {
-                Label("Permissions & credentials", systemImage: "lock.shield")
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(.white)
-            }
-            Text("Always and Precise Location are required for a locked-screen collection trial.")
+            Label("Location permissions", systemImage: "location.shield")
+                .font(.headline.weight(.semibold))
+            Text("Enable Precise Location for GPS recording. Background location supports an explicitly started session during app switching. No account or pairing credential is required.")
                 .font(.caption)
                 .foregroundStyle(TelemetryTheme.mutedText)
+            Button("Open system settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            .buttonStyle(.bordered)
         }
         .telemetrySurface(.standard)
         .accessibilityIdentifier("setup-permissions-card")

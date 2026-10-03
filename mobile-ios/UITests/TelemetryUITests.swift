@@ -229,7 +229,9 @@ final class TelemetryUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
         app.tabBars.buttons["Sessions"].tap()
-        XCTAssertTrue(app.buttons["export-measurement-json"].waitForExistence(timeout: 5))
+        let export = app.buttons["sessions-export-json"]
+        for _ in 0..<8 where !export.isHittable { app.swipeUp() }
+        XCTAssertTrue(export.isHittable)
         XCTAssertTrue(app.otherElements["sessions-export-card"].waitForExistence(timeout: 5))
     }
 
@@ -238,7 +240,9 @@ final class TelemetryUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
         app.tabBars.buttons["Sessions"].tap()
-        XCTAssertTrue(app.buttons["export-measurement-csv"].waitForExistence(timeout: 5))
+        let export = app.buttons["sessions-export-csv"]
+        for _ in 0..<8 where !export.isHittable { app.swipeUp() }
+        XCTAssertTrue(export.isHittable)
     }
 
     func testDashboardEditorExposesPageAndLayoutControls() {

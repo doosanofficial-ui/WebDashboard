@@ -63,6 +63,59 @@ final class DashboardPersistenceHostedTests: XCTestCase {
     }
 
     @MainActor
+    func testStartupPreservesSavedCustomOverlapsAndOriginalFileBytes() throws {
+        #if !targetEnvironment(simulator)
+        throw XCTSkip("Saved-layout fixture is Simulator-only")
+        #else
+        guard Bundle.main.bundleIdentifier == "local.webdashboard.Telemetry.LifecycleHost" else { throw FixtureError.unsafeHost }
+        let model = TelemetryModel.shared
+        guard !model.collecting, !model.localRecordingEnabled, model.replayController.sessionID == nil else { throw FixtureError.busy }
+        let originalURL = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
+            appropriateFor: nil, create: false).appendingPathComponent("Telemetry/dashboard.json")
+        let originalProfile = model.dashboardProfile
+        let originalError = model.dashboardSaveError
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("saved-layout-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer {
+            model.restoreDashboardProfile(at: originalURL)
+            model.dashboardProfile = originalProfile; model.dashboardSaveError = originalError
+            try? FileManager.default.removeItem(at: directory)
+        }
+        for (name, identifiers, overlap) in [
+            ("custom-overlap", ["custom-a", "custom-b"], true),
+            ("built-in-overlap", ["ws-fl", "ws-fr"], true),
+            ("existing-spaced-layout", ["ws-fl", "ws-fr"], false)
+        ] {
+            let widgets = identifiers.enumerated().map { index, id in
+                DashboardWidgetDefinition(id: id, type: .numericGauge, signalID: "fixture",
+                    rect: .init(x: overlap ? 0 : index * 2, y: 0, width: 2, height: 1), zIndex: 10 + index,
+                    configuration: .init(label: "User custom label", unit: "%", decimals: 1,
+                        minimum: 0, maximum: 100, warningThreshold: nil, criticalThreshold: nil))
+            }
+            let profile = try DashboardProfile(id: name, name: "Saved user layout", pages: [
+                .init(id: "main", name: "Custom", orientation: .landscape, widgets: widgets)])
+            var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(profile)) as? [String: Any])
+            json["fixture-preserved-extra-field"] = "Original formatting and extra metadata"
+            let bytes = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
+            let url = directory.appendingPathComponent(name + ".json")
+            try bytes.write(to: url)
+            for _ in 0..<2 {
+                model.restoreDashboardProfile(at: url)
+                XCTAssertEqual(model.dashboardProfile, profile, "Startup cannot infer user intent from built-in IDs and overlapping rectangles")
+                XCTAssertEqual(try Data(contentsOf: url), bytes, "Startup must not rewrite a saved profile")
+            }
+        }
+        let unreadable = directory.appendingPathComponent("invalid-saved.json")
+        let originalBytes = Data("{unreadable saved user fixture".utf8)
+        try originalBytes.write(to: unreadable)
+        model.restoreDashboardProfile(at: unreadable)
+        XCTAssertEqual(try Data(contentsOf: unreadable), originalBytes, "Invalid saved data must remain available for recovery")
+        XCTAssertNil(model.dashboardProfile)
+        XCTAssertNotNil(model.dashboardSaveError)
+        #endif
+    }
+
+    @MainActor
     func testDashboardSaveFailureDoesNotPoisonRecordingOrDiscardEdits() async throws {
         try await withDashboard { model, url, original, bytes in
             model.startRecording()

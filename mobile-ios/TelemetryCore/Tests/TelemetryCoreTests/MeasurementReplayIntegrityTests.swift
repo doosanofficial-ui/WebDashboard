@@ -3,6 +3,28 @@ import XCTest
 @testable import TelemetryCore
 
 final class MeasurementReplayIntegrityTests: XCTestCase {
+
+    func testSnapshotMetadataUsesPersistedSequenceForReorderedInput() async throws {
+        let response = OBDResponse(receivedAtEpoch: 102, receivedAtMonotonicNanos: 1000,
+            responseCANID: 0x7EC, isExtended: false, service: .service22, command: "0101",
+            payload: [0, 0, 0, 0, 101], sequence: 1, sourceAdapter: "fixture", sourceTransport: "fixture")
+        let frame = try CANFrame(receivedAtEpoch: 101, receivedAtMonotonicNanos: 1100,
+            canID: 0x123, isExtended: false, dlc: 1, payload: [1],
+            sourceAdapter: "fixture", sourceTransport: "fixture", sequence: 2)
+        let rows = [
+            PersistedMeasurement(sequence: 1, sessionID: "session", kind: "DIAGNOSTIC_RESPONSE",
+                sourceTimestamp: 102, receivedAtEpoch: 102, receivedAtMonotonicNanos: 1000,
+                payloadJSON: String(decoding: try JSONEncoder().encode(response), as: UTF8.self)),
+            PersistedMeasurement(sequence: 2, sessionID: "session", kind: "CAN",
+                sourceTimestamp: 101, receivedAtEpoch: 101, receivedAtMonotonicNanos: 1100,
+                payloadJSON: String(decoding: try JSONEncoder().encode(frame), as: UTF8.self))
+        ]
+        let snapshot = try await MeasurementReplay.snapshot(envelope(Array(rows.reversed())))
+        XCTAssertEqual(snapshot.timestamp, 101, "Last persisted sequence defines the reference time even after a clock rollback")
+        XCTAssertEqual(snapshot.frame, frame)
+        XCTAssertNil(snapshot.diagnostic)
+    }
+
     private func signalRow(sequence: Int64 = 1, session: String = "session", id: String = "soc",
                            value: Double = 50.5, timestamp: Double = 100.125) throws -> PersistedMeasurement {
         let sample = DecodedSignalSample(signalID: id, value: value, rawValue: 101,

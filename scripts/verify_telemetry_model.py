@@ -51,7 +51,8 @@ def main() -> None:
         generated = tmp / "Coordinator.swift"
         generated.write_text(shell, encoding="utf-8")
         binary = tmp / "tests"
-        inputs = [str(generated), str(template_dir / "Checks.swift")]
+        inputs = [str(generated), str(template_dir / "Checks.swift"),
+                  str(ROOT / "mobile-ios/App/TelemetryProductScope.swift")]
         if helper.exists():
             inputs.append(str(helper))
         subprocess.run([swift, "-swift-version", "5", "-parse-as-library", *inputs, "-o", str(binary)], check=True, timeout=90)

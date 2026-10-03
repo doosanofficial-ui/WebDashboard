@@ -14,6 +14,8 @@ from verify_ios_lifecycle import output, stage_sources, select_runtime_and_type,
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--result-directory", type=Path, required=True)
+    parser.add_argument("--only-test", choices=["background-export-lifecycle", "active-slider-drag", "ui-clarity", "single-instant", "large-text", "recorded-history", "recorded-route", "native-save-reentry"],
+                        help="Run one new native lifecycle test; default executes all seventeen UI regressions")
     args = parser.parse_args()
     results = args.result_directory.resolve()
     results.mkdir(parents=True, exist_ok=False)
@@ -40,7 +42,8 @@ def main():
             derived = workspace / "derived"
             base = ["xcodebuild", "-project", str(staged / "Telemetry.xcodeproj"), "-scheme", "Telemetry",
                     "-destination", "platform=iOS Simulator,id=" + simulator,
-                    "-derivedDataPath", str(derived), "CODE_SIGNING_ALLOWED=NO"]
+                    "-derivedDataPath", str(derived), "CODE_SIGNING_ALLOWED=NO",
+                    "-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never"]
             with (results / "build.log").open("w") as log:
                 subprocess.run(base + ["build"], stdout=log, stderr=subprocess.STDOUT, check=True, timeout=600)
             output(["xcrun", "simctl", "install", simulator,
@@ -61,17 +64,32 @@ let package = Package(name: "Seed", platforms: [.macOS(.v13)],
                                 str(container / "Library/Application Support/Telemetry")],
                                stdout=log, stderr=subprocess.STDOUT, check=True, timeout=240)
             bundle = results / "ReplayUI.xcresult"
-            command = base + ["-resultBundlePath", str(bundle),
-                "-only-testing:TelemetryUITests/OfflineReplayUITests/testSeededSessionPickerSnapshotAndReadOnlyControls", "test"]
+            focused_methods = {"background-export-lifecycle": "testNativeExportBackgroundReturnCancelAndReentry",
+                               "active-slider-drag": "testPlayingLongSliderDragPreservesCapturedUserTarget",
+                               "recorded-history": "testRecordedSignalHistoryContainsOnlySelectedTimePrefix",
+                               "recorded-route": "testRecordedGPSRouteContainsOnlySelectedTimePrefix"}
+            selected_tests = ["-only-testing:TelemetryUITests/OfflineReplayUITests/testNativeExportBackgroundReturnCancelAndReentry", "-only-testing:TelemetryUITests/OfflineReplayUITests/testNativeJSONCSVSaveConfirmsCompletion"] if args.only_test == "native-save-reentry" else ["-only-testing:TelemetryUITests/UIClarityUITests/testRecordedTimeAccessibilityAtLargeTextAndLandscape"] if args.only_test == "large-text" else ["-only-testing:TelemetryUITests/UIClarityUITests/testSingleInstantRecordingExplainsUnavailableTimeNavigation"] if args.only_test == "single-instant" else ["-only-testing:TelemetryUITests/UIClarityUITests"] if args.only_test == "ui-clarity" else ["-only-testing:TelemetryUITests/OfflineReplayUITests/" + focused_methods[args.only_test]] if args.only_test else [
+                "-only-testing:TelemetryUITests/OfflineReplayUITests",
+                "-only-testing:TelemetryUITests/TelemetryUITests/testMeasurementExportControlIsVisible",
+                "-only-testing:TelemetryUITests/TelemetryUITests/testMeasurementCSVExportControlIsVisible",
+                "-only-testing:TelemetryUITests/UIClarityUITests"]
+            expected_count = 2 if args.only_test == "native-save-reentry" else 5 if args.only_test == "ui-clarity" else 1 if args.only_test else 17
+            command = base + ["-resultBundlePath", str(bundle)] + selected_tests + ["test"]
             (results / "command.json").write_text(json.dumps(command, indent=2))
             with (results / "test.log").open("w") as log:
-                subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=600)
+                subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, timeout=1200)
             summary = json.loads(output(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)]))
             (results / "summary.json").write_text(json.dumps(summary, indent=2))
-            verify_summary(summary, 1)
+            native = results / "native-exports"
+            native.mkdir()
+            own_storage = container.parents[3] / "Containers/Shared/AppGroup"
+            for path in own_storage.rglob("telemetry-measurements-*.*"):
+                if path.suffix in (".json", ".csv"):
+                    shutil.copy2(path, native / path.name)
             output(["xcrun", "xcresulttool", "export", "attachments", "--path", str(bundle),
                     "--output-path", str(results / "screenshots")], timeout=120)
-            print("OFFLINE REPLAY UI PASS: 1 executed test, zero failures/skips; Simulator fixture, not hardware evidence")
+            verify_summary(summary, expected_count)
+            print(f"OFFLINE REPLAY UI PASS: {expected_count} executed tests, zero failures/skips; Simulator fixture, not hardware evidence")
         finally:
             if simulator:
                 subprocess.run(["xcrun", "simctl", "shutdown", simulator], capture_output=True, timeout=60)

@@ -17,6 +17,19 @@ struct TelemetryApp: App {
 }
 
 final class TelemetryAppDelegate: NSObject, UIApplicationDelegate {
+    private let legacyCancellation = LocalOnlyBackgroundTaskCancellation(
+        identifier: BackgroundUploader.identifier,
+        makeSession: { LegacyURLSessionCancellationSession(identifier: $0) }
+    )
+
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        if !TelemetryProductScope.allowsRemoteDelivery {
+            legacyCancellation.cancelLegacyTasks(identifier: BackgroundUploader.identifier, completion: {})
+        }
+        return true
+    }
+
     func applicationWillTerminate(_ application: UIApplication) {
         Task { @MainActor in
             TelemetryModel.shared.finishLocalMeasurement()
@@ -26,6 +39,12 @@ final class TelemetryAppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String,
                      completionHandler: @escaping () -> Void) {
         guard identifier == BackgroundUploader.identifier else { completionHandler(); return }
+        if !TelemetryProductScope.allowsRemoteDelivery {
+            legacyCancellation.cancelLegacyTasks(identifier: identifier) {
+                DispatchQueue.main.async(execute: completionHandler)
+            }
+            return
+        }
         let uploader = TelemetryModel.shared.uploader
         uploader?.backgroundCompletion = completionHandler
         TelemetryModel.shared.restoreBackgroundSession()
