@@ -244,7 +244,16 @@ final class OfflineReplayUITests: XCTestCase {
         _ = readyNativeSaveButton(app)
         // This is the owned test Simulator's Home, never a physical device.
         XCUIDevice.shared.press(.home)
-        XCTAssertTrue(app.wait(for: .runningBackground, timeout: 5))
+        // Home can leave an offline app running or suspended in background.
+        let background = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            app.state == .runningBackground || app.state == .runningBackgroundSuspended
+        }, object: app)
+        let backgroundResult = XCTWaiter.wait(for: [background], timeout: 5)
+        let backgroundState = XCTAttachment(string: "state after Home: \(app.state.rawValue)")
+        backgroundState.name = "DEMO-native-export-background-state"
+        backgroundState.lifetime = .keepAlways
+        add(backgroundState)
+        XCTAssertEqual(backgroundResult, .completed, "state after Home: \(app.state.rawValue)")
         app.activate()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 5))
         if nativeExporterIsVisible(app) {
