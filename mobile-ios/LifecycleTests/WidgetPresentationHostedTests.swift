@@ -8,6 +8,86 @@ import TelemetryCore
 
 @MainActor
 final class WidgetPresentationHostedTests: XCTestCase {
+
+    func testShortLandscapeCellsKeepEveryNumericCardVisibleInPortrait() throws {
+        #if !targetEnvironment(simulator)
+        throw XCTSkip("Grid fixture must not mutate a physical-device model")
+        #endif
+        let model = TelemetryModel.shared
+        guard !model.localRecordingEnabled, !model.collecting, model.replayController.sessionID == nil else {
+            throw XCTSkip("Grid fixture requires an idle disposable Simulator")
+        }
+        let previous = (model.runMode, model.frame, model.lastFrameAt,
+                        model.localSignalReceivedAt, model.localSignalTimeouts)
+        defer {
+            model.runMode = previous.0; model.frame = previous.1; model.lastFrameAt = previous.2
+            model.localSignalReceivedAt = previous.3; model.localSignalTimeouts = previous.4
+        }
+        let now = Date()
+        let names = ["AA", "BB", "CC", "DD", "EE", "FF"]
+        let numbers = ["11.1", "22.2", "33.3", "44.4", "55.5", "66.6"]
+        let definitions = names.enumerated().map { index, name in
+            DashboardWidgetDefinition(id: name, type: .numericGauge, signalID: name,
+                rect: .init(x: (index % 3) * 2, y: index / 3, width: 2, height: 1), zIndex: index,
+                configuration: .init(label: name, unit: "km/h", decimals: 1,
+                    minimum: nil, maximum: nil, warningThreshold: nil, criticalThreshold: nil))
+        }
+        let page = DashboardPage(id: "synthetic-short-grid", name: "Short grid", orientation: .landscape, widgets: definitions)
+        let encoder = JSONEncoder(); encoder.outputFormatting = .sortedKeys
+        let original = try encoder.encode(page)
+        model.runMode = .live
+        model.frame = try ServerCANFrame(version: 1, serverTimestamp: now.timeIntervalSince1970,
+            signals: Dictionary(uniqueKeysWithValues: zip(names, numbers.map { Double($0)! })),
+            status: .init(sequence: 1, drop: 0))
+        model.lastFrameAt = now
+        model.localSignalReceivedAt = Dictionary(uniqueKeysWithValues: names.map { ($0, now.timeIntervalSince1970) })
+        model.localSignalTimeouts = Dictionary(uniqueKeysWithValues: names.map { ($0, 1.5) })
+        let cockpit = LiveCockpitView(model: model, editorPresented: .constant(false), selectedPageID: .constant(nil))
+        for size in [DynamicTypeSize.large, .xxxLarge] {
+            let content = cockpit.dashboardGrid(page, now: now)
+                .frame(width: 343).fixedSize(horizontal: false, vertical: true)
+                .environment(\.dynamicTypeSize, size).preferredColorScheme(.dark)
+            // ImageRenderer omits the production numeric card's horizontal
+            // ScrollView fallback. Host the real view so its UIKit descendants
+            // materialize; never replace the card or shorten its measurement.
+            let host = UIHostingController(rootView: content)
+            let measured = host.sizeThatFits(in: CGSize(width: 343, height: 2000))
+            let window = UIWindow(frame: CGRect(origin: .zero, size: measured))
+            window.rootViewController = host; window.isHidden = false
+            defer { window.isHidden = true }
+            host.view.frame = window.bounds; host.view.layoutIfNeeded()
+            let format = UIGraphicsImageRendererFormat(); format.scale = 2
+            let image = UIGraphicsImageRenderer(bounds: host.view.bounds, format: format).image { _ in
+                XCTAssertTrue(host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true))
+            }
+            let attachment = XCTAttachment(image: image)
+            attachment.name = "SYNTHETIC-short-landscape-grid-portrait-\(size)"
+            attachment.lifetime = .keepAlways; add(attachment)
+            let request = VNRecognizeTextRequest()
+            request.recognitionLevel = .accurate; request.usesLanguageCorrection = false
+            request.recognitionLanguages = ["en-US"]
+            try VNImageRequestHandler(cgImage: try XCTUnwrap(image.cgImage), options: [:]).perform([request])
+            let observations = request.results ?? []
+            let labels = observations.compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ").uppercased()
+            let diagnostic = XCTAttachment(string: labels)
+            diagnostic.name = "short-grid-OCR-\(size)"; diagnostic.lifetime = .keepAlways; add(diagnostic)
+            for index in names.indices {
+                XCTAssertTrue(labels.contains(names[index]), "Card label must remain visible at \(size): \(labels)")
+                XCTAssertTrue(labels.contains(numbers[index]), "Card value must remain visible at \(size): \(labels)")
+            }
+            for column in 0..<3 {
+                if let topValue = observations.first(where: { $0.topCandidates(1).first?.string.contains(numbers[column]) == true }),
+                   let nextLabel = observations.first(where: { $0.topCandidates(1).first?.string.uppercased().contains(names[column + 3]) == true }) {
+                    // Vision uses bottom-left coordinates: all of the first row's
+                    // value must be above the following row's label.
+                    XCTAssertGreaterThan(topValue.boundingBox.minY, nextLabel.boundingBox.maxY,
+                        "Row content must not cross into its successor at \(size)")
+                }
+            }
+        }
+        XCTAssertEqual(try encoder.encode(page), original, "Rendering must preserve stored geometry")
+    }
+
     private func renderLabels(value: Double?, replay: Bool = false, quality: SignalQuality = .valid,
                               freshness: MeasurementReplay.SignalFreshness = .unknown, expectedGreen: Bool = false) throws -> String {
         #if !targetEnvironment(simulator)

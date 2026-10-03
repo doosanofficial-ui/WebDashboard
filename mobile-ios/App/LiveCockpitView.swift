@@ -349,8 +349,6 @@ struct LiveCockpitView: View {
 
     @ViewBuilder
     private func dashboardCanvas(_ page: DashboardPage, now: Date) -> some View {
-        let columns = page.orientation == .portrait ? 4 : 6
-        let maxRow = max(4, (page.widgets.map { $0.rect.y + $0.rect.height }.max() ?? 4) + 1)
         if dynamicTypeSize.isAccessibilitySize {
             VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
                 ForEach(page.widgets.sorted {
@@ -365,28 +363,24 @@ struct LiveCockpitView: View {
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("dashboard-canvas-\(page.id)")
         } else {
-        GeometryReader { proxy in
-            let cell = proxy.size.width / CGFloat(columns)
-            ZStack(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: TelemetryTheme.Radius.medium, style: .continuous)
-                    .fill(TelemetryTheme.plot)
-                ForEach(page.widgets.sorted { $0.zIndex < $1.zIndex }) { widget in
-                    dashboardWidget(widget, now: now)
-                        .frame(width: max(36, cell * CGFloat(widget.rect.width) - 8),
-                               height: max(36, cell * CGFloat(widget.rect.height) - 8),
-                               alignment: .topLeading)
-                        .position(
-                            x: cell * (CGFloat(widget.rect.x) + CGFloat(widget.rect.width) / 2),
-                            y: cell * (CGFloat(widget.rect.y) + CGFloat(widget.rect.height) / 2)
-                        )
-                }
-            }
-            .frame(height: cell * CGFloat(maxRow), alignment: .top)
+            dashboardGrid(page, now: now)
         }
-        .aspectRatio(CGFloat(columns) / CGFloat(maxRow), contentMode: .fit)
+    }
+
+    // Eager production grid, shared by the canvas and hosted rendering tests.
+    func dashboardGrid(_ page: DashboardPage, now: Date) -> some View {
+        let columns = page.orientation == .portrait ? 4 : 6
+        let maxRow = max(4, (page.widgets.map { $0.rect.y + $0.rect.height }.max() ?? 4) + 1)
+        return DashboardGridLayout(columns: columns, rows: maxRow) {
+            ForEach(page.widgets.sorted { $0.zIndex < $1.zIndex }) { widget in
+                dashboardWidget(widget, now: now)
+                    .layoutValue(key: DashboardGridRectKey.self, value: widget.rect)
+            }
+        }
+        .background(TelemetryTheme.plot,
+                    in: RoundedRectangle(cornerRadius: TelemetryTheme.Radius.medium, style: .continuous))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("dashboard-canvas-\(page.id)")
-        }
     }
 
     @ViewBuilder

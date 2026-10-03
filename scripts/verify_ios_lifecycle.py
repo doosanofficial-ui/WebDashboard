@@ -13,7 +13,7 @@ import uuid
 import shutil
 import tempfile
 
-EXPECTED_TEST_COUNT = 67
+EXPECTED_TEST_COUNT = 68
 
 
 def stage_sources(root, destination):
