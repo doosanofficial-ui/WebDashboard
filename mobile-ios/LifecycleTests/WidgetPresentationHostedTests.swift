@@ -24,7 +24,7 @@ final class WidgetPresentationHostedTests: XCTestCase {
             model.localSignalReceivedAt = previous.3; model.localSignalTimeouts = previous.4
         }
         let now = Date()
-        let names = ["AA", "BB", "CC", "DD", "EE", "FF"]
+        let names = ["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX"]
         let numbers = ["11.1", "22.2", "33.3", "44.4", "55.5", "66.6"]
         let definitions = names.enumerated().map { index, name in
             DashboardWidgetDefinition(id: name, type: .numericGauge, signalID: name,
@@ -64,7 +64,7 @@ final class WidgetPresentationHostedTests: XCTestCase {
             attachment.name = "SYNTHETIC-short-landscape-grid-portrait-\(size)"
             attachment.lifetime = .keepAlways; add(attachment)
             let request = VNRecognizeTextRequest()
-            request.recognitionLevel = .accurate; request.usesLanguageCorrection = false
+            request.recognitionLevel = .accurate; request.usesLanguageCorrection = true
             request.recognitionLanguages = ["en-US"]
             try VNImageRequestHandler(cgImage: try XCTUnwrap(image.cgImage), options: [:]).perform([request])
             let observations = request.results ?? []
@@ -86,6 +86,123 @@ final class WidgetPresentationHostedTests: XCTestCase {
             }
         }
         XCTAssertEqual(try encoder.encode(page), original, "Rendering must preserve stored geometry")
+    }
+
+
+    func testShortRecordedGraphExposesMinimumHeightToGrid() async throws {
+        try await assertShortRecordedHistoryGrid(type: .timeSeries)
+    }
+
+    func testShortRecordedRouteExposesMinimumHeightToGrid() async throws {
+        try await assertShortRecordedHistoryGrid(type: .map)
+    }
+
+    private func assertShortRecordedHistoryGrid(type: DashboardWidgetType) async throws {
+        #if !targetEnvironment(simulator)
+        throw XCTSkip("Recorded grid fixture is Simulator-only")
+        #endif
+        let model = TelemetryModel.shared
+        guard !model.localRecordingEnabled, !model.collecting, model.replayController.sessionID == nil else {
+            throw XCTSkip("Recorded grid fixture requires an idle disposable Simulator")
+        }
+        let oldMode = model.runMode
+        defer { model.replayController.stop(); model.runMode = oldMode }
+        var rows: [PersistedMeasurement] = []
+        for index in 1...2 {
+            let signal = DecodedSignalSample(signalID: "short-grid", value: Double(index * 10), rawValue: UInt64(index),
+                enumName: nil, unit: "%", frameSequence: UInt64(index), receivedAtEpoch: 100 + Double(index),
+                receivedAtMonotonicNanos: UInt64(index) * 1_000_000_000)
+            rows.append(.init(sequence: Int64(index * 2 - 1), sessionID: "short-history", kind: "SIGNAL",
+                sourceTimestamp: signal.receivedAtEpoch, receivedAtEpoch: signal.receivedAtEpoch,
+                receivedAtMonotonicNanos: signal.receivedAtMonotonicNanos,
+                payloadJSON: String(decoding: try JSONEncoder().encode(signal), as: UTF8.self)))
+            let location = LocationSample(originalTimestamp: 100 + Double(index), receivedAtEpoch: 100 + Double(index),
+                receivedAtMonotonicNanos: UInt64(index) * 1_000_000_000, latitude: Double(index) * 0.001,
+                longitude: Double(index) * 0.001, altitude: nil, speed: nil, course: nil,
+                horizontalAccuracy: nil, verticalAccuracy: nil, source: .demo)
+            rows.append(.init(sequence: Int64(index * 2), sessionID: "short-history", kind: "LOCATION",
+                sourceTimestamp: location.originalTimestamp, receivedAtEpoch: location.receivedAtEpoch,
+                receivedAtMonotonicNanos: location.receivedAtMonotonicNanos,
+                payloadJSON: String(decoding: try JSONEncoder().encode(location), as: UTF8.self)))
+        }
+        _ = try await model.replayController.load(sessionID: "short-history") {
+            MeasurementExport(session: .init(sessionID: "short-history", startedAt: 100, endedAt: 102, mode: .demo),
+                              measurements: rows)
+        }
+        model.runMode = .replay
+        let configuration = DashboardWidgetConfiguration(label: type == .map ? "ROUTE" : "GRAPH", unit: "%",
+            decimals: 1, minimum: nil, maximum: nil, warningThreshold: nil, criticalThreshold: nil)
+        let history = DashboardWidgetDefinition(id: "short-history-card", type: type,
+            signalID: type == .map ? nil : "short-grid", rect: .init(x: 0, y: 0, width: 6, height: 1),
+            zIndex: 0, configuration: configuration)
+        let following = DashboardWidgetDefinition(id: "following-card", type: .numericGauge, signalID: nil,
+            rect: .init(x: 0, y: 1, width: 6, height: 1), zIndex: 1,
+            configuration: .init(label: "FOLLOWING", unit: "%", decimals: 1, minimum: nil,
+                                 maximum: nil, warningThreshold: nil, criticalThreshold: nil))
+        let page = DashboardPage(id: "short-history-grid", name: "Synthetic", orientation: .landscape,
+                                 widgets: [history, following])
+        let cockpit = LiveCockpitView(model: model, editorPresented: .constant(false), selectedPageID: .constant(nil))
+        for size in [DynamicTypeSize.large, .xxxLarge] {
+            let view = cockpit.dashboardGrid(page, now: Date()).frame(width: 360)
+                .fixedSize(horizontal: false, vertical: true).dynamicTypeSize(size).preferredColorScheme(.dark)
+            let host = UIHostingController(rootView: view)
+            let measured = host.sizeThatFits(in: CGSize(width: 360, height: 3000))
+            let window = UIWindow(frame: CGRect(origin: .zero, size: measured))
+            window.rootViewController = host; window.isHidden = false
+            defer { window.isHidden = true }
+            host.view.frame = window.bounds; host.view.layoutIfNeeded()
+            let format = UIGraphicsImageRendererFormat(); format.scale = 2
+            let image = UIGraphicsImageRenderer(bounds: host.view.bounds, format: format).image { _ in
+                XCTAssertTrue(host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true))
+            }
+            let attachment = XCTAttachment(image: image)
+            attachment.name = "SYNTHETIC-short-\(type.rawValue)-grid-\(size)"
+            attachment.lifetime = .keepAlways; add(attachment)
+            let cg = try XCTUnwrap(image.cgImage)
+            let request = VNRecognizeTextRequest()
+            request.recognitionLevel = .accurate; request.usesLanguageCorrection = false
+            request.recognitionLanguages = ["en-US"]
+            try VNImageRequestHandler(cgImage: cg, options: [:]).perform([request])
+            let observations = request.results ?? []
+            let text = observations.compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ").uppercased()
+            let suffix = type == .map ? "FIXES:2" : "SAMPLES:2"
+            XCTAssertTrue(text.filter { !$0.isWhitespace }.contains(suffix),
+                          "Count must remain readable even when its label wraps at \(size): \(text)")
+            let footer = type == .map ? "NOT CURRENT POSITION" : "HISTORICAL FRESHNESS UNKNOWN"
+            XCTAssertTrue(text.contains(footer), "Full history footer must remain visible at \(size): \(text)")
+            let fontCategory: UIContentSizeCategory = size == .large ? .large : .extraExtraExtraLarge
+            let fontSize = UIFont.preferredFont(forTextStyle: .caption2,
+                compatibleWith: UITraitCollection(preferredContentSizeCategory: fontCategory)).pointSize
+            if let line = observations.first(where: {
+                let value = $0.topCandidates(1).first?.string.uppercased() ?? ""
+                return type == .map ? value.contains("NOT CURRENT") : value.contains("HISTORICAL")
+            }) {
+                XCTAssertGreaterThanOrEqual(CGFloat(line.boundingBox.height) * image.size.height, fontSize * 0.6,
+                    "Footer glyphs cannot be partly covered by the next card at \(size)")
+            }
+            XCTAssertTrue(text.contains("FOLLOWING"), text)
+            if let count = observations.first(where: { $0.topCandidates(1).first?.string.uppercased().contains(type == .map ? "FIXES" : "SAMPLES") == true }),
+               let next = observations.first(where: { $0.topCandidates(1).first?.string.uppercased().contains("FOLLOWING") == true }) {
+                XCTAssertGreaterThan(count.boundingBox.minY, next.boundingBox.maxY,
+                                     "History summary cannot paint into the next row at \(size)")
+            }
+            var bytes = [UInt8](repeating: 0, count: cg.width * cg.height * 4)
+            try bytes.withUnsafeMutableBytes { buffer in
+                let context = try XCTUnwrap(CGContext(data: buffer.baseAddress, width: cg.width, height: cg.height,
+                    bitsPerComponent: 8, bytesPerRow: cg.width * 4,
+                    space: try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB)),
+                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue))
+                context.draw(cg, in: CGRect(x: 0, y: 0, width: cg.width, height: cg.height)); context.flush()
+            }
+            let cyan = stride(from: 0, to: bytes.count, by: 4).filter {
+                bytes[$0] < 100 && bytes[$0 + 1] > 140 && bytes[$0 + 2] > 160 && bytes[$0 + 3] > 200
+            }.count
+            XCTAssertGreaterThan(cyan, 8, "Recorded plot must stay visible at \(size)")
+            let diagnostic = XCTAttachment(string: "Canvas \(measured.width)x\(measured.height)pt, cyan=\(cyan), OCR=\(text)")
+            diagnostic.name = "short-history-grid-geometry-\(type.rawValue)-\(size)"
+            diagnostic.lifetime = .keepAlways; add(diagnostic)
+        }
+        XCTAssertEqual(page.widgets.map(\.rect), [history.rect, following.rect], "No saved reflow")
     }
 
     private func renderLabels(value: Double?, replay: Bool = false, quality: SignalQuality = .valid,

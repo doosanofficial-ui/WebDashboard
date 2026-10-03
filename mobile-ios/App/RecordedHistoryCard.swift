@@ -26,15 +26,14 @@ struct RecordedHistoryCard<Plot: View, Summary: View, Details: View>: View {
                 }
                 .telemetrySurface(.standard, padding: TelemetryTheme.Spacing.small)
             } else {
-                GeometryReader { geometry in
-                    VStack(alignment: .leading, spacing: 4) {
-                        header
-                        plot.frame(minHeight: 24, maxHeight: .infinity)
-                        summary.fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(width: max(0, geometry.size.width - 24), height: max(0, geometry.size.height - 24))
-                    .telemetrySurface(.standard, padding: TelemetryTheme.Spacing.small)
+                // Report header, summary and minimum plot height when the grid
+                // asks for an unconstrained height at this card's actual width.
+                VStack(alignment: .leading, spacing: 4) {
+                    header
+                    plot.frame(minHeight: 24, maxHeight: .infinity)
+                    summary.fixedSize(horizontal: false, vertical: true)
                 }
+                .telemetrySurface(.standard, padding: TelemetryTheme.Spacing.small)
             }
         }
         .sheet(isPresented: $showingDetails) {
