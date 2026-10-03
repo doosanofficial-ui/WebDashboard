@@ -385,7 +385,7 @@ struct LiveCockpitView: View {
 
     @ViewBuilder
     // Internal so hosted display tests render the production widget without a lazy scroll container.
-    func dashboardWidget(_ widget: DashboardWidgetDefinition, now: Date) -> some View {
+    func dashboardWidget(_ widget: DashboardWidgetDefinition, now: Date, allowsMapTiles: Bool = true) -> some View {
         let value = widget.signalID.flatMap { model.frame?.sig[$0] }
         let fresh = signalDataIsFresh(widget.signalID, at: now, fallback: canDataIsFresh(at: now))
         switch widget.type {
@@ -410,7 +410,7 @@ struct LiveCockpitView: View {
         case .timeSeries:
             timeSeriesWidget(widget)
         case .gps, .map:
-            gpsWidget(widget, map: widget.type == .map)
+            gpsWidget(widget, map: widget.type == .map, allowsMapTiles: allowsMapTiles)
         }
     }
 
@@ -585,7 +585,7 @@ struct LiveCockpitView: View {
     }
 
     @ViewBuilder
-    private func gpsWidget(_ widget: DashboardWidgetDefinition, map: Bool) -> some View {
+    private func gpsWidget(_ widget: DashboardWidgetDefinition, map: Bool, allowsMapTiles: Bool) -> some View {
         let fix = model.lastLocation
         if map && model.runMode == .replay {
             RecordedRouteView(title: widget.configuration.label, history: model.replayController.recordedLocations())
@@ -594,7 +594,7 @@ struct LiveCockpitView: View {
             TrackMapView(
                 title: widget.configuration.label,
                 coordinate: fix.flatMap { coordinate(from: $0) },
-                track: model.locationTrack
+                track: model.locationTrack, showsBasemap: allowsMapTiles
             )
             .accessibilityIdentifier("profile-widget-\(widget.id)")
         } else {
@@ -712,12 +712,14 @@ private struct TrackMapView: View {
     let title: String
     let coordinate: CLLocationCoordinate2D?
     let track: [CLLocationCoordinate2D]
+    let showsBasemap: Bool
     @State private var position: MapCameraPosition
 
-    init(title: String, coordinate: CLLocationCoordinate2D?, track: [CLLocationCoordinate2D]) {
+    init(title: String, coordinate: CLLocationCoordinate2D?, track: [CLLocationCoordinate2D], showsBasemap: Bool = true) {
         self.title = title
         self.coordinate = coordinate
         self.track = track
+        self.showsBasemap = showsBasemap
         if let coordinate {
             _position = State(initialValue: .region(MKCoordinateRegion(
                 center: coordinate,
@@ -735,6 +737,7 @@ private struct TrackMapView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white)
             if let coordinate {
+                if showsBasemap {
                 Map(position: $position, interactionModes: [.pan, .zoom, .rotate]) {
                     if track.count > 1 {
                         MapPolyline(coordinates: track)
@@ -747,6 +750,26 @@ private struct TrackMapView: View {
                 .clipShape(RoundedRectangle(cornerRadius: TelemetryTheme.Radius.small, style: .continuous))
                 .onChange(of: coordinate.latitude) { _, _ in follow(coordinate) }
                 .onChange(of: coordinate.longitude) { _, _ in follow(coordinate) }
+                } else {
+                    Canvas { context, size in
+                        let points = track.isEmpty ? [coordinate] : track
+                        let lat = points.map(\.latitude); let lon = points.map(\.longitude)
+                        let minLat = lat.min() ?? 0; let minLon = lon.min() ?? 0
+                        let latSpan = max(0.0001, (lat.max() ?? minLat) - minLat)
+                        let lonSpan = max(0.0001, (lon.max() ?? minLon) - minLon)
+                        var path = Path()
+                        for (index, point) in points.enumerated() {
+                            let p = CGPoint(x: 12 + (point.longitude - minLon) / lonSpan * max(0, size.width - 24),
+                                            y: size.height - 12 - (point.latitude - minLat) / latSpan * max(0, size.height - 24))
+                            if index == 0 { path.move(to: p) } else { path.addLine(to: p) }
+                            context.fill(Path(ellipseIn: CGRect(x: p.x - 3, y: p.y - 3, width: 6, height: 6)), with: .color(.cyan))
+                        }
+                        context.stroke(path, with: .color(.cyan), lineWidth: 3)
+                    }
+                    .frame(minHeight: 170)
+                    .background(TelemetryTheme.plot)
+                    .accessibilityLabel("Local route preview")
+                }
                 Text("\(String(format: "%.6f", coordinate.latitude)), \(String(format: "%.6f", coordinate.longitude))")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(TelemetryTheme.mutedText)

@@ -32,11 +32,13 @@ final class DashboardPersistenceHostedTests: XCTestCase {
             appropriateFor: nil, create: false).appendingPathComponent("Telemetry/dashboard.json")
         let bytes = try Data(contentsOf: url)
         let original = try XCTUnwrap(model.dashboardProfile)
+        let originalHistory = model.dashboardLayoutHistory
         let originalError = model.dashboardSaveError
         let originalStorageStatus = model.storageStatus
         defer {
             try? bytes.write(to: url, options: .atomic)
             model.dashboardProfile = original
+            model.dashboardLayoutHistory = originalHistory
             model.dashboardSaveError = originalError
             model.storageStatus = originalStorageStatus
         }
@@ -167,6 +169,86 @@ final class DashboardPersistenceHostedTests: XCTestCase {
             XCTAssertNil(model.dashboardSaveError)
             let saved = try JSONDecoder().decode(DashboardProfile.self, from: Data(contentsOf: url))
             XCTAssertEqual(saved, model.dashboardProfile)
+        }
+    }
+
+    @MainActor
+    func testMagneticPreviewAndCancellationKeepDiskBytesUntilRelease() async throws {
+        try await withDashboard { model, url, profile, bytes in
+            model.dashboardLayoutHistory = .init()
+            let page = profile.pages[0]; let active = try XCTUnwrap(page.widgets.first)
+            var last: DashboardSnapResult?
+            for offset in 1...24 {
+                last = DashboardMagneticSnap.preview(original: active.rect,
+                    proposed: .init(x: Double(active.rect.x) + Double(offset) / 10, y: Double(active.rect.y) + 2,
+                                    width: Double(active.rect.width), height: Double(active.rect.height)),
+                    neighbors: page.widgets.filter { $0.id != active.id }, operation: .move,
+                    geometry: .init(columnWidth: 80, rowHeight: 140))
+            }
+            XCTAssertEqual(model.dashboardProfile, profile)
+            XCTAssertEqual(try Data(contentsOf: url), bytes, "Drafts and discarded gestures never save")
+            let result = try XCTUnwrap(last)
+            XCTAssertTrue(model.commitDashboardWidgetEdit(profileID: profile.id, page: page, widgetID: active.id, rect: result.rect))
+            let saved = try JSONDecoder().decode(DashboardProfile.self, from: Data(contentsOf: url))
+            XCTAssertEqual(saved, model.dashboardProfile)
+            XCTAssertEqual(saved.pages[0].widgets.first?.rect, result.rect)
+            XCTAssertEqual(Array(saved.pages[0].widgets.dropFirst()), Array(page.widgets.dropFirst()))
+            XCTAssertTrue(model.canUndoDashboardLayout)
+        }
+    }
+    @MainActor
+    func testNoOpAndStaleReleasePreserveExactDiskBytes() async throws {
+        try await withDashboard { model, url, profile, bytes in
+            model.dashboardLayoutHistory = .init()
+            let page = profile.pages[0]; let active = try XCTUnwrap(page.widgets.first)
+            XCTAssertFalse(model.commitDashboardWidgetEdit(profileID: profile.id, page: page, widgetID: active.id, rect: active.rect))
+            XCTAssertEqual(try Data(contentsOf: url), bytes)
+            model.updateDashboardWidgetRect(pageID: page.id, widgetID: active.id,
+                rect: .init(x: active.rect.x + 3, y: active.rect.y, width: active.rect.width, height: active.rect.height))
+            let changed = try Data(contentsOf: url); let current = model.dashboardProfile
+            XCTAssertFalse(model.commitDashboardWidgetEdit(profileID: profile.id, page: page, widgetID: active.id,
+                rect: .init(x: active.rect.x + 1, y: active.rect.y, width: active.rect.width, height: active.rect.height)))
+            XCTAssertEqual(model.dashboardProfile, current); XCTAssertEqual(try Data(contentsOf: url), changed)
+            XCTAssertFalse(model.canUndoDashboardLayout)
+        }
+    }
+    @MainActor
+    func testLayoutUndoRedoPersistOnlyActiveRectAndPreserveNeighborChanges() async throws {
+        try await withDashboard { model, url, profile, _ in
+            model.dashboardLayoutHistory = .init()
+            let page = profile.pages[0]; let active = try XCTUnwrap(page.widgets.first)
+            let neighbor = try XCTUnwrap(page.widgets.dropFirst().first)
+            let moved = DashboardRect(x: active.rect.x + 1, y: active.rect.y + 3, width: active.rect.width, height: active.rect.height)
+            XCTAssertTrue(model.commitDashboardWidgetEdit(profileID: profile.id, page: page, widgetID: active.id, rect: moved))
+            let neighborRect = DashboardRect(x: neighbor.rect.x + 5, y: neighbor.rect.y + 2, width: neighbor.rect.width, height: neighbor.rect.height)
+            model.updateDashboardWidgetRect(pageID: page.id, widgetID: neighbor.id, rect: neighborRect)
+            model.undoDashboardLayout()
+            var saved = try JSONDecoder().decode(DashboardProfile.self, from: Data(contentsOf: url))
+            XCTAssertEqual(saved.pages[0].widgets.first { $0.id == active.id }?.rect, active.rect)
+            XCTAssertEqual(saved.pages[0].widgets.first { $0.id == neighbor.id }?.rect, neighborRect)
+            XCTAssertTrue(model.canRedoDashboardLayout)
+            model.redoDashboardLayout()
+            saved = try JSONDecoder().decode(DashboardProfile.self, from: Data(contentsOf: url))
+            XCTAssertEqual(saved.pages[0].widgets.first { $0.id == active.id }?.rect, moved)
+            XCTAssertEqual(saved.pages[0].widgets.first { $0.id == neighbor.id }?.rect, neighborRect)
+        }
+    }
+    @MainActor
+    func testFailedReleaseSaveRetainsUndoableDraftAndRetry() async throws {
+        try await withDashboard { model, url, profile, bytes in
+            model.dashboardLayoutHistory = .init()
+            let page = profile.pages[0]; let active = try XCTUnwrap(page.widgets.first)
+            let rect = DashboardRect(x: active.rect.x + 1, y: active.rect.y + 2, width: active.rect.width, height: active.rect.height)
+            try withBlockedDestination(url) { _ in
+                XCTAssertTrue(model.commitDashboardWidgetEdit(profileID: profile.id, page: page, widgetID: active.id, rect: rect))
+                XCTAssertNotNil(model.dashboardSaveError)
+                XCTAssertTrue(model.canUndoDashboardLayout)
+            }
+            XCTAssertEqual(try Data(contentsOf: url), bytes)
+            model.retryDashboardSave()
+            let saved = try JSONDecoder().decode(DashboardProfile.self, from: Data(contentsOf: url))
+            XCTAssertEqual(saved.pages[0].widgets.first?.rect, rect)
+            XCTAssertNil(model.dashboardSaveError); XCTAssertNil(model.storageStatus)
         }
     }
 }

@@ -974,6 +974,30 @@ final class TelemetryModel: NSObject {
         persistDashboardProfile()
     }
 
+    var dashboardLayoutHistory = DashboardLayoutHistory()
+    var canUndoDashboardLayout: Bool { dashboardProfile.map { dashboardLayoutHistory.canUndo(in: $0) } ?? false }
+    var canRedoDashboardLayout: Bool { dashboardProfile.map { dashboardLayoutHistory.canRedo(in: $0) } ?? false }
+
+    @discardableResult
+    func commitDashboardWidgetEdit(profileID: String, page: DashboardPage, widgetID: String, rect: DashboardRect) -> Bool {
+        guard var profile = dashboardProfile,
+              dashboardLayoutHistory.commit(profile: &profile, expectedProfileID: profileID,
+                  expectedPage: page, widgetID: widgetID, rect: rect) else { return false }
+        dashboardProfile = profile
+        persistDashboardProfile()
+        return true
+    }
+    func undoDashboardLayout() {
+        guard var profile = dashboardProfile, dashboardLayoutHistory.undo(profile: &profile) else { return }
+        dashboardProfile = profile
+        persistDashboardProfile()
+    }
+    func redoDashboardLayout() {
+        guard var profile = dashboardProfile, dashboardLayoutHistory.redo(profile: &profile) else { return }
+        dashboardProfile = profile
+        persistDashboardProfile()
+    }
+
     func updateDashboardWidgetRect(pageID: String, widgetID: String, rect: DashboardRect) {
         guard var profile = dashboardProfile,
               (try? profile.updateWidgetRect(pageID: pageID, widgetID: widgetID, rect: rect)) != nil else { return }
@@ -1039,6 +1063,7 @@ final class TelemetryModel: NSObject {
     /// Startup reads existing layouts without migration or re-encoding their files.
     func restoreDashboardProfile(at url: URL) {
         dashboardURL = url
+        dashboardLayoutHistory = .init()
         if let data = try? Data(contentsOf: url),
            let saved = try? JSONDecoder().decode(DashboardProfile.self, from: data) {
             dashboardProfile = saved

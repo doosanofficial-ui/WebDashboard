@@ -9,7 +9,65 @@ import TelemetryCore
 @MainActor
 final class WidgetPresentationHostedTests: XCTestCase {
 
+    func testWidthCancellationCachesNewGeometryEvenWhenRowHeightDoesNotChange() throws {
+        let active = DashboardWidgetDefinition(id: "active", type: .numericGauge, signalID: nil,
+            rect: .init(x: 0, y: 0, width: 2, height: 1), zIndex: 0,
+            configuration: .init(label: "Active", unit: "%", decimals: 1, minimum: nil, maximum: nil,
+                                 warningThreshold: nil, criticalThreshold: nil))
+        let page = DashboardPage(id: "page", name: "Page", orientation: .landscape, widgets: [active])
+        var viewport = DashboardEditorViewport(); var draft: DashboardEditDraft?
+        viewport.observe(.init(width: 360, height: 960), draft: &draft)
+        draft = try XCTUnwrap(DashboardEditDraft(profileID: "profile", page: page, widgetID: active.id,
+                                                operation: .move, geometry: viewport.geometry(columns: 6, rows: 4)))
+        draft?.update(translationX: 60, translationY: 0)
+        viewport.observe(.init(width: 720, height: 960), draft: &draft)
+        XCTAssertTrue(draft?.isCancelled == true); XCTAssertNil(draft?.releaseRect)
+        XCTAssertEqual(viewport.size.width, 720, "A cancelled gesture may not receive another geometry event")
+        draft = nil
+        // Same content-driven row height, no second observe event after cancellation.
+        draft = try XCTUnwrap(DashboardEditDraft(profileID: "profile", page: page, widgetID: active.id,
+                                                operation: .move, geometry: viewport.geometry(columns: 6, rows: 4)))
+        draft?.update(translationX: 120, translationY: 240)
+        XCTAssertEqual(draft?.releaseRect, .init(x: 1, y: 1, width: 2, height: 1))
+    }
+
+    func testMagneticOverlayDrawsGuideAtCardEdgeAndOrangeCollisionPreview() throws {
+        let neighbor = DashboardWidgetDefinition(id: "neighbor", type: .numericGauge, signalID: nil,
+            rect: .init(x: 2, y: 0, width: 2, height: 1), zIndex: 0,
+            configuration: .init(label: "Neighbor", unit: "%", decimals: 1, minimum: nil,
+                                 maximum: nil, warningThreshold: nil, criticalThreshold: nil))
+        let geometry = DashboardSnapGeometry(columnWidth: 60, rowHeight: 120)
+        let result = DashboardMagneticSnap.preview(original: .init(x: 0, y: 0, width: 2, height: 1),
+            proposed: .init(x: 2.05, y: 0, width: 2, height: 1), neighbors: [neighbor], operation: .move, geometry: geometry)
+        XCTAssertEqual(result.overlappingWidgetIDs, ["neighbor"])
+        let renderer = ImageRenderer(content: DashboardSnapOverlay(result: result, geometry: geometry)
+            .frame(width: 360, height: 240).background(.black))
+        renderer.scale = 2
+        let image = try XCTUnwrap(renderer.uiImage); let cg = try XCTUnwrap(image.cgImage)
+        let attachment = XCTAttachment(image: image); attachment.name = "SYNTHETIC-magnetic-guide-collision"
+        attachment.lifetime = .keepAlways; add(attachment)
+        var pixels = [UInt8](repeating: 0, count: cg.width * cg.height * 4)
+        let context = try XCTUnwrap(CGContext(data: &pixels, width: cg.width, height: cg.height,
+            bitsPerComponent: 8, bytesPerRow: cg.width * 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue))
+        context.draw(cg, in: CGRect(x: 0, y: 0, width: cg.width, height: cg.height))
+        var edgeCyan = 0; var orange = 0
+        for y in 0..<cg.height { for x in 0..<cg.width {
+            let i = (y * cg.width + x) * 4; let red = pixels[i]; let green = pixels[i + 1]; let blue = pixels[i + 2]
+            if abs(x - 248) <= 3 && red < 120 && green > 140 && blue > 180 { edgeCyan += 1 }
+            if red > 180 && green > 60 && green < 200 && blue < 90 { orange += 1 }
+        } }
+        XCTAssertGreaterThan(edgeCyan, 150, "Guide must use the measured leading card edge, including its 4pt gutter")
+        XCTAssertGreaterThan(orange, 100, "Active collision preview must remain visibly orange")
+    }
+
     func testShortLandscapeCellsKeepEveryNumericCardVisibleInPortrait() throws {
+        try assertNumericGrid(editor: false)
+    }
+    func testEditorKeepsEveryNumericValueVisibleAtNormalAndAccessibilitySizes() throws {
+        try assertNumericGrid(editor: true)
+    }
+    private func assertNumericGrid(editor: Bool) throws {
         #if !targetEnvironment(simulator)
         throw XCTSkip("Grid fixture must not mutate a physical-device model")
         #endif
@@ -43,8 +101,11 @@ final class WidgetPresentationHostedTests: XCTestCase {
         model.localSignalReceivedAt = Dictionary(uniqueKeysWithValues: names.map { ($0, now.timeIntervalSince1970) })
         model.localSignalTimeouts = Dictionary(uniqueKeysWithValues: names.map { ($0, 1.5) })
         let cockpit = LiveCockpitView(model: model, editorPresented: .constant(false), selectedPageID: .constant(nil))
-        for size in [DynamicTypeSize.large, .xxxLarge] {
-            let content = cockpit.dashboardGrid(page, now: now)
+        for size in (editor ? [DynamicTypeSize.large, .xxxLarge, .accessibility5] : [.large, .xxxLarge]) {
+            let canvas = editor
+                ? AnyView(DashboardEditorCanvas(model: model, page: page, selectedWidgetID: .constant(nil)))
+                : AnyView(cockpit.dashboardGrid(page, now: now))
+            let content = canvas
                 .frame(width: 343).fixedSize(horizontal: false, vertical: true)
                 .environment(\.dynamicTypeSize, size).preferredColorScheme(.dark)
             // ImageRenderer omits the production numeric card's horizontal
@@ -61,7 +122,7 @@ final class WidgetPresentationHostedTests: XCTestCase {
                 XCTAssertTrue(host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true))
             }
             let attachment = XCTAttachment(image: image)
-            attachment.name = "SYNTHETIC-short-landscape-grid-portrait-\(size)"
+            attachment.name = "SYNTHETIC-\(editor ? "editor" : "live")-short-grid-\(size)"
             attachment.lifetime = .keepAlways; add(attachment)
             let request = VNRecognizeTextRequest()
             request.recognitionLevel = .accurate; request.usesLanguageCorrection = true

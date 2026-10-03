@@ -61,6 +61,14 @@ struct DashboardEditorView: View {
             .navigationTitle("Dashboard Editor")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItemGroup(placement: .topBarLeading) {
+                    Button("Undo", systemImage: "arrow.uturn.backward", action: model.undoDashboardLayout)
+                        .labelStyle(.iconOnly).disabled(!model.canUndoDashboardLayout)
+                        .accessibilityIdentifier("undo-dashboard-layout")
+                    Button("Redo", systemImage: "arrow.uturn.forward", action: model.redoDashboardLayout)
+                        .labelStyle(.iconOnly).disabled(!model.canRedoDashboardLayout)
+                        .accessibilityIdentifier("redo-dashboard-layout")
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
@@ -352,106 +360,5 @@ struct DashboardEditorView: View {
         case .centerVertical: return "Center vertically"
         case .bottom: return "Bottom"
         }
-    }
-}
-
-private struct DashboardEditorCanvas: View {
-    @Bindable var model: TelemetryModel
-    let page: DashboardPage
-    @Binding var selectedWidgetID: String?
-
-    private var columns: Int { page.orientation == .portrait ? 4 : 6 }
-    private var maxRow: Int {
-        max(4, (page.widgets.map { $0.rect.y + $0.rect.height }.max() ?? 4) + 1)
-    }
-
-    var body: some View {
-        GeometryReader { proxy in
-            let cell = max(42, proxy.size.width / CGFloat(columns))
-            ZStack(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(Color(.secondarySystemGroupedBackground))
-                ForEach(page.widgets.sorted { $0.zIndex < $1.zIndex }) { widget in
-                    editorWidget(widget)
-                        .frame(width: max(42, cell * CGFloat(widget.rect.width) - 8),
-                               height: max(42, cell * CGFloat(widget.rect.height) - 8))
-                        .position(
-                            x: cell * (CGFloat(widget.rect.x) + CGFloat(widget.rect.width) / 2),
-                            y: cell * (CGFloat(widget.rect.y) + CGFloat(widget.rect.height) / 2)
-                        )
-                        .overlay(alignment: .bottomTrailing) {
-                            resizeHandle(widget: widget, cell: cell)
-                        }
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(selectedWidgetID == widget.id ? Color.cyan : .clear,
-                                        lineWidth: 3)
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture { selectedWidgetID = widget.id }
-                        .gesture(moveGesture(widget: widget, cell: cell))
-                }
-            }
-            .frame(height: cell * CGFloat(maxRow), alignment: .top)
-        }
-        .frame(height: page.orientation == .portrait ? 520 : 360)
-        .accessibilityIdentifier("dashboard-editor-canvas-\(page.id)")
-    }
-
-    private func editorWidget(_ widget: DashboardWidgetDefinition) -> some View {
-        let value = widget.signalID.flatMap { model.frame?.sig[$0] }
-        return VStack(alignment: .leading, spacing: 4) {
-            Text(widget.configuration.label)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Text(value.map { String(format: "%.*f", widget.configuration.decimals, $0) } ?? "-")
-                .font(.system(size: 25, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .minimumScaleFactor(0.6)
-            Text(widget.configuration.unit)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .padding(10)
-        .background(.background, in: RoundedRectangle(cornerRadius: 14))
-        .accessibilityIdentifier("editor-widget-\(widget.id)")
-    }
-
-    private func moveGesture(widget: DashboardWidgetDefinition, cell: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 4)
-            .onEnded { value in
-                let dx = Int((value.translation.width / cell).rounded())
-                let dy = Int((value.translation.height / cell).rounded())
-                guard dx != 0 || dy != 0 else { return }
-                model.updateDashboardWidgetRect(
-                    pageID: page.id,
-                    widgetID: widget.id,
-                    rect: DashboardRect(x: widget.rect.x + dx, y: widget.rect.y + dy,
-                                        width: widget.rect.width, height: widget.rect.height)
-                )
-                selectedWidgetID = widget.id
-            }
-    }
-
-    private func resizeHandle(widget: DashboardWidgetDefinition, cell: CGFloat) -> some View {
-        Circle()
-            .fill(Color.cyan)
-            .frame(width: 16, height: 16)
-            .padding(4)
-            .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 2).onEnded { value in
-                let dw = Int((value.translation.width / cell).rounded())
-                let dh = Int((value.translation.height / cell).rounded())
-                guard dw != 0 || dh != 0 else { return }
-                model.updateDashboardWidgetRect(
-                    pageID: page.id,
-                    widgetID: widget.id,
-                    rect: DashboardRect(x: widget.rect.x, y: widget.rect.y,
-                                        width: widget.rect.width + dw,
-                                        height: widget.rect.height + dh)
-                )
-                selectedWidgetID = widget.id
-            })
     }
 }
