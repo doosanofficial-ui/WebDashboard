@@ -76,11 +76,15 @@ final class OfflineReplayUITests: XCTestCase {
             let preferred = upperHalf ? top + min(60, (bottom - top) / 4) : (top + bottom) / 2
             let desired = min(max(preferred, top + rect.height / 2 + 4), visibleBottom - rect.height / 2 - 4)
             let delta = exists ? rect.midY - desired : (bottom - top) / 3
-            let center = (top + bottom) / 2
-            let distance = min(max(abs(delta), 12), max(24, (bottom - top) / 3))
-            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: center / app.frame.height))
-            let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.98,
-                dy: (center - (delta >= 0 ? distance : -distance)) / app.frame.height))
+            // AX5 content can span many screens. Use the available viewport rather
+            // than spending the fixed gesture budget on one-third-screen drags.
+            let viewportHeight = bottom - top
+            let distance = min(max(abs(delta), 12), max(24, viewportHeight * 0.7))
+            let startY = delta >= 0 ? bottom - 8 : top + 8
+            let endY = startY - (delta >= 0 ? distance : -distance)
+            print("History reveal exists=\(exists) attempt=\(attempt) target=\(rect) viewport=\(top)...\(bottom) drag=\(startY)...\(endY)")
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: startY / app.frame.height))
+            let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: endY / app.frame.height))
             start.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.1)
         }
         return false
@@ -178,6 +182,9 @@ final class OfflineReplayUITests: XCTestCase {
         XCTAssertTrue(revealHistoryElement(typeAudit, in: app), app.debugDescription)
         let expectedType = category == "UICTContentSizeCategoryL" ? "large" : "accessibility5"
         XCTAssertEqual(typeAudit.label, "Dynamic Type: " + expectedType)
+        let auditScreenshot = XCTAttachment(screenshot: app.screenshot())
+        auditScreenshot.name = "DEMO-Sessions-dynamic-type-audit-visible-" + expectedType
+        auditScreenshot.lifetime = .keepAlways; add(auditScreenshot)
         let typeProof = XCTAttachment(string: "requested " + category + "; observed " + typeAudit.label)
         typeProof.name = "DEMO-observed-content-size-category"; typeProof.lifetime = .keepAlways; add(typeProof)
         func captureHistory(expectedCount: Int, name: String) {
