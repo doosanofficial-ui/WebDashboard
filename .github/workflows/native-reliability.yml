@@ -59,7 +59,8 @@ jobs:
 
   native-replay-ui:
     runs-on: macos-15
-    timeout-minutes: 20
+    # Include isolated Simulator preparation/build plus the bounded 20-minute UI run.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
       - name: Install XcodeGen
