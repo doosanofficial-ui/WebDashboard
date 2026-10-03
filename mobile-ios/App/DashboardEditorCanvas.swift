@@ -79,44 +79,49 @@ struct DashboardEditorCanvas: View {
         .onDisappear { draft = nil }
     }
     private func card(_ widget: DashboardWidgetDefinition) -> some View {
-        LiveCockpitView(model: model, editorPresented: .constant(false), selectedPageID: .constant(page.id))
-            .dashboardWidget(widget, now: model.replayTimestamp.map(Date.init(timeIntervalSince1970:)) ?? .now,
-                             allowsMapTiles: false)
-            .allowsHitTesting(false)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .overlay {
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(draft?.result.overlappingWidgetIDs.contains(widget.id) == true ? .orange :
-                                (selectedWidgetID == widget.id ? .cyan : .clear), lineWidth: 3)
-                    .allowsHitTesting(false)
-            }
-            .contentShape(Rectangle())
-            .onTapGesture { selectedWidgetID = widget.id }
-            .gesture(gesture(widget, operation: .move), including: dynamicTypeSize.isAccessibilitySize ? .none : .all)
-            .overlay(alignment: .bottomTrailing) {
-                if selectedWidgetID == widget.id && !dynamicTypeSize.isAccessibilitySize {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 16, weight: .bold)).foregroundStyle(.black)
-                        .frame(width: 44, height: 44)
-                        .background(.cyan, in: Circle()).contentShape(Rectangle())
-                        .highPriorityGesture(gesture(widget, operation: .resize))
-                        .accessibilityLabel("Resize \(widget.configuration.label)")
-                        .accessibilityAddTraits(.isButton)
-                        .accessibilityIdentifier("resize-dashboard-widget-\(widget.id)")
-                }
-            }
+        interactiveCard(widget)
             .accessibilityElement(children: .contain)
             .accessibilityLabel(widget.configuration.label)
             .accessibilityValue("Position \(widget.rect.x), \(widget.rect.y); size \(widget.rect.width) by \(widget.rect.height)")
             .accessibilityIdentifier("editor-widget-\(widget.id)")
-            .accessibilityAction(named: "Move right") { step(widget, dx: 1, dy: 0) }
-            .accessibilityAction(named: "Move left") { step(widget, dx: -1, dy: 0) }
-            .accessibilityAction(named: "Move down") { step(widget, dx: 0, dy: 1) }
-            .accessibilityAction(named: "Move up") { step(widget, dx: 0, dy: -1) }
-            .accessibilityAction(named: "Wider") { step(widget, dw: 1) }
-            .accessibilityAction(named: "Narrower") { step(widget, dw: -1) }
-            .accessibilityAction(named: "Taller") { step(widget, dh: 1) }
-            .accessibilityAction(named: "Shorter") { step(widget, dh: -1) }
+            .modifier(DashboardWidgetStepActions { dx, dy, dw, dh in
+                step(widget, dx: dx, dy: dy, dw: dw, dh: dh)
+            })
+    }
+    private func interactiveCard(_ widget: DashboardWidgetDefinition) -> some View {
+        widgetPresentation(widget)
+            .overlay { selectionOutline(widget) }
+            .contentShape(Rectangle())
+            .onTapGesture { selectedWidgetID = widget.id }
+            .gesture(gesture(widget, operation: .move), including: dynamicTypeSize.isAccessibilitySize ? .none : .all)
+            .overlay(alignment: .bottomTrailing) { resizeHandle(widget) }
+    }
+    private func widgetPresentation(_ widget: DashboardWidgetDefinition) -> some View {
+        let cockpit = LiveCockpitView(model: model, editorPresented: .constant(false), selectedPageID: .constant(page.id))
+        let date = model.replayTimestamp.map(Date.init(timeIntervalSince1970:)) ?? .now
+        return cockpit.dashboardWidget(widget, now: date, allowsMapTiles: false)
+            .allowsHitTesting(false)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+    private func selectionOutline(_ widget: DashboardWidgetDefinition) -> some View {
+        let color: Color
+        if draft?.result.overlappingWidgetIDs.contains(widget.id) == true { color = .orange }
+        else if selectedWidgetID == widget.id { color = .cyan }
+        else { color = .clear }
+        return RoundedRectangle(cornerRadius: 14).stroke(color, lineWidth: 3).allowsHitTesting(false)
+    }
+    @ViewBuilder
+    private func resizeHandle(_ widget: DashboardWidgetDefinition) -> some View {
+        if selectedWidgetID == widget.id && !dynamicTypeSize.isAccessibilitySize {
+            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                .font(.system(size: 16, weight: .bold)).foregroundStyle(.black)
+                .frame(width: 44, height: 44)
+                .background(.cyan, in: Circle()).contentShape(Rectangle())
+                .highPriorityGesture(gesture(widget, operation: .resize))
+                .accessibilityLabel("Resize \(widget.configuration.label)")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityIdentifier("resize-dashboard-widget-\(widget.id)")
+        }
     }
     private func gesture(_ widget: DashboardWidgetDefinition, operation: DashboardSnapOperation) -> some Gesture {
         DragGesture(minimumDistance: operation == .move ? 4 : 2, coordinateSpace: .named("dashboard-editor-grid"))
@@ -172,5 +177,21 @@ struct DashboardSnapOverlay: View {
                 with: .color(result.overlappingWidgetIDs.isEmpty ? .cyan : .orange), lineWidth: 3)
         }
         .allowsHitTesting(false).accessibilityHidden(true)
+    }
+}
+
+private struct DashboardWidgetStepActions: ViewModifier {
+    let onStep: (Int, Int, Int, Int) -> Void
+    func body(content: Content) -> some View {
+        let moving = content
+            .accessibilityAction(named: "Move right") { onStep(1, 0, 0, 0) }
+            .accessibilityAction(named: "Move left") { onStep(-1, 0, 0, 0) }
+            .accessibilityAction(named: "Move down") { onStep(0, 1, 0, 0) }
+            .accessibilityAction(named: "Move up") { onStep(0, -1, 0, 0) }
+        return moving
+            .accessibilityAction(named: "Wider") { onStep(0, 0, 1, 0) }
+            .accessibilityAction(named: "Narrower") { onStep(0, 0, -1, 0) }
+            .accessibilityAction(named: "Taller") { onStep(0, 0, 0, 1) }
+            .accessibilityAction(named: "Shorter") { onStep(0, 0, 0, -1) }
     }
 }
