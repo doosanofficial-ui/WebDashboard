@@ -20,24 +20,33 @@ final class UIClarityUITests: XCTestCase {
     // target's direction so a small viewport cannot overshoot it indefinitely.
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
         for _ in 0..<16 {
-            guard element.exists else { app.swipeUp(); continue }
+            let exists = element.exists
             let top = app.navigationBars.firstMatch.frame.maxY + 8
             var bottom = app.tabBars.firstMatch.frame.minY - 8
             let controls = app.otherElements["replay-cockpit-controls"]
             if controls.exists && controls.frame.minY > top { bottom = min(bottom, controls.frame.minY - 8) }
             let stickyStop = app.buttons["cockpit-replay-stop"]
-            if stickyStop.exists && stickyStop.frame.minY > top {
-                bottom = min(bottom, stickyStop.frame.minY - 8)
-            }
-            let rect = element.frame
-            if rect.minY >= top && rect.maxY <= bottom { return true }
+            if stickyStop.exists && stickyStop.frame.minY > top { bottom = min(bottom, stickyStop.frame.minY - 8) }
+            let rect = exists ? element.frame : .zero
+            if exists && rect.minY >= top && rect.maxY <= bottom { return true }
             let center = (top + bottom) / 2
-            let delta = rect.midY - center
-            let distance = min(max(abs(delta), 12), max(24, (bottom - top) / 3))
-            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: center / app.frame.height))
-            let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.98,
-                dy: (center - (delta >= 0 ? distance : -distance)) / app.frame.height))
-            start.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.1)
+            let delta = exists ? rect.midY - center : (bottom - top) / 2
+            let distance = min(max(abs(delta), 24), (bottom - top) / 2)
+            let window = app.windows.firstMatch
+            // A controlled device/window screenshot and frame probe verified these
+            // window-relative endpoints move content on iOS 26 landscape.
+            let startY = top + (bottom - top) * (delta >= 0 ? 0.7 : 0.3)
+            let endY = min(bottom - 4, max(top + 4, startY - (delta >= 0 ? distance : -distance)))
+            let anchor = window.coordinate(withNormalizedOffset: .zero)
+            let secondsField = app.textFields["replay-seek-seconds"]
+            // Native text editing can consume a drag started inside Seconds.
+            // Its enclosing card has padding beyond the field's right edge.
+            let x = secondsField.exists
+                ? min(window.frame.width - 8, secondsField.frame.maxX + 6)
+                : window.frame.width / 2
+            anchor.withOffset(CGVector(dx: x, dy: startY)).press(forDuration: 0.1,
+                thenDragTo: anchor.withOffset(CGVector(dx: x, dy: endY)),
+                withVelocity: .slow, thenHoldForDuration: 0.1)
         }
         return false
     }
@@ -238,13 +247,17 @@ final class UIClarityUITests: XCTestCase {
             app.state == .runningForeground
         }, object: app)
         XCTAssertEqual(XCTWaiter.wait(for: [foreground], timeout: 5), .completed, app.debugDescription)
-        XCTAssertTrue(reveal(go, in: app), app.debugDescription)
-        XCTAssertEqual(app.state, .runningForeground, app.debugDescription)
         let window = app.windows.firstMatch
         let windowRotated = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             window.frame.width > window.frame.height
         }, object: window)
         XCTAssertEqual(XCTWaiter.wait(for: [windowRotated], timeout: 5), .completed, app.debugDescription)
+        let goRevealed = reveal(go, in: app)
+        let visibility = XCTAttachment(screenshot: window.screenshot())
+        visibility.name = "DEMO-landscape-go-visibility-result"
+        visibility.lifetime = .keepAlways; add(visibility)
+        XCTAssertTrue(goRevealed, app.debugDescription)
+        XCTAssertEqual(app.state, .runningForeground, app.debugDescription)
         let landscapeImage = window.screenshot()
         let attachment = XCTAttachment(screenshot: landscapeImage)
         attachment.name = "DEMO-audit-large-text-landscape-time-controls"

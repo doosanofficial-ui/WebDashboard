@@ -45,6 +45,14 @@ final class OfflineReplayUITests: XCTestCase {
         return false
     }
 
+    private func nativeSaveButton(_ app: XCUIApplication) -> XCUIElement {
+        // Files exposes this action by identifier on iOS 27 and by label on iOS 26.
+        let identified = app.buttons["DOCPicker.actionButton"]
+        if identified.exists { return identified }
+        return app.navigationBars["FullDocumentManagerViewControllerNavigationBar"].buttons
+            .matching(NSPredicate(format: "label IN %@", ["Save", "저장"])).firstMatch
+    }
+
     private func revealExport(_ app: XCUIApplication, format: String) -> XCUIElement {
         let button = app.buttons["sessions-export-" + format]
         for _ in 0..<8 where !button.isHittable { app.swipeUp() }
@@ -210,25 +218,25 @@ final class OfflineReplayUITests: XCTestCase {
         let app = XCUIApplication()
         openFixtureSession(app)
         revealExport(app, format: "json").tap()
-        XCTAssertTrue(app.buttons["DOCPicker.actionButton"].waitForExistence(timeout: 10))
+        XCTAssertTrue(nativeSaveButton(app).waitForExistence(timeout: 10))
         // This is the owned test Simulator's Home, never a physical device.
         XCUIDevice.shared.press(.home)
         XCTAssertTrue(app.wait(for: .runningBackground, timeout: 5))
         app.activate()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 5))
-        if app.buttons["DOCPicker.actionButton"].exists {
+        if nativeSaveButton(app).exists {
             app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.085))
                 .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)))
         }
-        let closed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["DOCPicker.actionButton"])
+        let closed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: nativeSaveButton(app))
         XCTAssertEqual(XCTWaiter.wait(for: [closed], timeout: 5), .completed, app.debugDescription)
         revealExport(app, format: "csv").tap()
-        XCTAssertTrue(app.buttons["DOCPicker.actionButton"].waitForExistence(timeout: 10))
+        XCTAssertTrue(nativeSaveButton(app).waitForExistence(timeout: 10))
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "DEMO-native-export-background-return-csv"; screenshot.lifetime = .keepAlways; add(screenshot)
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.085))
             .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)))
-        let closedAgain = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["DOCPicker.actionButton"])
+        let closedAgain = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: nativeSaveButton(app))
         XCTAssertEqual(XCTWaiter.wait(for: [closedAgain], timeout: 5), .completed, app.debugDescription)
         let replay = app.buttons["replay-saved-session"]
         for _ in 0..<8 where !replay.isHittable { app.swipeDown() }
@@ -367,7 +375,7 @@ final class OfflineReplayUITests: XCTestCase {
         openFixtureSession(app)
         for format in ["json", "csv", "json"] {
             revealExport(app, format: format).tap()
-            let save = app.buttons["DOCPicker.actionButton"]
+            let save = nativeSaveButton(app)
             XCTAssertTrue(save.waitForExistence(timeout: 10), app.debugDescription)
             let attachment = XCTAttachment(screenshot: app.screenshot())
             attachment.name = "native-" + format + "-export"; attachment.lifetime = .keepAlways; add(attachment)
@@ -375,7 +383,7 @@ final class OfflineReplayUITests: XCTestCase {
             // A Files accessibility element labelled Cancel can overlap its menu.
             app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.085))
                 .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)))
-            let closed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["DOCPicker.actionButton"])
+            let closed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: nativeSaveButton(app))
             XCTAssertEqual(XCTWaiter.wait(for: [closed], timeout: 5), .completed, app.debugDescription)
             XCTAssertTrue(app.tabBars.buttons["Sessions"].waitForExistence(timeout: 5))
         }
@@ -402,7 +410,7 @@ final class OfflineReplayUITests: XCTestCase {
         openFixtureSession(app)
         for format in ["json", "csv"] {
             revealExport(app, format: format).tap()
-            let save = app.buttons["DOCPicker.actionButton"]
+            let save = nativeSaveButton(app)
             XCTAssertTrue(save.waitForExistence(timeout: 10), app.debugDescription)
             XCTAssertTrue(save.isEnabled)
             save.tap()
