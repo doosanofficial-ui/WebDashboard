@@ -15,7 +15,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--result-directory", type=Path, required=True)
     parser.add_argument("--only-test", choices=["background-export-lifecycle", "active-slider-drag", "ui-clarity", "single-instant", "large-text", "recorded-history", "recorded-route", "native-save-reentry"],
-                        help="Run one new native lifecycle test; default executes all twenty-one UI regressions")
+                        help="Run one new native lifecycle test; default executes all twenty-three UI regressions")
     args = parser.parse_args()
     results = args.result_directory.resolve()
     results.mkdir(parents=True, exist_ok=False)
@@ -74,7 +74,7 @@ let package = Package(name: "Seed", platforms: [.macOS(.v13)],
                 "-only-testing:TelemetryUITests/TelemetryUITests/testMeasurementCSVExportControlIsVisible",
                 "-only-testing:TelemetryUITests/UIClarityUITests",
                 "-only-testing:TelemetryUITests/DashboardEditingUITests"]
-            expected_count = 2 if args.only_test == "native-save-reentry" else 5 if args.only_test == "ui-clarity" else 1 if args.only_test else 21
+            expected_count = 2 if args.only_test == "native-save-reentry" else 5 if args.only_test == "ui-clarity" else 1 if args.only_test else 23
             command = base + ["-resultBundlePath", str(bundle)] + selected_tests + ["test"]
             (results / "command.json").write_text(json.dumps(command, indent=2))
             with (results / "test.log").open("w") as log:

@@ -23,11 +23,19 @@ struct SessionsView: View {
             TimelineView(.periodic(from: .now, by: 1)) { _ in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: TelemetryTheme.Spacing.medium) {
-                        sessionHero
-                        sessionControls
-                        sessionStats
-                        savedSessionCard
-                        if model.runMode == .replay { replayTimeCard }
+                        if model.runMode == .replay {
+                            replayHeader()
+                            compactReplayControls()
+                            ReplayAnalysisView(model: model)
+                            replayTimeCard
+                            savedSessionCard
+                            DisclosureGroup("Session details") { sessionStats }
+                        } else {
+                            sessionHero
+                            sessionControls
+                            sessionStats
+                            savedSessionCard
+                        }
                         exportCard
                     }
                     .padding(.horizontal, TelemetryTheme.Spacing.medium)
@@ -70,6 +78,63 @@ struct SessionsView: View {
             .onDisappear { exportRequest.cancel() }
 
         }
+    }
+
+    // Eager header allows hosted rendering of the actual Replay warning region.
+    func replayHeader() -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            TelemetryRunStatusView(model: model)
+            if let storageStatus = model.storageStatus {
+                Label(storageStatus, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(TelemetryTheme.critical)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("replay-storage-error")
+            }
+        }
+    }
+
+    // Quick analysis controls reuse the recorded-time controller. Detailed seeking remains below.
+    private func compactReplayControls() -> some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout(spacing: 12))
+        return layout {
+            if model.replayController.isPlaying {
+                Button { model.pauseReplayPlayback() } label: {
+                    Label("Pause", systemImage: "pause.fill").frame(minHeight: 44)
+                }
+                .accessibilityIdentifier("session-replay-pause")
+            } else {
+                Button { model.playReplay() } label: {
+                    Label("Play", systemImage: "play.fill").frame(minHeight: 44)
+                }
+                .disabled(model.replayController.position >= model.replayController.duration)
+                .accessibilityIdentifier("session-replay-play")
+            }
+            Text(String(format: "%.1f / %.1f s", model.replayController.position, model.replayController.duration))
+                .font(.caption.monospacedDigit())
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityLabel("Recorded time")
+                .accessibilityValue(String(format: "%.1f of %.1f seconds", model.replayController.position, model.replayController.duration))
+                .accessibilityIdentifier("session-replay-position")
+            Menu {
+                ForEach([0.5, 1.0, 2.0], id: \.self) { rate in
+                    Button(String(format: "%g×", rate)) { model.setReplayPlaybackRate(rate) }
+                }
+            } label: {
+                Label(String(format: "%g×", model.replayController.playbackRate), systemImage: "speedometer")
+                    .frame(minHeight: 44)
+            }
+            .disabled(model.replayController.duration <= 0)
+            .accessibilityLabel("Replay speed")
+            .accessibilityValue(String(format: "%g times", model.replayController.playbackRate))
+            .accessibilityIdentifier("session-replay-speed")
+        }
+        .buttonStyle(.bordered).tint(TelemetryTheme.accent)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("session-replay-quick-controls")
     }
 
     private var savedSessionCard: some View {

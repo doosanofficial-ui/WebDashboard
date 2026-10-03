@@ -18,6 +18,47 @@ final class OfflineReplayUITests: XCTestCase {
         fixture.tap()
     }
 
+    func testSessionReplayShowsAnalysisAndSynchronizedRecordedTime() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication(); openFixtureSession(app, startedAt: 300)
+        app.buttons["replay-saved-session"].tap()
+        let analysis = app.otherElements["session-replay-analysis"]
+        XCTAssertTrue(analysis.waitForExistence(timeout: 8), "Replay analysis must be in the selected session, not behind a Live tab switch")
+        let quickPlay = app.buttons["session-replay-play"]
+        XCTAssertTrue(quickPlay.waitForExistence(timeout: 5))
+        XCTAssertTrue(quickPlay.isHittable, "Play must be visible beside the analysis without scrolling to advanced time controls")
+        XCTAssertTrue(app.buttons["session-replay-speed"].isHittable)
+        let quickTime = app.staticTexts["session-replay-position"]
+        XCTAssertTrue(quickTime.exists)
+        // Opening preserves the existing end-of-recording snapshot.
+        XCTAssertEqual(quickTime.value as? String, "5.0 of 5.0 seconds")
+        XCTAssertFalse(quickPlay.isEnabled)
+        XCTAssertGreaterThanOrEqual(quickTime.frame.minY, app.navigationBars.firstMatch.frame.maxY)
+        XCTAssertLessThanOrEqual(quickTime.frame.maxY, app.tabBars.firstMatch.frame.minY)
+        let input = app.textFields["replay-seek-seconds"]
+        XCTAssertTrue(revealHistoryElement(input, in: app)); input.tap(); input.typeText("2")
+        app.buttons["replay-seek-go"].tap()
+        let position = app.staticTexts["replay-analysis-time"]
+        let accepted = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            position.exists && position.label.hasPrefix("2.0 / ")
+        }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [accepted], timeout: 5), .completed)
+        let signal = app.buttons["replay-analysis-signal"]
+        XCTAssertTrue(revealHistoryElement(signal, in: app))
+        let chart = app.otherElements["replay-analysis-history"]
+        XCTAssertTrue(revealHistoryElement(chart, in: app))
+        XCTAssertTrue(app.staticTexts["Recorded samples: 1"].exists)
+        XCTAssertTrue(revealHistoryElement(quickPlay, in: app))
+        XCTAssertTrue(quickPlay.isEnabled)
+        XCTAssertEqual(quickTime.value as? String, "2.0 of 5.0 seconds")
+        let image = XCTAttachment(screenshot: app.screenshot()); image.name = "SYNTHETIC-concept-session-analysis"
+        image.lifetime = .keepAlways; add(image)
+        let route = app.otherElements["replay-analysis-route"]
+        XCTAssertTrue(revealHistoryElement(route, in: app))
+        XCTAssertTrue(app.staticTexts["Recorded fixes: 0"].exists, "GPS from later recorded time must not leak into the accepted cursor")
+        XCTAssertTrue(app.buttons["stop-replay-header"].isEnabled)
+    }
+
     private func revealHistoryElement(_ element: XCUIElement, in app: XCUIApplication, upperHalf: Bool = false) -> Bool {
         for attempt in 0...24 {
             let top = app.navigationBars.firstMatch.frame.maxY + 8

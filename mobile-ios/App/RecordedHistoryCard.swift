@@ -51,7 +51,7 @@ struct RecordedHistoryCard<Plot: View, Summary: View, Details: View>: View {
     private var header: some View {
         HStack(alignment: .top, spacing: 8) {
             Text(title).font(.subheadline.weight(.semibold))
-                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                .lineLimit(nil)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if !dynamicTypeSize.isAccessibilitySize {

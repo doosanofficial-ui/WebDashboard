@@ -6,6 +6,7 @@ struct DashboardEditorView: View {
     @Bindable var model: TelemetryModel
     @State private var selectedPageID: String?
     @State private var selectedWidgetID: String?
+    @State private var configurationExpanded = false
     @State private var draftLabel = ""
     @State private var draftSignalID = ""
     @State private var draftUnit = ""
@@ -77,8 +78,8 @@ struct DashboardEditorView: View {
                 if selectedPageID == nil { selectedPageID = model.dashboardProfile?.pages.first?.id }
                 loadDraftFromSelection()
             }
-            .onChange(of: selectedWidgetID) { _, _ in loadDraftFromSelection() }
-            .onChange(of: selectedPageID) { _, _ in loadDraftFromSelection() }
+            .onChange(of: selectedWidgetID) { _, _ in configurationExpanded = false; loadDraftFromSelection() }
+            .onChange(of: selectedPageID) { _, _ in configurationExpanded = false; loadDraftFromSelection() }
             .confirmationDialog("Delete page?", isPresented: $confirmPageDelete, titleVisibility: .visible) {
                 Button("Delete page", role: .destructive) { deletePendingPage() }
             } message: {
@@ -114,7 +115,7 @@ struct DashboardEditorView: View {
                 set: { selectedPageID = $0 }
             )) {
                 ForEach(profile.pages) { page in
-                    Text(page.name).tag(page.id)
+                    Text(page.name + " · " + page.orientation.rawValue.capitalized).tag(page.id)
                 }
             }
             .pickerStyle(.menu)
@@ -149,9 +150,6 @@ struct DashboardEditorView: View {
             }
             }
             .buttonStyle(.bordered)
-            Text("\(page.orientation.rawValue.capitalized) · drag widgets, use the corner handle to resize")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
         .padding(.horizontal)
     }
@@ -209,72 +207,80 @@ struct DashboardEditorView: View {
                 }
                 .buttonStyle(.bordered)
 
-                Text("Widget configuration")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.secondary)
-                HStack {
-                    TextField("Label", text: $draftLabel)
-                    Menu("Bind signal") {
-                        if model.availableSignalIDs.isEmpty {
-                            Text("No profile signals")
-                        } else {
-                            ForEach(model.availableSignalIDs, id: \.self) { signalID in
-                                Button(signalID) { draftSignalID = signalID }
+                DisclosureGroup(isExpanded: $configurationExpanded) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                TextField("Label", text: $draftLabel)
+                                Menu("Bind signal") {
+                                    if model.availableSignalIDs.isEmpty {
+                                        Text("No profile signals")
+                                    } else {
+                                        ForEach(model.availableSignalIDs, id: \.self) { signalID in
+                                            Button(signalID) { draftSignalID = signalID }
+                                        }
+                                    }
+                                }
+                                .accessibilityIdentifier("bind-dashboard-signal")
                             }
+                            HStack {
+                                TextField("Signal ID", text: $draftSignalID)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                            }
+                            HStack {
+                                TextField("Unit", text: $draftUnit)
+                                TextField("Decimals", text: $draftDecimals)
+                                    .keyboardType(.numberPad)
+                            }
+                            HStack {
+                                TextField("Min", text: $draftMinimum).keyboardType(.numbersAndPunctuation)
+                                TextField("Max", text: $draftMaximum).keyboardType(.numbersAndPunctuation)
+                                TextField("Warn", text: $draftWarning).keyboardType(.numbersAndPunctuation)
+                                TextField("Critical", text: $draftCritical).keyboardType(.numbersAndPunctuation)
+                            }
+                            Toggle("Condition enabled", isOn: $draftConditionEnabled)
+                            if draftConditionEnabled {
+                                Picker("Condition", selection: $draftConditionOperator) {
+                                    Text("Equals").tag(DashboardConditionOperator.equals)
+                                    Text("Greater than").tag(DashboardConditionOperator.greaterThan)
+                                    Text("Less than").tag(DashboardConditionOperator.lessThan)
+                                    Text("Within range").tag(DashboardConditionOperator.withinRange)
+                                    Text("Bit set").tag(DashboardConditionOperator.bitSet)
+                                }
+                                HStack {
+                                    TextField("Threshold", text: $draftConditionThreshold)
+                                        .keyboardType(.numbersAndPunctuation)
+                                    if draftConditionOperator == .withinRange {
+                                        TextField("Upper", text: $draftConditionUpper)
+                                            .keyboardType(.numbersAndPunctuation)
+                                    }
+                                    if draftConditionOperator == .bitSet {
+                                        TextField("Bit 0-63", text: $draftConditionBit)
+                                            .keyboardType(.numberPad)
+                                    }
+                                }
+                                HStack {
+                                    TextField("Hysteresis", text: $draftConditionHysteresis)
+                                        .keyboardType(.numbersAndPunctuation)
+                                    TextField("Hold seconds", text: $draftConditionHold)
+                                        .keyboardType(.numbersAndPunctuation)
+                                }
+                                Toggle("Stale is active", isOn: $draftConditionStaleActive)
+                            }
+                            Button("Apply widget configuration") {
+                                applyDraft(pageID: page.id, widgetID: widget.id)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .accessibilityIdentifier("apply-widget-configuration")
                         }
+                        .padding(.vertical, 6)
                     }
-                    .accessibilityIdentifier("bind-dashboard-signal")
+                    .frame(maxHeight: 300)
+                } label: {
+                    Text("Widget configuration").font(.subheadline.weight(.semibold))
                 }
-                HStack {
-                    TextField("Signal ID", text: $draftSignalID)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                }
-                HStack {
-                    TextField("Unit", text: $draftUnit)
-                    TextField("Decimals", text: $draftDecimals)
-                        .keyboardType(.numberPad)
-                }
-                HStack {
-                    TextField("Min", text: $draftMinimum).keyboardType(.numbersAndPunctuation)
-                    TextField("Max", text: $draftMaximum).keyboardType(.numbersAndPunctuation)
-                    TextField("Warn", text: $draftWarning).keyboardType(.numbersAndPunctuation)
-                    TextField("Critical", text: $draftCritical).keyboardType(.numbersAndPunctuation)
-                }
-                Toggle("Condition enabled", isOn: $draftConditionEnabled)
-                if draftConditionEnabled {
-                    Picker("Condition", selection: $draftConditionOperator) {
-                        Text("Equals").tag(DashboardConditionOperator.equals)
-                        Text("Greater than").tag(DashboardConditionOperator.greaterThan)
-                        Text("Less than").tag(DashboardConditionOperator.lessThan)
-                        Text("Within range").tag(DashboardConditionOperator.withinRange)
-                        Text("Bit set").tag(DashboardConditionOperator.bitSet)
-                    }
-                    HStack {
-                        TextField("Threshold", text: $draftConditionThreshold)
-                            .keyboardType(.numbersAndPunctuation)
-                        if draftConditionOperator == .withinRange {
-                            TextField("Upper", text: $draftConditionUpper)
-                                .keyboardType(.numbersAndPunctuation)
-                        }
-                        if draftConditionOperator == .bitSet {
-                            TextField("Bit 0-63", text: $draftConditionBit)
-                                .keyboardType(.numberPad)
-                        }
-                    }
-                    HStack {
-                        TextField("Hysteresis", text: $draftConditionHysteresis)
-                            .keyboardType(.numbersAndPunctuation)
-                        TextField("Hold seconds", text: $draftConditionHold)
-                            .keyboardType(.numbersAndPunctuation)
-                    }
-                    Toggle("Stale is active", isOn: $draftConditionStaleActive)
-                }
-                Button("Apply widget configuration") {
-                    applyDraft(pageID: page.id, widgetID: widget.id)
-                }
-                .buttonStyle(.borderedProminent)
-                .accessibilityIdentifier("apply-widget-configuration")
+                .accessibilityIdentifier("widget-configuration-disclosure")
             }
             .textFieldStyle(.roundedBorder)
             .padding(.horizontal)

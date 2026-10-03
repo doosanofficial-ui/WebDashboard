@@ -23,7 +23,10 @@ struct LiveCockpitView: View {
                         wheelSpeedRail(at: displayDate)
                         dynamicsCharts(at: displayDate)
                     }
-                    locationCard(at: displayDate)
+                    if model.lastLocation != nil || model.collecting || model.runMode == .replay
+                        || !["Not collecting", "Stopped"].contains(model.locationStatus) {
+                        locationCard(at: displayDate)
+                    }
 
                     if let error = model.storageStatus {
                         Label(error, systemImage: "exclamationmark.triangle.fill")
@@ -56,23 +59,34 @@ struct LiveCockpitView: View {
 
     private func connectionStrip(at now: Date) -> some View {
         let age = model.lastFrameAt.map { max(0, now.timeIntervalSince($0)) }
-        return VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
-            TelemetryRunStatusView(model: model)
-            if model.runMode != .replay {
+        let idle = model.runMode != .replay && model.frame == nil
+            && !model.localRecordingEnabled && !model.collecting
+            && model.adapterStatus == "Adapter disconnected"
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 8) {
+                TelemetryRunStatusView(model: model)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Menu {
+                    Text("\(model.runMode == .replay ? "ROW" : "SEQ"): \(model.frame?.status.seq.description ?? "-")")
+                    Text("\(model.runMode == .replay ? "RECORDED AGE" : "FRAME AGE"): \(age.map { String(format: "%.0f ms", $0 * 1000) } ?? "NO SAMPLE")")
+                    if TelemetryProductScope.allowsRemoteDelivery {
+                        Text("DROP: \(model.clientDrops + (model.frame?.status.drop ?? 0))")
+                        Text("RTT: \(model.serverRTTMilliseconds.map { String(format: "%.0f ms", $0) } ?? "-")")
+                    }
+                } label: {
+                    Image(systemName: "info.circle").frame(minWidth: 44, minHeight: 44)
+                }
+                .foregroundStyle(TelemetryTheme.mutedText)
+                .accessibilityLabel("Connection details")
+                .accessibilityIdentifier("connection-details")
+            }
+            if model.runMode != .replay && !idle {
                 Text(model.adapterStatus)
                     .font(.caption).foregroundStyle(TelemetryTheme.mutedText)
-            }
-            HStack(spacing: TelemetryTheme.Spacing.small) {
-                telemetryStat(model.runMode == .replay ? "ROW" : "SEQ", model.frame?.status.seq.description ?? "-")
-                telemetryStat(model.runMode == .replay ? "RECORDED AGE" : "FRAME AGE",
-                    age.map { String(format: "%.0f ms", $0 * 1000) } ?? "NO SAMPLE")
-                if TelemetryProductScope.allowsRemoteDelivery {
-                    telemetryStat("DROP", String(model.clientDrops + (model.frame?.status.drop ?? 0)))
-                    telemetryStat("RTT", model.serverRTTMilliseconds.map { String(format: "%.0f ms", $0) } ?? "-")
-                }
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .telemetrySurface(.raised, padding: TelemetryTheme.Spacing.small)
+        .padding(.vertical, 4)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(model.runMode == .replay ? "replay-banner" : "live-status-strip")
     }
@@ -310,12 +324,8 @@ struct LiveCockpitView: View {
             VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("SELECTED DASHBOARD")
-                            .font(.caption.weight(.bold))
-                            .tracking(1.0)
-                            .foregroundStyle(TelemetryTheme.accent)
                         Text(profile.name)
-                            .font(.title3.weight(.semibold))
+                            .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white)
                     }
                     Spacer()
@@ -849,58 +859,43 @@ private struct RecordingSessionBar: View {
         .padding(.horizontal, TelemetryTheme.Spacing.small)
         .padding(.vertical, TelemetryTheme.Spacing.xSmall)
         .background(TelemetryTheme.surfaceRaised, in: RoundedRectangle(cornerRadius: TelemetryTheme.Radius.medium, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: TelemetryTheme.Radius.medium, style: .continuous)
-                .stroke(TelemetryTheme.warning.opacity(0.24), lineWidth: 1)
-        }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("session-mark")
     }
 
     private func recordingActions() -> some View {
         HStack(spacing: TelemetryTheme.Spacing.xSmall) {
-            Button(action: model.mark) {
-                Label("MARK", systemImage: "flag.fill")
+            Button {
+                if model.localRecordingEnabled { model.stopRecording() }
+                else { model.startRecording() }
+            } label: {
+                Label(model.localRecordingEnabled ? "Stop recording" : "Start recording",
+                      systemImage: model.localRecordingEnabled ? "stop.fill" : "record.circle")
                     .font(.headline.weight(.bold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 4 : 11)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.borderedProminent)
-            .tint(TelemetryTheme.warning)
+            .tint(model.localRecordingEnabled ? TelemetryTheme.critical : TelemetryTheme.accent)
+            .accessibilityIdentifier("toggle-recording")
+            .disabled(model.runMode == .replay)
+
+            Button(action: model.mark) {
+                Label("Mark", systemImage: "flag.fill").frame(minWidth: 44, minHeight: 44)
+            }
+            .labelStyle(.iconOnly).buttonStyle(.bordered)
+            .tint(TelemetryTheme.mutedText)
             .disabled(model.storageStatus != nil || model.runMode == .replay)
             .accessibilityIdentifier("mark-event")
 
             Button {
-                if model.localRecordingEnabled {
-                    model.stopRecording()
-                } else {
-                    model.startRecording()
-                }
-            } label: {
-                Label(model.localRecordingEnabled ? "STOP" : "REC",
-                      systemImage: model.localRecordingEnabled ? "stop.fill" : "record.circle")
-                    .font(.headline.weight(.bold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 4 : 11)
-            }
-            .buttonStyle(.bordered)
-            .tint(model.localRecordingEnabled ? TelemetryTheme.critical : TelemetryTheme.valid)
-            .accessibilityIdentifier("toggle-recording")
-            .disabled(model.runMode == .replay)
-
-            Button {
-                if model.collecting {
-                    model.stopLocation()
-                } else {
-                    model.startLocation()
-                }
+                if model.collecting { model.stopLocation() }
+                else { model.startLocation() }
             } label: {
                 Label("GPS", systemImage: model.collecting ? "location.fill" : "location")
-                    .font(.headline.weight(.bold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 4 : 11)
+                    .frame(minWidth: 44, minHeight: 44)
             }
-            .buttonStyle(.bordered)
+            .labelStyle(.iconOnly).buttonStyle(.bordered)
             .tint(model.collecting ? TelemetryTheme.accent : TelemetryTheme.mutedText)
             .disabled(model.storageStatus != nil || model.runMode == .replay)
             .accessibilityLabel(model.collecting ? "Stop GPS" : "Start GPS")

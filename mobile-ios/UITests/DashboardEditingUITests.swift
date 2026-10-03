@@ -18,6 +18,21 @@ final class DashboardEditingUITests: XCTestCase {
         let image = XCTAttachment(screenshot: app.screenshot()); image.name = name; image.lifetime = .keepAlways; add(image)
         let ax = XCTAttachment(string: app.debugDescription); ax.name = name + "-AX"; ax.lifetime = .keepAlways; add(ax)
     }
+    func testSelectedCardKeepsConfigurationAvailableOnDemand() {
+        let app = XCUIApplication(); app.launch(); capture(app, "SYNTHETIC-concept-live-idle"); openEditor(app)
+        let active = widget("fixture-0", app); XCTAssertTrue(active.waitForExistence(timeout: 5)); active.tap()
+        let configuration = app.buttons["widget-configuration-disclosure"]
+        XCTAssertTrue(configuration.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["apply-widget-configuration"].isHittable)
+        configuration.tap()
+        XCTAssertTrue(app.buttons["apply-widget-configuration"].waitForExistence(timeout: 5))
+        configuration.tap()
+        XCTAssertFalse(app.buttons["apply-widget-configuration"].isHittable)
+        XCTAssertFalse(app.buttons["undo-dashboard-layout"].isEnabled)
+        let image = XCTAttachment(screenshot: app.screenshot()); image.name = "SYNTHETIC-concept-editor-compact"
+        image.lifetime = .keepAlways; add(image)
+    }
+
     func testMoveReleaseUndoRedoAndReentryPreserveNeighbor() {
         let app = XCUIApplication(); openEditor(app)
         let active = widget("fixture-0", app); let neighbor = widget("fixture-1", app)

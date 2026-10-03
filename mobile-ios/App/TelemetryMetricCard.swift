@@ -10,15 +10,10 @@ struct TelemetryMetricCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.xSmall) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(label.uppercased())
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(TelemetryTheme.mutedText)
-                Text(state.uppercased())
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(state.contains("INVALID") ? TelemetryTheme.critical : state.contains("UNKNOWN") ? TelemetryTheme.mutedText : state == "VALID" ? TelemetryTheme.valid : TelemetryTheme.warning)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            Text(label.uppercased())
+                .font(.caption.weight(.bold))
+                .foregroundStyle(TelemetryTheme.mutedText)
+                .fixedSize(horizontal: false, vertical: true)
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .lastTextBaseline, spacing: 6) {
                     measurementText
@@ -30,9 +25,19 @@ struct TelemetryMetricCard: View {
                     unitText
                 }
             }
+            Text(state.uppercased())
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(qualityColor)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .telemetrySurface(emphasized ? .raised : .standard,
                           padding: emphasized ? TelemetryTheme.Spacing.medium : TelemetryTheme.Spacing.small)
+    }
+
+    private var qualityColor: Color {
+        if state.contains("INVALID") { return TelemetryTheme.critical }
+        if state.contains("UNKNOWN") || state == "NO SAMPLE" { return TelemetryTheme.mutedText }
+        return state == "VALID" ? TelemetryTheme.valid : TelemetryTheme.warning
     }
 
     private var measurementText: some View {
