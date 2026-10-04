@@ -9,6 +9,7 @@ struct DashboardEditorCanvas: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var viewport = DashboardEditorViewport()
     @State private var draft: DashboardEditDraft?
+    @State private var editingHelpExpanded = false
     @GestureState private var moving = false
     @GestureState private var resizing = false
 
@@ -24,9 +25,20 @@ struct DashboardEditorCanvas: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(status).font(.caption).foregroundStyle(draft?.result.overlappingWidgetIDs.isEmpty == false ? .orange : .secondary)
+            if dynamicTypeSize.isAccessibilitySize && (draft == nil || draft?.isCancelled == true) {
+                DisclosureGroup("Editing help", isExpanded: $editingHelpExpanded) {
+                    Text(status)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("dashboard-edit-preview-status")
+                }
+                .font(.caption)
                 .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("dashboard-edit-preview-status")
+                .accessibilityIdentifier("dashboard-edit-help")
+            } else {
+                Text(status).font(.caption).foregroundStyle(draft?.result.overlappingWidgetIDs.isEmpty == false ? .orange : .secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("dashboard-edit-preview-status")
+            }
             if dynamicTypeSize.isAccessibilitySize {
                 VStack(spacing: 12) {
                     ForEach(page.widgets.sorted { $0.zIndex < $1.zIndex }) { widget in

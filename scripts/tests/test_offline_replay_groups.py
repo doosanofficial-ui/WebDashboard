@@ -9,17 +9,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import verify_offline_replay as runner
 
 class ReplayGroupTests(unittest.TestCase):
-    def test_partition_is_disjoint_and_covers_exact_existing_23(self):
+    def test_partition_is_disjoint_and_covers_exact_existing_25(self):
         root = Path(__file__).resolve().parents[2] / "mobile-ios/UITests"
         expected = set()
-        for suite in ("OfflineReplayUITests", "UIClarityUITests", "DashboardEditingUITests"):
+        for suite in ("OfflineReplayUITests", "UIClarityUITests", "DashboardEditingUITests", "SmallViewportUIRegression", "SmallViewportStatusUIRegression"):
             expected.update("TelemetryUITests/" + suite + "/" + name for name in re.findall(r"func (test\w+)\(", (root / (suite + ".swift")).read_text()))
         expected.update("TelemetryUITests/TelemetryUITests/" + name for name in ("testMeasurementExportControlIsVisible", "testMeasurementCSVExportControlIsVisible"))
         replay, layout = runner.TEST_GROUPS["replay"], runner.TEST_GROUPS["layout"]
-        self.assertEqual((len(replay), len(layout)), (11, 12))
+        self.assertEqual((len(replay), len(layout)), (11, 14))
         self.assertFalse(set(replay) & set(layout))
         self.assertEqual(set(replay) | set(layout), expected)
-        self.assertEqual(len(expected), 23)
+        self.assertEqual(len(expected), 25)
 
     def test_aggregate_requires_both_exact_groups_and_clean_counters(self):
         with tempfile.TemporaryDirectory() as directory:

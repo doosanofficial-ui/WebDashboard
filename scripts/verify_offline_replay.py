@@ -12,7 +12,7 @@ import uuid
 from verify_ios_lifecycle import output, stage_sources, select_runtime_and_type, verify_summary, record_toolchain, run_test_command
 
 
-# Explicit, disjoint 11 + 12 selectors: source coverage is enforced by unit tests.
+# Explicit, disjoint 11 + 14 selectors: source coverage is enforced by unit tests.
 TEST_GROUPS = {'replay': ['TelemetryUITests/OfflineReplayUITests/testSessionReplayShowsAnalysisAndSynchronizedRecordedTime',
             'TelemetryUITests/OfflineReplayUITests/testRecordedSignalHistoryContainsOnlySelectedTimePrefix',
             'TelemetryUITests/OfflineReplayUITests/testRecordedGPSRouteContainsOnlySelectedTimePrefix',
@@ -35,7 +35,33 @@ TEST_GROUPS = {'replay': ['TelemetryUITests/OfflineReplayUITests/testSessionRepl
             'TelemetryUITests/UIClarityUITests/testRecordedTimeAccessibilityAtLargeTextAndLandscape',
             'TelemetryUITests/UIClarityUITests/testSingleInstantRecordingExplainsUnavailableTimeNavigation',
             'TelemetryUITests/TelemetryUITests/testMeasurementExportControlIsVisible',
-            'TelemetryUITests/TelemetryUITests/testMeasurementCSVExportControlIsVisible']}
+            'TelemetryUITests/TelemetryUITests/testMeasurementCSVExportControlIsVisible',
+            'TelemetryUITests/SmallViewportUIRegression/testSmallViewportLiveAndEditorReachability',
+            'TelemetryUITests/SmallViewportStatusUIRegression/testStatusAndEditingHelpRemainAccessibleAtMaximumText']}
+
+
+# These are re-executions of two layout tests, not two additional unique tests.
+SE_VIEWPORT_TESTS = [
+    'TelemetryUITests/SmallViewportUIRegression/testSmallViewportLiveAndEditorReachability',
+    'TelemetryUITests/SmallViewportStatusUIRegression/testStatusAndEditingHelpRemainAccessibleAtMaximumText']
+SE_DEVICE_TYPE = 'com.apple.CoreSimulator.SimDeviceType.iPhone-SE-3rd-generation'
+
+
+def select_ui_destination(catalog, se_viewport=False):
+    if se_viewport:
+        filtered = {"runtimes": [dict(runtime, supportedDeviceTypes=[
+            device for device in runtime.get("supportedDeviceTypes", [])
+            if device.get("identifier") == SE_DEVICE_TYPE])
+            for runtime in catalog.get("runtimes", [])]}
+        try:
+            return select_runtime_and_type(filtered)
+        except ValueError as error:
+            raise ValueError("BLOCKED: iPhone SE (3rd generation) on iOS 27.x is required; no fallback") from error
+    runtime, device_type = select_runtime_and_type(catalog)
+    selected = next(entry for entry in catalog["runtimes"] if entry["identifier"] == runtime)
+    preferred = next((device["identifier"] for device in selected.get("supportedDeviceTypes", [])
+                      if device.get("identifier", "").endswith(".iPhone-17")), None)
+    return runtime, preferred or device_type
 
 
 def verify_group_results(root):
@@ -46,18 +72,20 @@ def verify_group_results(root):
             raise ValueError(f"Unexpected/missing group selectors: {group}")
         verify_summary(json.loads((root / group / "summary.json").read_text()), len(tests))
         executed.extend(tests)
-    if len(executed) != 23 or len(set(executed)) != 23:
-        raise ValueError("Expected exactly 23 disjoint UI tests")
-    print("OFFLINE REPLAY FULL GATE PASS: 23 tests across both groups, zero failures/skips")
+    if len(executed) != 25 or len(set(executed)) != 25:
+        raise ValueError("Expected exactly 25 disjoint UI tests")
+    print("OFFLINE REPLAY FULL GATE PASS: 25 tests across both groups, zero failures/skips")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--result-directory", type=Path, required=True)
     selection = parser.add_mutually_exclusive_group()
-    selection.add_argument("--group", choices=TEST_GROUPS, help="Disjoint portion of the full 23-test CI gate")
+    selection.add_argument("--se-viewport", action="store_true",
+                           help="Re-execute the two viewport tests on iPhone SE (3rd generation), iOS 27.x only")
+    selection.add_argument("--group", choices=TEST_GROUPS, help="Disjoint portion of the full 25-test CI gate")
     selection.add_argument("--only-test", choices=["background-export-lifecycle", "active-slider-drag", "ui-clarity", "single-instant", "large-text", "recorded-history", "recorded-route", "native-save-reentry"],
-                        help="Run one new native lifecycle test; default executes all twenty-three UI regressions")
+                        help="Run one new native lifecycle test; default executes all twenty-five UI regressions")
     args = parser.parse_args()
     results = args.result_directory.resolve()
     results.mkdir(parents=True, exist_ok=False)
@@ -70,11 +98,8 @@ def main():
         try:
             toolchain = record_toolchain(results)
             catalog = json.loads(output(["xcrun", "simctl", "list", "runtimes", "--json"]))
-            runtime, device_type = select_runtime_and_type(catalog)
+            runtime, device_type = select_ui_destination(catalog, args.se_viewport)
             selected = next(r for r in catalog["runtimes"] if r["identifier"] == runtime)
-            preferred = next((t["identifier"] for t in selected.get("supportedDeviceTypes", [])
-                              if t.get("identifier", "").endswith(".iPhone-17")), None)
-            device_type = preferred or device_type
             simulator = str(uuid.UUID(output(["xcrun", "simctl", "create", "OfflineReplay-" + uuid.uuid4().hex,
                                               device_type, runtime]).strip())).upper()
             (results / "environment.json").write_text(json.dumps({**toolchain, "runtime": runtime, "runtime_version": selected["version"],
@@ -118,12 +143,20 @@ let package = Package(name: "Seed", platforms: [.macOS(.v13)],
                 "-only-testing:TelemetryUITests/TelemetryUITests/testMeasurementExportControlIsVisible",
                 "-only-testing:TelemetryUITests/TelemetryUITests/testMeasurementCSVExportControlIsVisible",
                 "-only-testing:TelemetryUITests/UIClarityUITests",
-                "-only-testing:TelemetryUITests/DashboardEditingUITests"]
-            expected_count = 2 if args.only_test == "native-save-reentry" else 5 if args.only_test == "ui-clarity" else 1 if args.only_test else 23
+                "-only-testing:TelemetryUITests/DashboardEditingUITests",
+                "-only-testing:TelemetryUITests/SmallViewportUIRegression",
+                "-only-testing:TelemetryUITests/SmallViewportStatusUIRegression"]
+            expected_count = 2 if args.only_test == "native-save-reentry" else 5 if args.only_test == "ui-clarity" else 1 if args.only_test else 25
             if args.group:
                 selected_tests = ["-only-testing:" + test for test in TEST_GROUPS[args.group]]
                 expected_count = len(TEST_GROUPS[args.group])
                 (results / "selection.json").write_text(json.dumps({"group": args.group, "tests": TEST_GROUPS[args.group]}, indent=2))
+            if args.se_viewport:
+                selected_tests = ["-only-testing:" + test for test in SE_VIEWPORT_TESTS]
+                expected_count = len(SE_VIEWPORT_TESTS)
+                (results / "selection.json").write_text(json.dumps({
+                    "reexecution": "se-viewport", "repeatOf": "layout",
+                    "requiredDeviceType": SE_DEVICE_TYPE, "tests": SE_VIEWPORT_TESTS}, indent=2))
             command = base + ["-resultBundlePath", str(bundle)] + selected_tests + ["test"]
             (results / "command.json").write_text(json.dumps(command, indent=2))
             run_test_command(command, results / "test.log", timeout=1200)
@@ -138,7 +171,8 @@ let package = Package(name: "Seed", platforms: [.macOS(.v13)],
             output(["xcrun", "xcresulttool", "export", "attachments", "--path", str(bundle),
                     "--output-path", str(results / "screenshots")], timeout=120)
             verify_summary(summary, expected_count)
-            print(f"OFFLINE REPLAY UI PASS: {expected_count} executed tests, zero failures/skips; Simulator fixture, not hardware evidence")
+            gate = "SE VIEWPORT RE-EXECUTION" if args.se_viewport else "OFFLINE REPLAY UI"
+            print(f"{gate} PASS: {expected_count} executed tests, zero failures/skips; Simulator fixture, not hardware evidence")
         finally:
             if simulator:
                 subprocess.run(["xcrun", "simctl", "shutdown", simulator], capture_output=True, timeout=60)

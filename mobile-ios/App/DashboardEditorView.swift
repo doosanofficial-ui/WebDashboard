@@ -3,6 +3,7 @@ import TelemetryCore
 
 struct DashboardEditorView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var model: TelemetryModel
     @State private var selectedPageID: String?
     @State private var selectedWidgetID: String?
@@ -48,12 +49,24 @@ struct DashboardEditorView: View {
                     .accessibilityIdentifier("dashboard-save-error")
                 }
                 if let profile = model.dashboardProfile, let page = selectedPage {
-                    pageControls(profile: profile, page: page)
-                    ScrollView {
-                        DashboardEditorCanvas(model: model, page: page,
-                                               selectedWidgetID: $selectedWidgetID)
-                            .padding(.horizontal)
+                    if !dynamicTypeSize.isAccessibilitySize {
+                        pageControls(profile: profile, page: page)
                     }
+                    ScrollView {
+                        if dynamicTypeSize.isAccessibilitySize {
+                            VStack(spacing: 12) {
+                                pageControls(profile: profile, page: page)
+                                DashboardEditorCanvas(model: model, page: page,
+                                                       selectedWidgetID: $selectedWidgetID)
+                                    .padding(.horizontal)
+                            }
+                        } else {
+                            DashboardEditorCanvas(model: model, page: page,
+                                                   selectedWidgetID: $selectedWidgetID)
+                                .padding(.horizontal)
+                        }
+                    }
+                    .accessibilityIdentifier("dashboard-editor-scroll")
                     selectionControls(page: page)
                 } else {
                     ContentUnavailableView("No dashboard profile", systemImage: "rectangle.3.group")

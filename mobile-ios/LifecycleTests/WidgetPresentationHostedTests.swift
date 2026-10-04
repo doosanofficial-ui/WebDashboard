@@ -376,13 +376,32 @@ final class WidgetPresentationHostedTests: XCTestCase {
                 let content = cockpit.recordingSessionBar()
                     .environment(\.dynamicTypeSize, size)
                     .frame(width: 343).fixedSize(horizontal: false, vertical: true)
-                let renderer = ImageRenderer(content: content); renderer.scale = 2
-                let image = try XCTUnwrap(renderer.uiImage)
+                // Menu is UIKit-backed: ImageRenderer produces an unsupported-view
+                // placeholder instead of the real role label at accessibility sizes.
+                // Host the production footer, retaining the same role and height checks.
+                let host = UIHostingController(rootView: content)
+                // This window measures an isolated component, not a full screen.
+                host.safeAreaRegions = []
+                let measured = host.sizeThatFits(in: CGSize(width: 343, height: 2000))
+                let window = UIWindow(frame: CGRect(origin: .zero, size: measured))
+                window.rootViewController = host; window.isHidden = false
+                defer { window.isHidden = true }
+                host.view.frame = window.bounds; host.view.layoutIfNeeded()
+                let format = UIGraphicsImageRendererFormat(); format.scale = 2
+                let image = UIGraphicsImageRenderer(bounds: host.view.bounds, format: format).image { _ in
+                    XCTAssertTrue(host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true))
+                }
+                let geometry = XCTAttachment(string: "measured=\(measured); viewFrame=\(host.view.frame); bounds=\(host.view.bounds); imageSize=\(image.size)")
+                geometry.name = "footer-geometry-\(demo ? "DEMO" : "LIVE")-\(size)"
+                geometry.lifetime = .keepAlways; add(geometry)
                 XCTAssertLessThanOrEqual(image.size.height, 300, "Footer must leave content space on a small viewport")
                 let request = VNRecognizeTextRequest()
                 request.recognitionLevel = .accurate; request.usesLanguageCorrection = false
                 try VNImageRequestHandler(cgImage: try XCTUnwrap(image.cgImage), options: [:]).perform([request])
                 let labels = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ").uppercased()
+                let recognized = XCTAttachment(string: labels)
+                recognized.name = "footer-OCR-\(demo ? "DEMO" : "LIVE")-\(size)"
+                recognized.lifetime = .keepAlways; add(recognized)
                 XCTAssertTrue(labels.contains(demo ? "DEMO" : "LIVE"), "Persistent footer role must remain readable at \(size): \(labels)")
                 let attachment = XCTAttachment(image: image)
                 attachment.name = "SIMULATOR-footer-\(demo ? "DEMO" : "LIVE")-\(size)"

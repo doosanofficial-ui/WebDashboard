@@ -814,20 +814,20 @@ private struct RecordingSessionBar: View {
     var body: some View {
         VStack(spacing: TelemetryTheme.Spacing.xSmall) {
             if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(model.runMode == .demo ? "DEMO" : "LIVE")
+                Menu {
+                    Text(model.runMode == .demo ? "DEMO · synthetic data" : "LIVE · vehicle data")
+                    Text(model.localRecordingEnabled ? "Recording on" : "Recording off")
+                    Text(model.collecting ? "GPS collecting" : "GPS off")
+                    Text(model.lastMarkAt.map { "Last mark " + $0.formatted(date: .omitted, time: .shortened) } ?? "No mark")
+                } label: {
+                    Label(model.runMode == .demo ? "DEMO" : "LIVE", systemImage: "info.circle")
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(TelemetryTheme.accent)
-                        .accessibilityIdentifier("cockpit-recording-mode")
-                    Text((model.localRecordingEnabled ? "RECORDING" : "REC OFF") + " · " + (model.collecting ? "GPS ON" : "GPS OFF"))
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(TelemetryTheme.mutedText)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(model.lastMarkAt.map { "Last mark " + $0.formatted(date: .omitted, time: .shortened) } ?? "No mark")
-                        .font(.caption2).foregroundStyle(TelemetryTheme.mutedText)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityLabel("Recording and GPS status")
+                .accessibilityValue((model.localRecordingEnabled ? "Recording on" : "Recording off") + " · " + (model.collecting ? "GPS collecting" : "GPS off"))
+                .accessibilityIdentifier("session-status-details")
             } else {
                 HStack(spacing: TelemetryTheme.Spacing.small) {
                     Text(model.runMode == .demo ? "DEMO" : "LIVE")
@@ -878,6 +878,7 @@ private struct RecordingSessionBar: View {
             .buttonStyle(.borderedProminent)
             .tint(model.localRecordingEnabled ? TelemetryTheme.critical : TelemetryTheme.accent)
             .accessibilityIdentifier("toggle-recording")
+            .accessibilityValue(model.localRecordingEnabled ? "Recording on" : "Recording off")
             .disabled(model.runMode == .replay)
 
             Button(action: model.mark) {
@@ -899,6 +900,7 @@ private struct RecordingSessionBar: View {
             .tint(model.collecting ? TelemetryTheme.accent : TelemetryTheme.mutedText)
             .disabled(model.storageStatus != nil || model.runMode == .replay)
             .accessibilityLabel(model.collecting ? "Stop GPS" : "Start GPS")
+            .accessibilityValue(model.collecting ? "GPS collecting" : "GPS off")
             .accessibilityIdentifier("toggle-gps")
         }
     }

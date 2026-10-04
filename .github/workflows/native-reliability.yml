@@ -82,7 +82,7 @@ jobs:
           if ! brew list xcodegen >/dev/null 2>&1; then
             brew install xcodegen
           fi
-      - name: Verify exact 23-test partition
+      - name: Verify exact 25-test partition
         run: python3 -m unittest discover -s scripts/tests -p test_offline_replay_groups.py -v
       - name: Verify offline Replay on isolated Simulator
         run: python3 scripts/verify_offline_replay.py --group "${{ matrix.group }}" --result-directory "$RUNNER_TEMP/offline-replay"
@@ -92,6 +92,34 @@ jobs:
         with:
           name: offline-replay-${{ matrix.group }}-${{ github.sha }}
           path: ${{ runner.temp }}/offline-replay
+          if-no-files-found: error
+          retention-days: 14
+
+  # Separate repeats of two layout tests; the unique full-suite aggregate remains 25.
+  native-se-viewport:
+    runs-on: xcode-27
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - name: Require Xcode, iOS SDK and runtime 27.x
+        run: python3 scripts/verify_ios_lifecycle.py --check-toolchain
+      - name: Check exact SE selection and separate re-execution count
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
+      - name: Install XcodeGen
+        run: |
+          if ! brew list xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+      - name: Re-execute two viewport tests on iPhone SE (3rd generation), iOS 27.x
+        run: python3 scripts/verify_offline_replay.py --se-viewport --result-directory "$RUNNER_TEMP/se-viewport"
+      - name: Preserve SE re-execution evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: se-viewport-repeat-2-${{ github.sha }}
+          path: ${{ runner.temp }}/se-viewport
           if-no-files-found: error
           retention-days: 14
 
@@ -118,7 +146,7 @@ jobs:
         with:
           name: offline-replay-layout-${{ github.sha }}
           path: ui-results/layout
-      - name: Require all 23 UI tests across both disjoint groups
+      - name: Require all 25 UI tests across both disjoint groups
         run: python3 scripts/verify_offline_replay.py --verify-groups ui-results
 
   native-app:
