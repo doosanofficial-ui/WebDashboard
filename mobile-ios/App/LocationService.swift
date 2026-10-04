@@ -38,7 +38,7 @@ final class LocationService: NSObject, @preconcurrency CLLocationManagerDelegate
             manager.startUpdatingLocation()
             collecting = true
             onCollectingChanged?(true)
-            publish("Collecting in foreground; Always permission enables lock-screen capture")
+            publish("Collecting in foreground; Always permission supports app switching")
             if !requestedAlways {
                 requestedAlways = true
                 manager.requestAlwaysAuthorization()

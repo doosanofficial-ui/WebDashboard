@@ -16,7 +16,7 @@ import uuid
 from verify_ios_lifecycle import output, stage_sources, select_runtime_and_type, verify_summary, record_toolchain, run_test_command
 
 
-# Explicit, disjoint 11 + 14 selectors: source coverage is enforced by unit tests.
+# Explicit, disjoint 11 + 14 + 4 selectors: source coverage is enforced by unit tests.
 TEST_GROUPS = {'replay': ['TelemetryUITests/OfflineReplayUITests/testSessionReplayShowsAnalysisAndSynchronizedRecordedTime',
             'TelemetryUITests/OfflineReplayUITests/testRecordedSignalHistoryContainsOnlySelectedTimePrefix',
             'TelemetryUITests/OfflineReplayUITests/testRecordedGPSRouteContainsOnlySelectedTimePrefix',
@@ -42,6 +42,14 @@ TEST_GROUPS = {'replay': ['TelemetryUITests/OfflineReplayUITests/testSessionRepl
             'TelemetryUITests/TelemetryUITests/testMeasurementCSVExportControlIsVisible',
             'TelemetryUITests/SmallViewportUIRegression/testSmallViewportLiveAndEditorReachability',
             'TelemetryUITests/SmallViewportStatusUIRegression/testStatusAndEditingHelpRemainAccessibleAtMaximumText']}
+
+
+TEST_GROUPS["help"] = [
+    "TelemetryUITests/LocalizationHelpUITests/testCaptureEnglishGuideScreens",
+    "TelemetryUITests/LocalizationHelpUITests/testCaptureKoreanGuideScreens",
+    "TelemetryUITests/LocalizationHelpUITests/testLanguageSwitchPersistsAndHelpPreservesReplay",
+    "TelemetryUITests/LocalizationHelpUITests/testKoreanHelpAtMaximumTextAndLandscape",
+    "TelemetryUITests/LocalizationHelpUITests/testEveryGuideAtMaximumTextShowsWholeNumberedImageAndClosesZoomInBothLanguages"]
 
 
 # These are re-executions of two layout tests, not two additional unique tests.
@@ -76,9 +84,9 @@ def verify_group_results(root):
             raise ValueError(f"Unexpected/missing group selectors: {group}")
         verify_summary(json.loads((root / group / "summary.json").read_text()), len(tests))
         executed.extend(tests)
-    if len(executed) != 25 or len(set(executed)) != 25:
-        raise ValueError("Expected exactly 25 disjoint UI tests")
-    print("OFFLINE REPLAY FULL GATE PASS: 25 tests across both groups, zero failures/skips")
+    if len(executed) != 30 or len(set(executed)) != 30:
+        raise ValueError("Expected exactly 30 disjoint UI tests")
+    print("OFFLINE REPLAY FULL GATE PASS: 30 tests across three groups, zero failures/skips")
 
 
 def run_seed_phase(command, log, receipt, timeout):
@@ -142,8 +150,8 @@ def main():
     selection = parser.add_mutually_exclusive_group()
     selection.add_argument("--se-viewport", action="store_true",
                            help="Re-execute the two viewport tests on iPhone SE (3rd generation), iOS 27.x only")
-    selection.add_argument("--group", choices=TEST_GROUPS, help="Disjoint portion of the full 25-test CI gate")
-    selection.add_argument("--only-test", choices=["background-export-lifecycle", "active-slider-drag", "ui-clarity", "single-instant", "large-text", "recorded-history", "recorded-route", "native-save-reentry"],
+    selection.add_argument("--group", choices=TEST_GROUPS, help="Disjoint portion of the full 30-test CI gate")
+    selection.add_argument("--only-test", choices=["background-export-lifecycle", "active-slider-drag", "ui-clarity", "single-instant", "large-text", "recorded-history", "recorded-route", "native-save-reentry", "help-capture"],
                         help="Run one new native lifecycle test; default executes all twenty-five UI regressions")
     args = parser.parse_args()
     results = args.result_directory.resolve()
@@ -202,15 +210,19 @@ let package = Package(name: "Seed", platforms: [.macOS(.v13)],
                                "active-slider-drag": "testPlayingLongSliderDragPreservesCapturedUserTarget",
                                "recorded-history": "testRecordedSignalHistoryContainsOnlySelectedTimePrefix",
                                "recorded-route": "testRecordedGPSRouteContainsOnlySelectedTimePrefix"}
-            selected_tests = ["-only-testing:TelemetryUITests/OfflineReplayUITests/testNativeExportBackgroundReturnCancelAndReentry", "-only-testing:TelemetryUITests/OfflineReplayUITests/testNativeJSONCSVSaveConfirmsCompletion"] if args.only_test == "native-save-reentry" else ["-only-testing:TelemetryUITests/UIClarityUITests/testRecordedTimeAccessibilityAtLargeTextAndLandscape"] if args.only_test == "large-text" else ["-only-testing:TelemetryUITests/UIClarityUITests/testSingleInstantRecordingExplainsUnavailableTimeNavigation"] if args.only_test == "single-instant" else ["-only-testing:TelemetryUITests/UIClarityUITests"] if args.only_test == "ui-clarity" else ["-only-testing:TelemetryUITests/OfflineReplayUITests/" + focused_methods[args.only_test]] if args.only_test else [
+            selected_tests = ["-only-testing:" + test for test in TEST_GROUPS["help"][:2]] if args.only_test == "help-capture" else ["-only-testing:TelemetryUITests/OfflineReplayUITests/testNativeExportBackgroundReturnCancelAndReentry", "-only-testing:TelemetryUITests/OfflineReplayUITests/testNativeJSONCSVSaveConfirmsCompletion"] if args.only_test == "native-save-reentry" else ["-only-testing:TelemetryUITests/UIClarityUITests/testRecordedTimeAccessibilityAtLargeTextAndLandscape"] if args.only_test == "large-text" else ["-only-testing:TelemetryUITests/UIClarityUITests/testSingleInstantRecordingExplainsUnavailableTimeNavigation"] if args.only_test == "single-instant" else ["-only-testing:TelemetryUITests/UIClarityUITests"] if args.only_test == "ui-clarity" else ["-only-testing:TelemetryUITests/OfflineReplayUITests/" + focused_methods[args.only_test]] if args.only_test else [
                 "-only-testing:TelemetryUITests/OfflineReplayUITests",
                 "-only-testing:TelemetryUITests/TelemetryUITests/testMeasurementExportControlIsVisible",
                 "-only-testing:TelemetryUITests/TelemetryUITests/testMeasurementCSVExportControlIsVisible",
                 "-only-testing:TelemetryUITests/UIClarityUITests",
                 "-only-testing:TelemetryUITests/DashboardEditingUITests",
                 "-only-testing:TelemetryUITests/SmallViewportUIRegression",
-                "-only-testing:TelemetryUITests/SmallViewportStatusUIRegression"]
-            expected_count = 2 if args.only_test == "native-save-reentry" else 5 if args.only_test == "ui-clarity" else 1 if args.only_test else 25
+                "-only-testing:TelemetryUITests/SmallViewportStatusUIRegression",
+                "-only-testing:TelemetryUITests/LocalizationHelpUITests"]
+            expected_count = 2 if args.only_test == "native-save-reentry" else 5 if args.only_test == "ui-clarity" else 1 if args.only_test else 30
+            if args.only_test == "help-capture":
+                selected_tests = ["-only-testing:" + test for test in TEST_GROUPS["help"][:2]]
+                expected_count = 2
             if args.group:
                 selected_tests = ["-only-testing:" + test for test in TEST_GROUPS[args.group]]
                 expected_count = len(TEST_GROUPS[args.group])

@@ -21,7 +21,7 @@ struct SignalCatalogEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Signals") {
+                Section(AppLocalization.text("Signals")) {
                     ForEach(signals, id: \.id) { signal in
                         Button {
                             selectedID = signal.id
@@ -32,7 +32,7 @@ struct SignalCatalogEditorView: View {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(signal.name)
                                         .foregroundStyle(.primary)
-                                    Text("\(signal.id) · 0x\(String(signal.canID, radix: 16, uppercase: true)) · \(signal.unit)")
+                                    Text(AppLocalization.text("\(signal.id) · 0x\(String(signal.canID, radix: 16, uppercase: true)) · \(signal.unit)"))
                                         .font(.caption.monospaced())
                                         .foregroundStyle(.secondary)
                                 }
@@ -49,64 +49,64 @@ struct SignalCatalogEditorView: View {
                         pendingDeleteOffsets = offsets
                         confirmDelete = true
                     }
-                    Button("Add signal", systemImage: "plus") {
+                    Button(AppLocalization.text("Add signal"), systemImage: "plus") {
                         addSignal()
                     }
                     .accessibilityIdentifier("add-signal-definition")
                 }
 
                 if selectedID != nil {
-                    Section("Definition") {
-                        TextField("Signal ID", text: $draft.id)
+                    Section(AppLocalization.text("Definition")) {
+                        TextField(AppLocalization.text("Signal ID"), text: $draft.id)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
-                        TextField("Name", text: $draft.name)
-                        TextField("CAN ID (0x123)", text: $draft.canID)
+                        TextField(AppLocalization.text("Name"), text: $draft.name)
+                        TextField(AppLocalization.text("CAN ID (0x123)"), text: $draft.canID)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
-                        Toggle("Extended 29-bit ID", isOn: $draft.isExtended)
+                        Toggle(AppLocalization.text("Extended 29-bit ID"), isOn: $draft.isExtended)
                         LabeledContent("Start bit") {
-                            TextField("0", text: $draft.startBit)
+                            TextField(AppLocalization.text("0"), text: $draft.startBit)
                                 .keyboardType(.numberPad)
                                 .multilineTextAlignment(.trailing)
                         }
                         LabeledContent("Bit length") {
-                            TextField("8", text: $draft.bitLength)
+                            TextField(AppLocalization.text("8"), text: $draft.bitLength)
                                 .keyboardType(.numberPad)
                                 .multilineTextAlignment(.trailing)
                         }
-                        Picker("Byte order", selection: $draft.byteOrder) {
-                            Text("Intel / little-endian").tag(ByteOrder.intel)
-                            Text("Motorola / big-endian").tag(ByteOrder.motorola)
+                        Picker(AppLocalization.text("Byte order"), selection: $draft.byteOrder) {
+                            Text(AppLocalization.text("Intel / little-endian")).tag(ByteOrder.intel)
+                            Text(AppLocalization.text("Motorola / big-endian")).tag(ByteOrder.motorola)
                         }
-                        Toggle("Signed", isOn: $draft.isSigned)
+                        Toggle(AppLocalization.text("Signed"), isOn: $draft.isSigned)
                         LabeledContent("Factor") {
-                            TextField("1", text: $draft.factor)
+                            TextField(AppLocalization.text("1"), text: $draft.factor)
                                 .keyboardType(.numbersAndPunctuation)
                                 .multilineTextAlignment(.trailing)
                         }
                         LabeledContent("Offset") {
-                            TextField("0", text: $draft.offset)
+                            TextField(AppLocalization.text("0"), text: $draft.offset)
                                 .keyboardType(.numbersAndPunctuation)
                                 .multilineTextAlignment(.trailing)
                         }
                         LabeledContent("Minimum") {
-                            TextField("Optional", text: $draft.minimum)
+                            TextField(AppLocalization.text("Optional"), text: $draft.minimum)
                                 .keyboardType(.numbersAndPunctuation)
                                 .multilineTextAlignment(.trailing)
                         }
                         LabeledContent("Maximum") {
-                            TextField("Optional", text: $draft.maximum)
+                            TextField(AppLocalization.text("Optional"), text: $draft.maximum)
                                 .keyboardType(.numbersAndPunctuation)
                                 .multilineTextAlignment(.trailing)
                         }
-                        TextField("Unit", text: $draft.unit)
+                        TextField(AppLocalization.text("Unit"), text: $draft.unit)
                         LabeledContent("Timeout seconds") {
-                            TextField("0.5", text: $draft.timeout)
+                            TextField(AppLocalization.text("0.5"), text: $draft.timeout)
                                 .keyboardType(.numbersAndPunctuation)
                                 .multilineTextAlignment(.trailing)
                         }
-                        Button("Apply definition") { applyDraft() }
+                        Button(AppLocalization.text("Apply definition")) { applyDraft() }
                             .buttonStyle(.borderedProminent)
                             .accessibilityIdentifier("apply-signal-definition")
                     }
@@ -114,30 +114,30 @@ struct SignalCatalogEditorView: View {
 
                 if let errorText {
                     Section {
-                        Label(errorText, systemImage: "exclamationmark.triangle.fill")
+                        Label(AppLocalization.text(errorText), systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(.red)
                     }
                 }
             }
-            .navigationTitle("Signal Catalog")
+            .navigationTitle(AppLocalization.text("Signal Catalog"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(AppLocalization.text("Cancel")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    Button(AppLocalization.text("Save")) {
                         if model.replaceAdapterProfileSignals(signals) { dismiss() }
                     }
                     .disabled(signals.isEmpty)
                 }
             }
-            .confirmationDialog("Delete signal?", isPresented: $confirmDelete, titleVisibility: .visible) {
-                Button("Delete signal", role: .destructive) {
+            .confirmationDialog(AppLocalization.text("Delete signal?"), isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button(AppLocalization.text("Delete signal"), role: .destructive) {
                     deletePendingSignals()
                 }
             } message: {
-                Text("The definition will be removed from this profile when you save.")
+                Text(AppLocalization.text("The definition will be removed from this profile when you save."))
             }
             .onAppear {
                 if selectedID == nil, let first = signals.first {

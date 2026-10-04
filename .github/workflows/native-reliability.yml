@@ -31,6 +31,8 @@ jobs:
       - run: npm ci --prefix mobile --ignore-scripts --no-audit --no-fund
       - run: npm test --prefix mobile -- --runInBand --silent
       - run: python scripts/validate_platform_docs.py
+      - name: Verify actual app help images and source provenance
+        run: python scripts/verify_help_assets.py
       - name: Validate Windows bootstrap syntax
         if: matrix.os == 'windows-latest'
         shell: pwsh
@@ -66,7 +68,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [replay, layout]
+        group: [replay, layout, help]
     # Official Xcode 27 preview image; no runtime downloads or older fallback.
     runs-on: xcode-27
     env:
@@ -82,7 +84,7 @@ jobs:
           if ! brew list xcodegen >/dev/null 2>&1; then
             brew install xcodegen
           fi
-      - name: Verify exact 25-test partition
+      - name: Verify exact 30-test partition
         run: python3 -m unittest discover -s scripts/tests -p test_offline_replay_groups.py -v
       - name: Verify offline Replay on isolated Simulator
         run: python3 scripts/verify_offline_replay.py --group "${{ matrix.group }}" --result-directory "$RUNNER_TEMP/offline-replay"
@@ -95,7 +97,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # Separate repeats of two layout tests; the unique full-suite aggregate remains 25.
+  # Separate repeats of two layout tests; the unique full-suite aggregate is 30.
   native-se-viewport:
     runs-on: xcode-27
     env:
@@ -129,7 +131,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Require both UI group jobs to succeed
+      - name: Require all three UI group jobs to succeed
         env:
           UI_GROUP_RESULT: ${{ needs.native-replay-ui.result }}
         run: |
@@ -146,7 +148,11 @@ jobs:
         with:
           name: offline-replay-layout-${{ github.sha }}
           path: ui-results/layout
-      - name: Require all 25 UI tests across both disjoint groups
+      - uses: actions/download-artifact@v7
+        with:
+          name: offline-replay-help-${{ github.sha }}
+          path: ui-results/help
+      - name: Require all 30 UI tests across three disjoint groups
         run: python3 scripts/verify_offline_replay.py --verify-groups ui-results
 
   native-app:

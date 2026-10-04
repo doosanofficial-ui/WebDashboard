@@ -76,7 +76,7 @@ final class SmallViewportUIRegression: XCTestCase {
             "-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR", "--audit-ui-layout"]
         XCUIDevice.shared.orientation = .portrait
         defer { XCUIDevice.shared.orientation = .portrait }
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         capture(app, "live-initial")
         let first = app.staticTexts.matching(identifier: "profile-widget-fixture-0").firstMatch
         let liveVisible = reveal(first, app: app, editor: false)

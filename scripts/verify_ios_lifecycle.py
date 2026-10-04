@@ -16,7 +16,7 @@ import uuid
 import shutil
 import tempfile
 
-EXPECTED_TEST_COUNT = 84
+EXPECTED_TEST_COUNT = 89
 
 
 def stage_sources(root, destination):
@@ -125,6 +125,7 @@ def main():
         bundle = results / "Lifecycle.xcresult"
         command = ["xcodebuild", "-project", str(staged / "Telemetry.xcodeproj"),
                    "-scheme", "TelemetryLifecycle", "-configuration", "Debug",
+                   "-testLanguage", "en", "-testRegion", "US",
                    "-destination", "platform=iOS Simulator,id=" + simulator,
                    "-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never", "-resultBundlePath", str(bundle),
                    "-derivedDataPath", str(Path(workspace.name) / "derived"),

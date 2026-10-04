@@ -6,10 +6,10 @@ struct TelemetryRunStatusView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(TelemetryDisplayState.modeTitle(model.runMode, recordingMode: model.replayController.recordingMode))
+            Text(AppLocalization.text(TelemetryDisplayState.modeTitle(model.runMode, recordingMode: model.replayController.recordingMode)))
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(model.runMode == .demo ? TelemetryTheme.warning : TelemetryTheme.accent)
-            Text(stateSummary)
+            Text(AppLocalization.text(stateSummary))
                 .font(.caption)
                 .foregroundStyle(TelemetryTheme.mutedText)
                 .fixedSize(horizontal: false, vertical: true)

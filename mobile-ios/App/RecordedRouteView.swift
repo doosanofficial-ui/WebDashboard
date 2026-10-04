@@ -16,27 +16,27 @@ struct RecordedRouteView: View {
         } summary: {
             VStack(alignment: .leading, spacing: 2) {
                 summaryLayout {
-                    Text("Recorded fixes: \(points.count)").font(.caption)
+                    Text(AppLocalization.text("Recorded fixes: \(points.count)")).font(.caption)
                     if raw.contains(where: { $0.location.horizontalAccuracy == nil }) {
-                        Text("Some recorded accuracy is unknown").font(.caption2)
+                        Text(AppLocalization.text("Some recorded accuracy is unknown")).font(.caption2)
                     }
                 }
-                Text(latest?.isPlottable == false ? "Latest recorded fix not plottable" : "Recorded positions · not current position")
+                Text(AppLocalization.text(latest?.isPlottable == false ? "Latest recorded fix not plottable" : "Recorded positions · not current position"))
                     .font(.caption2)
             }
         } details: {
             VStack(alignment: .leading, spacing: 12) {
                 if let history {
-                    Text("\(history.samples.count) raw GPS rows · selected \(String(format: "%.1f", history.endSeconds)) seconds")
-                    if history.truncated { Text("Latest 1000 of \(history.totalRowsInPrefix) original GPS rows") }
+                    Text(AppLocalization.text("\(history.samples.count) raw GPS rows · selected \(String(format: "%.1f", history.endSeconds)) seconds"))
+                    if history.truncated { Text(AppLocalization.text("Latest 1000 of \(history.totalRowsInPrefix) original GPS rows")) }
                 }
                 if let latest {
-                    Text("Last raw source time: \(Date(timeIntervalSince1970: latest.location.originalTimestamp).formatted(date: .abbreviated, time: .standard))")
-                    Text("Original source epoch: \(String(latest.location.originalTimestamp))")
-                    Text("Recorded horizontal accuracy: \(latest.location.horizontalAccuracy.map { String($0) + " m" } ?? "unknown")")
+                    Text(AppLocalization.text("Last raw source time: \(Date(timeIntervalSince1970: latest.location.originalTimestamp).formatted(date: .abbreviated, time: .standard))"))
+                    Text(AppLocalization.text("Original source epoch: \(String(latest.location.originalTimestamp))"))
+                    Text(AppLocalization.text("Recorded horizontal accuracy: \(latest.location.horizontalAccuracy.map { String($0) + " m" } ?? "unknown")"))
                 }
-                Text("Local coordinate outline · lines connect recorded observations")
-                if latest?.isPlottable == false { Text("Recorded positions · not current position") }
+                Text(AppLocalization.text("Local coordinate outline · lines connect recorded observations"))
+                if latest?.isPlottable == false { Text(AppLocalization.text("Recorded positions · not current position")) }
             }
         }
     }
@@ -49,7 +49,7 @@ struct RecordedRouteView: View {
     @ViewBuilder
     private func routePlot(points: [MeasurementReplay.ProjectedRoutePoint], latest: MeasurementReplay.RecordedLocationPoint?) -> some View {
         if points.isEmpty {
-            Text("No plottable recorded fixes at this time").font(.caption)
+            Text(AppLocalization.text("No plottable recorded fixes at this time")).font(.caption)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
                 Canvas { context, size in
@@ -80,8 +80,8 @@ struct RecordedRouteView: View {
                                      with: .color(TelemetryTheme.warning))
                     }
                 }
-                .accessibilityLabel("Local recorded GPS route")
-                .accessibilityValue("\(points.count) recorded fixes; not current position")
+                .accessibilityLabel(AppLocalization.text("Local recorded GPS route"))
+                .accessibilityValue(AppLocalization.text("\(points.count) recorded fixes; not current position"))
         }
     }
 }

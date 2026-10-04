@@ -41,16 +41,16 @@ struct RecordedHistoryCard<Plot: View, Summary: View, Details: View>: View {
                 ScrollView {
                     details.frame(maxWidth: .infinity, alignment: .leading).padding()
                 }
-                .navigationTitle(title)
+                .navigationTitle(AppLocalization.text(title))
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingDetails = false } } }
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button(AppLocalization.text("Done")) { showingDetails = false } } }
             }
         }
     }
 
     private var header: some View {
         HStack(alignment: .top, spacing: 8) {
-            Text(title).font(.subheadline.weight(.semibold))
+            Text(AppLocalization.text(title)).font(.subheadline.weight(.semibold))
                 .lineLimit(nil)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -59,7 +59,7 @@ struct RecordedHistoryCard<Plot: View, Summary: View, Details: View>: View {
                 Image(systemName: "info.circle").font(.body).frame(width: 44, height: 44)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Recorded history details")
+            .accessibilityLabel(AppLocalization.text("Recorded history details"))
             }
         }
     }

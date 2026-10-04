@@ -1,0 +1,291 @@
+[
+  {
+    "en": "Recorded time: {value} original rows; acquisition and recording off",
+    "ko": "기록 시간: 원본 {0}행 · 수집 및 기록 꺼짐"
+  },
+  {
+    "en": "{value} of {value} seconds",
+    "ko": "전체 {1}초 중 {0}초"
+  },
+  {
+    "en": "{value} / {value} seconds",
+    "ko": "{0} / {1}초"
+  },
+  {
+    "en": "{value} / {value} recorded seconds",
+    "ko": "기록 시간 {0} / {1}초"
+  },
+  {
+    "en": "Recorded range: 0–{value} seconds. Values outside this range seek to the nearest end.",
+    "ko": "기록 범위: 0–{0}초. 범위 밖의 값은 가장 가까운 끝으로 이동합니다."
+  },
+  {
+    "en": "{value} times",
+    "ko": "{0}배"
+  },
+  {
+    "en": "{value} ITEMS",
+    "ko": "{0}개"
+  },
+  {
+    "en": "{value} samples",
+    "ko": "표본 {0}개"
+  },
+  {
+    "en": "{value} recorded samples",
+    "ko": "기록된 표본 {0}개"
+  },
+  {
+    "en": "{value} recorded fixes",
+    "ko": "기록된 위치 {0}개"
+  },
+  {
+    "en": "Recorded samples: {value}",
+    "ko": "기록된 표본: {0}"
+  },
+  {
+    "en": "Recorded fixes: {value}",
+    "ko": "기록된 위치: {0}"
+  },
+  {
+    "en": "{value}–{value} recorded seconds · {value}",
+    "ko": "기록 시간 {0}–{1}초 · {2}"
+  },
+  {
+    "en": "{value} original rows",
+    "ko": "원본 {0}행"
+  },
+  {
+    "en": "Recovered {value} interrupted session{value}",
+    "ko": "중단된 기록 {0}개 복구됨"
+  },
+  {
+    "en": "Saved JSON export ready: {value} bytes",
+    "ko": "JSON 저장 준비됨: {0}바이트"
+  },
+  {
+    "en": "Saved CSV export ready: {value} bytes",
+    "ko": "CSV 저장 준비됨: {0}바이트"
+  },
+  {
+    "en": "Measurement JSON ready: {value} bytes",
+    "ko": "측정 JSON 준비됨: {0}바이트"
+  },
+  {
+    "en": "Measurement CSV ready: {value} bytes",
+    "ko": "측정 CSV 준비됨: {0}바이트"
+  },
+  {
+    "en": "JSON export ready: {value} bytes",
+    "ko": "JSON 내보내기 준비됨: {0}바이트"
+  },
+  {
+    "en": "CSV export ready: {value} bytes",
+    "ko": "CSV 내보내기 준비됨: {0}바이트"
+  },
+  {
+    "en": "{value} saved sessions",
+    "ko": "저장된 기록 {0}개"
+  },
+  {
+    "en": "Diagnostic {value}: {value}",
+    "ko": "진단 {0}: {1}",
+    "localizeSlots": [
+      1
+    ]
+  },
+  {
+    "en": "Diagnostic adapter retrying in {value}s",
+    "ko": "진단 어댑터 {0}초 후 재시도"
+  },
+  {
+    "en": "Live adapter retrying in {value}s",
+    "ko": "실차 어댑터 {0}초 후 재시도"
+  },
+  {
+    "en": "negative response 0x{value}",
+    "ko": "부정 응답 0x{0}"
+  },
+  {
+    "en": "Profile not saved: {value}",
+    "ko": "프로필 저장 안 됨: {0}"
+  },
+  {
+    "en": "Acquisition off · Recording off · {value}",
+    "ko": "수집 꺼짐 · 기록 꺼짐 · {0}",
+    "localizeSlots": [
+      0
+    ]
+  },
+  {
+    "en": "{value} · Recording on · {value}",
+    "ko": "{0} · 기록 켜짐 · {1}",
+    "localizeSlots": [
+      0,
+      1
+    ]
+  },
+  {
+    "en": "{value} · Recording off · {value}",
+    "ko": "{0} · 기록 꺼짐 · {1}",
+    "localizeSlots": [
+      0,
+      1
+    ]
+  },
+  {
+    "en": "Frame age {value} · Local recording {value}",
+    "ko": "프레임 경과 시간 {0} · 기기 내 기록 {1}",
+    "localizeSlots": [
+      1
+    ]
+  },
+  {
+    "en": "Last mark {value}",
+    "ko": "마지막 MARK {0}"
+  },
+  {
+    "en": "Dynamic Type: {value}",
+    "ko": "글자 크기: {0}"
+  },
+  {
+    "en": "Page {value}",
+    "ko": "페이지 {0}"
+  },
+  {
+    "en": "Service {value}",
+    "ko": "서비스 {0}"
+  },
+  {
+    "en": "{value} valid · {value} invalid",
+    "ko": "유효 {0}개 · 잘못된 값 {1}개"
+  },
+  {
+    "en": "{value} rows · {value}",
+    "ko": "{0}행 · {1}"
+  },
+  {
+    "en": "Local recorder: {value}",
+    "ko": "기기 내 기록기: {0}"
+  },
+  {
+    "en": "{value} file saved",
+    "ko": "{0} 파일 저장됨"
+  },
+  {
+    "en": "{value} export cancelled or failed",
+    "ko": "{0} 내보내기 취소 또는 실패"
+  },
+  {
+    "en": "Overlap with {value} card(s) · neighbors stay in place",
+    "ko": "카드 {0}개와 겹침 · 다른 카드 위치 유지"
+  },
+  {
+    "en": "Move or resize {value}",
+    "ko": "{0} 이동 또는 크기 변경"
+  },
+  {
+    "en": "Position {value}, {value}; size {value} by {value}",
+    "ko": "위치 {0}, {1} · 크기 {2} × {3}"
+  },
+  {
+    "en": "Resize {value}",
+    "ko": "{0} 크기 변경"
+  },
+  {
+    "en": "{value} displayed of {value} original samples in this window",
+    "ko": "이 범위 원본 표본 {1}개 중 {0}개 표시"
+  },
+  {
+    "en": "{value}; retrying in {value}s",
+    "ko": "{0} · {1}초 후 재시도"
+  },
+  {
+    "en": "Observed {value} Santa Fe diagnostic profile",
+    "ko": "확인한 {0} 싼타페 진단 프로필"
+  },
+  {
+    "en": "Found {value} BLE peripheral(s)",
+    "ko": "BLE 장치 {0}개 발견"
+  },
+  {
+    "en": "Observed GATT profile for {value}",
+    "ko": "{0}의 GATT 프로필 확인됨"
+  },
+  {
+    "en": "Age {value} s · Stored locally",
+    "ko": "경과 시간 {0}초 · 기기에 저장됨"
+  },
+  {
+    "en": "Playback rate: {value}x",
+    "ko": "재생 속도: {0}배"
+  },
+  {
+    "en": "Speed {value} km/h · ±{value} m",
+    "ko": "속도 {0} km/h · ±{1} m"
+  },
+  {
+    "en": "LAST 60 SECONDS · {value}",
+    "ko": "최근 60초 · {0}"
+  },
+  {
+    "en": "Invalid signal definition: {value}",
+    "ko": "잘못된 신호 정의: {0}"
+  },
+  {
+    "en": "{value} raw GPS rows · selected {value} seconds",
+    "ko": "원본 GPS {0}행 · 선택 시간 {1}초"
+  },
+  {
+    "en": "Latest 1000 of {value} original GPS rows",
+    "ko": "원본 GPS {0}행 중 최근 1000행"
+  },
+  {
+    "en": "Last raw source time: {value}",
+    "ko": "마지막 원본 출처 시각: {0}"
+  },
+  {
+    "en": "Original source epoch: {value}",
+    "ko": "원본 출처 epoch: {0}"
+  },
+  {
+    "en": "Recorded horizontal accuracy: {value}",
+    "ko": "기록된 수평 정확도: {0}"
+  },
+  {
+    "en": "{value} recorded fixes; not current position",
+    "ko": "기록된 위치 {0}개 · 현재 위치 아님"
+  },
+  {
+    "en": "Profile loaded: {value}",
+    "ko": "프로필 불러옴: {0}"
+  },
+  {
+    "en": "BLE observation saved: {value}",
+    "ko": "BLE 확인 결과 저장됨: {0}"
+  },
+  {
+    "en": "Profile saved: {value}, {value} signals",
+    "ko": "프로필 저장됨: {0}, 신호 {1}개"
+  },
+  {
+    "en": "Export ready: {value} bytes",
+    "ko": "내보내기 준비됨: {0}바이트"
+  },
+  {
+    "en": "Saved export ready: {value} rows",
+    "ko": "저장 기록 내보내기 준비됨: {0}행"
+  },
+  {
+    "en": "Saved {value} export ready: {value} bytes",
+    "ko": "저장 기록 {0} 내보내기 준비됨: {1}바이트"
+  },
+  {
+    "en": "DIAGNOSTIC RESPONSE 0x{value}  (not passive CAN)",
+    "ko": "진단 응답 0x{0}  (수동 CAN 아님)"
+  },
+  {
+    "en": "{value}, {value}",
+    "ko": "{0}, {1}"
+  }
+]

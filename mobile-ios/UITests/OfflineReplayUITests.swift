@@ -5,7 +5,7 @@ final class OfflineReplayUITests: XCTestCase {
 
     #if targetEnvironment(simulator)
     private func openFixtureSession(_ app: XCUIApplication, startedAt: Double = 100, sessionID: String? = nil) {
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         XCTAssertTrue(app.tabBars.buttons["Sessions"].waitForExistence(timeout: 10))
         app.tabBars.buttons["Sessions"].tap()
         XCTAssertTrue(app.navigationBars["Sessions"].waitForExistence(timeout: 5))
@@ -524,7 +524,7 @@ final class OfflineReplayUITests: XCTestCase {
         #else
         continueAfterFailure = false
         let app = XCUIApplication()
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         app.tabBars.buttons["Setup"].tap()
         XCTAssertTrue(app.otherElements["setup-first-run"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["CAN diagnostics, GPS, recording, CSV/JSON and Replay work locally without a server or account."].exists)
@@ -547,7 +547,7 @@ final class OfflineReplayUITests: XCTestCase {
         #else
         continueAfterFailure = false
         let app = XCUIApplication()
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         XCTAssertTrue(app.tabBars.buttons["Sessions"].waitForExistence(timeout: 10))
         app.tabBars.buttons["Sessions"].tap()
         XCTAssertTrue(app.navigationBars["Sessions"].waitForExistence(timeout: 5))

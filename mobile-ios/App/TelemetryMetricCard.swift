@@ -10,7 +10,7 @@ struct TelemetryMetricCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.xSmall) {
-            Text(label.uppercased())
+            Text(AppLocalization.text(label.uppercased()))
                 .font(.caption.weight(.bold))
                 .foregroundStyle(TelemetryTheme.mutedText)
                 .fixedSize(horizontal: false, vertical: true)
@@ -25,7 +25,7 @@ struct TelemetryMetricCard: View {
                     unitText
                 }
             }
-            Text(state.uppercased())
+            Text(AppLocalization.text(state.uppercased()))
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(qualityColor)
                 .fixedSize(horizontal: false, vertical: true)
@@ -41,12 +41,12 @@ struct TelemetryMetricCard: View {
     }
 
     private var measurementText: some View {
-        Text(value)
+        Text(AppLocalization.text(value))
             .font(emphasized ? TelemetryTypography.primaryMeasurement : TelemetryTypography.measurement)
             .monospacedDigit().foregroundStyle(accent).contentTransition(.numericText())
     }
 
     private var unitText: some View {
-        Text(unit).font(.caption.weight(.medium)).foregroundStyle(TelemetryTheme.mutedText)
+        Text(verbatim: unit).font(.caption.weight(.medium)).foregroundStyle(TelemetryTheme.mutedText)
     }
 }

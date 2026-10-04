@@ -23,8 +23,8 @@ struct ReplayAnalysisView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let signal = currentSignal {
-                Picker("Recorded signal", selection: Binding(get: { currentSignal ?? signal }, set: { selectedSignalID = $0 })) {
-                    ForEach(signals, id: \.self) { id in Text(label(id)).tag(id) }
+                Picker(AppLocalization.text("Recorded signal"), selection: Binding(get: { currentSignal ?? signal }, set: { selectedSignalID = $0 })) {
+                    ForEach(signals, id: \.self) { id in Text(verbatim: label(id)).tag(id) }
                 }
                 .pickerStyle(.menu).tint(TelemetryTheme.accent)
                 .accessibilityIdentifier("replay-analysis-signal")
@@ -33,14 +33,14 @@ struct ReplayAnalysisView: View {
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("replay-analysis-history")
             } else {
-                Text("No recorded signal selected").foregroundStyle(TelemetryTheme.mutedText)
+                Text(AppLocalization.text("No recorded signal selected")).foregroundStyle(TelemetryTheme.mutedText)
             }
             let route = model.replayController.recordedLocations()
             RecordedRouteView(title: "Recorded route", history: route)
                 .frame(minHeight: dynamicTypeSize.isAccessibilitySize || route?.projectedPoints.isEmpty != false ? nil : 220)
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("replay-analysis-route")
-            Text(String(format: "%.1f / %.1f recorded seconds", model.replayController.position, model.replayController.duration))
+            Text(AppLocalization.text(String(format: "%.1f / %.1f recorded seconds", model.replayController.position, model.replayController.duration)))
                 .font(.caption.monospacedDigit()).foregroundStyle(TelemetryTheme.mutedText)
                 .accessibilityIdentifier("replay-analysis-time")
         }

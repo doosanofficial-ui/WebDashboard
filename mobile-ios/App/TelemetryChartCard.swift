@@ -13,10 +13,10 @@ struct TelemetryChartCard: View {
         VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
+                    Text(AppLocalization.text(title))
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(.white)
-                    Text("LAST 60 SECONDS · \(units)")
+                    Text(AppLocalization.text("LAST 60 SECONDS · \(units)"))
                         .font(.caption2.weight(.bold))
                         .tracking(0.7)
                         .foregroundStyle(TelemetryTheme.quietText)

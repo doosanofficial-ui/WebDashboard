@@ -69,7 +69,7 @@ struct TelemetryStatusBadge: View {
     let symbol: String
 
     var body: some View {
-        Label(title.uppercased(), systemImage: symbol)
+        Label(AppLocalization.text(title.uppercased()), systemImage: symbol)
             .font(.caption2.weight(.bold))
             .tracking(0.7)
             .foregroundStyle(color)

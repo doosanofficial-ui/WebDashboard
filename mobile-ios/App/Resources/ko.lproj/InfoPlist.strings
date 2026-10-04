@@ -1,0 +1,4 @@
+"NSLocationWhenInUseUsageDescription" = "사용자가 시작한 측정에서 CAN 데이터와 함께 위치를 기록합니다.";
+"NSLocationAlwaysAndWhenInUseUsageDescription" = "사용자가 시작한 측정을 앱 전환 중에도 계속합니다.";
+"NSLocalNetworkUsageDescription" = "기기 네트워크에서 검증된 측정 어댑터에 연결합니다.";
+"NSBluetoothAlwaysUsageDescription" = "연결 프로필이 검증된 사용자의 CAN 어댑터에 연결합니다.";

@@ -10,7 +10,7 @@ final class SmallViewportStatusUIRegression: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
             "-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR", "--audit-ui-layout"]
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         XCTAssertEqual(app.buttons["toggle-recording"].value as? String, "Recording off")
         XCTAssertEqual(app.buttons["toggle-gps"].value as? String, "GPS off")
         let status = app.buttons["session-status-details"]

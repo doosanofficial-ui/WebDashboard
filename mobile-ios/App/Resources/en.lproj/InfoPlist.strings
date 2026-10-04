@@ -1,0 +1,4 @@
+"NSLocationWhenInUseUsageDescription" = "Record location alongside CAN measurements during an operator session.";
+"NSLocationAlwaysAndWhenInUseUsageDescription" = "Continue an explicitly started measurement session during app switching.";
+"NSLocalNetworkUsageDescription" = "Connect to a verified telemetry adapter on the local network.";
+"NSBluetoothAlwaysUsageDescription" = "Connect to a user-selected CAN adapter after its transport profile is verified.";

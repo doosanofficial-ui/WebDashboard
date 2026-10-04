@@ -39,10 +39,10 @@ struct DashboardEditorView: View {
             VStack(spacing: 12) {
                 if let error = model.dashboardSaveError {
                     VStack(alignment: .leading, spacing: 6) {
-                        Label(error, systemImage: "exclamationmark.triangle.fill")
+                        Label(AppLocalization.text(error), systemImage: "exclamationmark.triangle.fill")
                             .font(.caption)
                             .foregroundStyle(.orange)
-                        Button("Retry save", action: model.retryDashboardSave)
+                        Button(AppLocalization.text("Retry save"), action: model.retryDashboardSave)
                             .accessibilityIdentifier("retry-dashboard-save")
                     }
                     .padding(.horizontal)
@@ -72,19 +72,19 @@ struct DashboardEditorView: View {
                     ContentUnavailableView("No dashboard profile", systemImage: "rectangle.3.group")
                 }
             }
-            .navigationTitle("Dashboard Editor")
+            .navigationTitle(AppLocalization.text("Dashboard Editor"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItemGroup(placement: .topBarLeading) {
-                    Button("Undo", systemImage: "arrow.uturn.backward", action: model.undoDashboardLayout)
+                    Button(AppLocalization.text("Undo"), systemImage: "arrow.uturn.backward", action: model.undoDashboardLayout)
                         .labelStyle(.iconOnly).disabled(!model.canUndoDashboardLayout)
                         .accessibilityIdentifier("undo-dashboard-layout")
-                    Button("Redo", systemImage: "arrow.uturn.forward", action: model.redoDashboardLayout)
+                    Button(AppLocalization.text("Redo"), systemImage: "arrow.uturn.forward", action: model.redoDashboardLayout)
                         .labelStyle(.iconOnly).disabled(!model.canRedoDashboardLayout)
                         .accessibilityIdentifier("redo-dashboard-layout")
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button(AppLocalization.text("Done")) { dismiss() }
                 }
             }
             .onAppear {
@@ -93,15 +93,15 @@ struct DashboardEditorView: View {
             }
             .onChange(of: selectedWidgetID) { _, _ in configurationExpanded = false; loadDraftFromSelection() }
             .onChange(of: selectedPageID) { _, _ in configurationExpanded = false; loadDraftFromSelection() }
-            .confirmationDialog("Delete page?", isPresented: $confirmPageDelete, titleVisibility: .visible) {
-                Button("Delete page", role: .destructive) { deletePendingPage() }
+            .confirmationDialog(AppLocalization.text("Delete page?"), isPresented: $confirmPageDelete, titleVisibility: .visible) {
+                Button(AppLocalization.text("Delete page"), role: .destructive) { deletePendingPage() }
             } message: {
-                Text("This removes the page and its widget layout.")
+                Text(AppLocalization.text("This removes the page and its widget layout."))
             }
-            .confirmationDialog("Delete widget?", isPresented: $confirmWidgetDelete, titleVisibility: .visible) {
-                Button("Delete widget", role: .destructive) { deletePendingWidget() }
+            .confirmationDialog(AppLocalization.text("Delete widget?"), isPresented: $confirmWidgetDelete, titleVisibility: .visible) {
+                Button(AppLocalization.text("Delete widget"), role: .destructive) { deletePendingWidget() }
             } message: {
-                Text("This removes the selected widget from the profile.")
+                Text(AppLocalization.text("This removes the selected widget from the profile."))
             }
         }
     }
@@ -123,12 +123,12 @@ struct DashboardEditorView: View {
 
     private func pageControls(profile: DashboardProfile, page: DashboardPage) -> some View {
         VStack(spacing: 8) {
-            Picker("Page", selection: Binding(
+            Picker(AppLocalization.text("Page"), selection: Binding(
                 get: { selectedPageID ?? profile.pages.first?.id ?? page.id },
                 set: { selectedPageID = $0 }
             )) {
                 ForEach(profile.pages) { page in
-                    Text(page.name + " · " + page.orientation.rawValue.capitalized).tag(page.id)
+                    Text(verbatim: page.name + " · " + AppLocalization.text(page.orientation.rawValue.capitalized)).tag(page.id)
                 }
             }
             .pickerStyle(.menu)
@@ -136,26 +136,26 @@ struct DashboardEditorView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack {
-                Button("Add page", action: model.addDashboardPage)
+                Button(AppLocalization.text("Add page"), action: model.addDashboardPage)
                     .accessibilityIdentifier("add-dashboard-page")
-                Menu("Add widget", systemImage: "plus.square") {
+                Menu(AppLocalization.text("Add widget"), systemImage: "plus.square") {
                     ForEach(DashboardWidgetType.allCases, id: \.self) { type in
-                        Button(widgetLabel(type)) {
+                        Button(AppLocalization.text(widgetLabel(type))) {
                             model.addDashboardWidget(pageID: page.id, type: type)
                         }
                     }
                 }
                 .accessibilityIdentifier("add-dashboard-widget")
-                Menu("Orientation") {
-                    Button("Portrait") {
+                Menu(AppLocalization.text("Orientation")) {
+                    Button(AppLocalization.text("Portrait")) {
                         model.setDashboardOrientation(pageID: page.id, orientation: .portrait)
                     }
-                    Button("Landscape") {
+                    Button(AppLocalization.text("Landscape")) {
                         model.setDashboardOrientation(pageID: page.id, orientation: .landscape)
                     }
                 }
-                Button("Snap") { model.snapDashboard(pageID: page.id) }
-                Button("Delete page", role: .destructive) {
+                Button(AppLocalization.text("Snap")) { model.snapDashboard(pageID: page.id) }
+                Button(AppLocalization.text("Delete page"), role: .destructive) {
                     pendingPageDeleteID = page.id
                     confirmPageDelete = true
                 }
@@ -193,15 +193,15 @@ struct DashboardEditorView: View {
                     HStack {
                     Text(widget.configuration.label).font(.caption.weight(.semibold))
                     Spacer()
-                    Button("Front") {
+                    Button(AppLocalization.text("Front")) {
                         model.bringDashboardWidgetToFront(pageID: page.id, widgetID: widget.id)
                     }
-                    Button("Duplicate") {
+                    Button(AppLocalization.text("Duplicate")) {
                         model.duplicateDashboardWidget(pageID: page.id, widgetID: widget.id)
                     }
-                    Menu("Align") {
+                    Menu(AppLocalization.text("Align")) {
                         ForEach(DashboardAlignment.allCases, id: \.self) { alignment in
-                            Button(alignmentLabel(alignment)) {
+                            Button(AppLocalization.text(alignmentLabel(alignment))) {
                                 let columns = page.orientation == .portrait ? 4 : 6
                                 model.alignDashboardWidget(
                                     pageID: page.id,
@@ -212,7 +212,7 @@ struct DashboardEditorView: View {
                             }
                         }
                     }
-                    Button("Delete", role: .destructive) {
+                    Button(AppLocalization.text("Delete"), role: .destructive) {
                         pendingWidgetDelete = (page.id, widget.id)
                         confirmWidgetDelete = true
                     }
@@ -224,10 +224,10 @@ struct DashboardEditorView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                TextField("Label", text: $draftLabel)
-                                Menu("Bind signal") {
+                                TextField(AppLocalization.text("Label"), text: $draftLabel)
+                                Menu(AppLocalization.text("Bind signal")) {
                                     if model.availableSignalIDs.isEmpty {
-                                        Text("No profile signals")
+                                        Text(AppLocalization.text("No profile signals"))
                                     } else {
                                         ForEach(model.availableSignalIDs, id: \.self) { signalID in
                                             Button(signalID) { draftSignalID = signalID }
@@ -237,51 +237,51 @@ struct DashboardEditorView: View {
                                 .accessibilityIdentifier("bind-dashboard-signal")
                             }
                             HStack {
-                                TextField("Signal ID", text: $draftSignalID)
+                                TextField(AppLocalization.text("Signal ID"), text: $draftSignalID)
                                     .textInputAutocapitalization(.never)
                                     .autocorrectionDisabled()
                             }
                             HStack {
-                                TextField("Unit", text: $draftUnit)
-                                TextField("Decimals", text: $draftDecimals)
+                                TextField(AppLocalization.text("Unit"), text: $draftUnit)
+                                TextField(AppLocalization.text("Decimals"), text: $draftDecimals)
                                     .keyboardType(.numberPad)
                             }
                             HStack {
-                                TextField("Min", text: $draftMinimum).keyboardType(.numbersAndPunctuation)
-                                TextField("Max", text: $draftMaximum).keyboardType(.numbersAndPunctuation)
-                                TextField("Warn", text: $draftWarning).keyboardType(.numbersAndPunctuation)
-                                TextField("Critical", text: $draftCritical).keyboardType(.numbersAndPunctuation)
+                                TextField(AppLocalization.text("Min"), text: $draftMinimum).keyboardType(.numbersAndPunctuation)
+                                TextField(AppLocalization.text("Max"), text: $draftMaximum).keyboardType(.numbersAndPunctuation)
+                                TextField(AppLocalization.text("Warn"), text: $draftWarning).keyboardType(.numbersAndPunctuation)
+                                TextField(AppLocalization.text("Critical"), text: $draftCritical).keyboardType(.numbersAndPunctuation)
                             }
-                            Toggle("Condition enabled", isOn: $draftConditionEnabled)
+                            Toggle(AppLocalization.text("Condition enabled"), isOn: $draftConditionEnabled)
                             if draftConditionEnabled {
-                                Picker("Condition", selection: $draftConditionOperator) {
-                                    Text("Equals").tag(DashboardConditionOperator.equals)
-                                    Text("Greater than").tag(DashboardConditionOperator.greaterThan)
-                                    Text("Less than").tag(DashboardConditionOperator.lessThan)
-                                    Text("Within range").tag(DashboardConditionOperator.withinRange)
-                                    Text("Bit set").tag(DashboardConditionOperator.bitSet)
+                                Picker(AppLocalization.text("Condition"), selection: $draftConditionOperator) {
+                                    Text(AppLocalization.text("Equals")).tag(DashboardConditionOperator.equals)
+                                    Text(AppLocalization.text("Greater than")).tag(DashboardConditionOperator.greaterThan)
+                                    Text(AppLocalization.text("Less than")).tag(DashboardConditionOperator.lessThan)
+                                    Text(AppLocalization.text("Within range")).tag(DashboardConditionOperator.withinRange)
+                                    Text(AppLocalization.text("Bit set")).tag(DashboardConditionOperator.bitSet)
                                 }
                                 HStack {
-                                    TextField("Threshold", text: $draftConditionThreshold)
+                                    TextField(AppLocalization.text("Threshold"), text: $draftConditionThreshold)
                                         .keyboardType(.numbersAndPunctuation)
                                     if draftConditionOperator == .withinRange {
-                                        TextField("Upper", text: $draftConditionUpper)
+                                        TextField(AppLocalization.text("Upper"), text: $draftConditionUpper)
                                             .keyboardType(.numbersAndPunctuation)
                                     }
                                     if draftConditionOperator == .bitSet {
-                                        TextField("Bit 0-63", text: $draftConditionBit)
+                                        TextField(AppLocalization.text("Bit 0-63"), text: $draftConditionBit)
                                             .keyboardType(.numberPad)
                                     }
                                 }
                                 HStack {
-                                    TextField("Hysteresis", text: $draftConditionHysteresis)
+                                    TextField(AppLocalization.text("Hysteresis"), text: $draftConditionHysteresis)
                                         .keyboardType(.numbersAndPunctuation)
-                                    TextField("Hold seconds", text: $draftConditionHold)
+                                    TextField(AppLocalization.text("Hold seconds"), text: $draftConditionHold)
                                         .keyboardType(.numbersAndPunctuation)
                                 }
-                                Toggle("Stale is active", isOn: $draftConditionStaleActive)
+                                Toggle(AppLocalization.text("Stale is active"), isOn: $draftConditionStaleActive)
                             }
-                            Button("Apply widget configuration") {
+                            Button(AppLocalization.text("Apply widget configuration")) {
                                 applyDraft(pageID: page.id, widgetID: widget.id)
                             }
                             .buttonStyle(.borderedProminent)
@@ -291,7 +291,7 @@ struct DashboardEditorView: View {
                     }
                     .frame(maxHeight: 300)
                 } label: {
-                    Text("Widget configuration").font(.subheadline.weight(.semibold))
+                    Text(AppLocalization.text("Widget configuration")).font(.subheadline.weight(.semibold))
                 }
                 .accessibilityIdentifier("widget-configuration-disclosure")
             }

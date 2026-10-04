@@ -26,8 +26,8 @@ struct DashboardEditorCanvas: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if dynamicTypeSize.isAccessibilitySize && (draft == nil || draft?.isCancelled == true) {
-                DisclosureGroup("Editing help", isExpanded: $editingHelpExpanded) {
-                    Text(status)
+                DisclosureGroup(AppLocalization.text("Editing help"), isExpanded: $editingHelpExpanded) {
+                    Text(AppLocalization.text(status))
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("dashboard-edit-preview-status")
                 }
@@ -35,7 +35,7 @@ struct DashboardEditorCanvas: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("dashboard-edit-help")
             } else {
-                Text(status).font(.caption).foregroundStyle(draft?.result.overlappingWidgetIDs.isEmpty == false ? .orange : .secondary)
+                Text(AppLocalization.text(status)).font(.caption).foregroundStyle(draft?.result.overlappingWidgetIDs.isEmpty == false ? .orange : .secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("dashboard-edit-preview-status")
             }
@@ -43,15 +43,15 @@ struct DashboardEditorCanvas: View {
                 VStack(spacing: 12) {
                     ForEach(page.widgets.sorted { $0.zIndex < $1.zIndex }) { widget in
                         card(widget).fixedSize(horizontal: false, vertical: true)
-                        Menu("Move or resize \(widget.configuration.label)") {
-                            Button("Move right") { step(widget, dx: 1) }
-                            Button("Move left") { step(widget, dx: -1) }
-                            Button("Move down") { step(widget, dy: 1) }
-                            Button("Move up") { step(widget, dy: -1) }
-                            Button("Wider") { step(widget, dw: 1) }
-                            Button("Narrower") { step(widget, dw: -1) }
-                            Button("Taller") { step(widget, dh: 1) }
-                            Button("Shorter") { step(widget, dh: -1) }
+                        Menu(AppLocalization.text("Move or resize \(widget.configuration.label)")) {
+                            Button(AppLocalization.text("Move right")) { step(widget, dx: 1) }
+                            Button(AppLocalization.text("Move left")) { step(widget, dx: -1) }
+                            Button(AppLocalization.text("Move down")) { step(widget, dy: 1) }
+                            Button(AppLocalization.text("Move up")) { step(widget, dy: -1) }
+                            Button(AppLocalization.text("Wider")) { step(widget, dw: 1) }
+                            Button(AppLocalization.text("Narrower")) { step(widget, dw: -1) }
+                            Button(AppLocalization.text("Taller")) { step(widget, dh: 1) }
+                            Button(AppLocalization.text("Shorter")) { step(widget, dh: -1) }
                         }
                         .buttonStyle(.bordered)
                         .accessibilityIdentifier("dashboard-widget-actions-\(widget.id)")
@@ -94,7 +94,7 @@ struct DashboardEditorCanvas: View {
         interactiveCard(widget)
             .accessibilityElement(children: .contain)
             .accessibilityLabel(widget.configuration.label)
-            .accessibilityValue("Position \(widget.rect.x), \(widget.rect.y); size \(widget.rect.width) by \(widget.rect.height)")
+            .accessibilityValue(AppLocalization.text("Position \(widget.rect.x), \(widget.rect.y); size \(widget.rect.width) by \(widget.rect.height)"))
             .accessibilityIdentifier("editor-widget-\(widget.id)")
             .modifier(DashboardWidgetStepActions { dx, dy, dw, dh in
                 step(widget, dx: dx, dy: dy, dw: dw, dh: dh)
@@ -130,7 +130,7 @@ struct DashboardEditorCanvas: View {
                 .frame(width: 44, height: 44)
                 .background(.cyan, in: Circle()).contentShape(Rectangle())
                 .highPriorityGesture(gesture(widget, operation: .resize))
-                .accessibilityLabel("Resize \(widget.configuration.label)")
+                .accessibilityLabel(AppLocalization.text("Resize \(widget.configuration.label)"))
                 .accessibilityAddTraits(.isButton)
                 .accessibilityIdentifier("resize-dashboard-widget-\(widget.id)")
         }

@@ -100,27 +100,27 @@ class LifecycleRunnerTests(unittest.TestCase):
         for path in sorted((root / "mobile-ios/LifecycleTests").glob("*.swift")):
             declarations.extend(re.findall(r"^\s+func (test\w+)\(", path.read_text(), re.MULTILINE))
         self.assertIn("sources: [LifecycleTests]", (root / "mobile-ios/lifecycle-tests.yml").read_text())
-        self.assertEqual(len(declarations), 84)
+        self.assertEqual(len(declarations), 89)
         self.assertEqual(runner.EXPECTED_TEST_COUNT, len(declarations))
         self.assertIn("testCancelledComputedManySignalSeekCannotPublish", declarations)
         self.assertIn("testStopAfterComputedManySignalSeekDiscardsResultAndAllOwnedState", declarations)
 
     def test_expanded_gate_rejects_old_green_or_partial_counts(self):
         expected = runner.EXPECTED_TEST_COUNT
-        runner.verify_summary({"totalTestCount": 84, "passedTests": 84, "failedTests": 0,
+        runner.verify_summary({"totalTestCount": 89, "passedTests": 89, "failedTests": 0,
                                "skippedTests": 0, "expectedFailures": 0}, expected)
-        for count in [0, 81, 82, 83, 85]:
+        for count in [0, 81, 82, 83, 84, 85, 86, 87, 88, 90]:
             with self.subTest(count=count), self.assertRaises(ValueError):
                 runner.verify_summary({"totalTestCount": count, "passedTests": count,
                                        "failedTests": 0, "skippedTests": 0}, expected)
 
     def test_expanded_gate_never_accepts_skips_or_expected_failures(self):
         for field in ["failedTests", "skippedTests", "expectedFailures"]:
-            summary = {"totalTestCount": 84, "passedTests": 84, "failedTests": 0,
+            summary = {"totalTestCount": 89, "passedTests": 89, "failedTests": 0,
                        "skippedTests": 0, "expectedFailures": 0}
             summary[field] = 1
             with self.subTest(field=field), self.assertRaises(ValueError):
-                runner.verify_summary(summary, 84)
+                runner.verify_summary(summary, 89)
 
 if __name__ == "__main__":
     unittest.main()

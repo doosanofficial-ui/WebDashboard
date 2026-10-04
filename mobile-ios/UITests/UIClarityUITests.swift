@@ -10,7 +10,7 @@ final class UIClarityUITests: XCTestCase {
     }
     private func launchPortrait(_ app: XCUIApplication) {
         XCUIDevice.shared.orientation = .portrait
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         let upright = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             app.frame.height > app.frame.width
         }, object: app)

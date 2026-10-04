@@ -1,0 +1,306 @@
+{
+  "screens": {
+    "Help-setup-ko-1": {
+      "sha256": "4026a4069a3b934b0a2fa3889aafd4c3c15cbbfc5fe9c898fdb66bbd3d34d45b",
+      "markerSHA256": "6779e970fd17045adbe6f946115c5e0cb3f9dbc44a79397bc0278b705be1a751",
+      "targetID": "import-adapter-profile",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125667.252,
+      "test": "LocalizationHelpUITests/testCaptureKoreanGuideScreens()"
+    },
+    "Help-setup-en-1": {
+      "sha256": "010e9994861c6f4279657a86d4fd020a6abca7790e503853277304b99f4925e2",
+      "markerSHA256": "612d14370a1f5df28ae2522c52f3c544a8e53579cfba3e39866ab0e3f4f55734",
+      "targetID": "import-adapter-profile",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125596.962,
+      "test": "LocalizationHelpUITests/testCaptureEnglishGuideScreens()"
+    },
+    "Help-setup-ko-2": {
+      "sha256": "b576a57b93b90e2276080978f22f3f0d4f6f2f733623eec665be65e7b22a66b5",
+      "markerSHA256": "620fbdada1f123796feb1affca43919ddcd47b345f1eab95b97cec1a10a6ef4f",
+      "targetID": "start-live-adapter",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125669.729,
+      "test": "LocalizationHelpUITests/testCaptureKoreanGuideScreens()"
+    },
+    "Help-setup-en-2": {
+      "sha256": "cba5727793ca19c618a12658480a4034d2495ec5f16cf3860bbac7924cf8b8c7",
+      "markerSHA256": "59548f65111b4585b3924eeeb0f0c16c7368bdd0327fbb6acdad24947abb2ca6",
+      "targetID": "start-live-adapter",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125599.482,
+      "test": "LocalizationHelpUITests/testCaptureEnglishGuideScreens()"
+    },
+    "Help-live-ko-1": {
+      "sha256": "00f97f4c7d98c099c4df650f29f952f5ec99c1e31e5d68ae8a19cb43141eb62e",
+      "markerSHA256": "7154942cd237a2affd0b77262fe2a0e1aa3802e4d7ede7b3e8d3eebd6e613792",
+      "targetID": "toggle-recording",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125654,
+      "test": "LocalizationHelpUITests/testCaptureKoreanGuideScreens()"
+    },
+    "Help-live-en-1": {
+      "sha256": "b6bdb027c40e31606ea4dcc0b655954de0b3837418ded0af25892b3c983855b8",
+      "markerSHA256": "7154942cd237a2affd0b77262fe2a0e1aa3802e4d7ede7b3e8d3eebd6e613792",
+      "targetID": "toggle-recording",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125583.128,
+      "test": "LocalizationHelpUITests/testCaptureEnglishGuideScreens()"
+    },
+    "Help-live-ko-2": {
+      "sha256": "00f97f4c7d98c099c4df650f29f952f5ec99c1e31e5d68ae8a19cb43141eb62e",
+      "markerSHA256": "468d8784da7fb8f0657f955cc252125ca1c1860e0befb24fafced0597933bee6",
+      "targetID": "toggle-gps",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125654.803,
+      "test": "LocalizationHelpUITests/testCaptureKoreanGuideScreens()"
+    },
+    "Help-live-en-2": {
+      "sha256": "b6bdb027c40e31606ea4dcc0b655954de0b3837418ded0af25892b3c983855b8",
+      "markerSHA256": "468d8784da7fb8f0657f955cc252125ca1c1860e0befb24fafced0597933bee6",
+      "targetID": "toggle-gps",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125584.003,
+      "test": "LocalizationHelpUITests/testCaptureEnglishGuideScreens()"
+    },
+    "Help-live-ko-3": {
+      "sha256": "00f97f4c7d98c099c4df650f29f952f5ec99c1e31e5d68ae8a19cb43141eb62e",
+      "markerSHA256": "c6b0564f0e6e8ce23a598c914dc36d34e1f69575c9931d7de204914404d2c044",
+      "targetID": "mark-event",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125655.723,
+      "test": "LocalizationHelpUITests/testCaptureKoreanGuideScreens()"
+    },
+    "Help-live-en-3": {
+      "sha256": "b6bdb027c40e31606ea4dcc0b655954de0b3837418ded0af25892b3c983855b8",
+      "markerSHA256": "c6b0564f0e6e8ce23a598c914dc36d34e1f69575c9931d7de204914404d2c044",
+      "targetID": "mark-event",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125584.951,
+      "test": "LocalizationHelpUITests/testCaptureEnglishGuideScreens()"
+    },
+    "Help-signals-ko-1": {
+      "sha256": "cf589d85544e26248a45388edfe1cb480e306acde9d0a5b3c6af40e67213d40d",
+      "markerSHA256": "a81922c88373663475095fb24098c8d398079d92274bebf58b3f35fe29c48b01",
+      "targetID": "raw-can-content",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125705.79,
+      "test": "LocalizationHelpUITests/testCaptureKoreanGuideScreens()"
+    },
+    "Help-signals-en-1": {
+      "sha256": "2f2e9c8bb2b86f368adee2a7273f76d090e4d54bccd565368975d91793052af4",
+      "markerSHA256": "2ae3f937305e83f936bc1a7b4805c0f2ce266f1465047142e48c8f486ab4a303",
+      "targetID": "raw-can-content",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125637.182,
+      "test": "LocalizationHelpUITests/testCaptureEnglishGuideScreens()"
+    },
+    "Help-signals-ko-2": {
+      "sha256": "cf589d85544e26248a45388edfe1cb480e306acde9d0a5b3c6af40e67213d40d",
+      "markerSHA256": "263584a1abd32016aaa6d7312a7dad7dab943750800af43eecbcacfb048ad3c7",
+      "targetID": "signals-stale-filter",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125705.119,
+      "test": "LocalizationHelpUITests/testCaptureKoreanGuideScreens()"
+    },
+    "Help-signals-en-2": {
+      "sha256": "2f2e9c8bb2b86f368adee2a7273f76d090e4d54bccd565368975d91793052af4",
+      "markerSHA256": "e9feca9b28398bbc26a12fd311b33ed5dff82362276570b65d81dc3acd7e36d9",
+      "targetID": "signals-stale-filter",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125636.449,
+      "test": "LocalizationHelpUITests/testCaptureEnglishGuideScreens()"
+    },
+    "Help-sessions-ko-1": {
+      "sha256": "59f7fd4619c53fe054547d81b2683c158d4a4efab6d2f9ee46158b6efd9bd21a",
+      "markerSHA256": "d833859162c65a649813ea73b39662a56e542f8f2c14c5e4facc86cf2dba17e6",
+      "targetID": "saved-session-picker",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125676.801,
+      "test": "LocalizationHelpUITests/testCaptureKoreanGuideScreens()"
+    },
+    "Help-sessions-en-1": {
+      "sha256": "01890aa720f6d0dd31a78e00a89a84e0a643097e51691a09f97bc0d6966efb84",
+      "markerSHA256": "e52149312c3dd1809dddaa712f7a1802d12e62f6810d9be3f8da04ad9e76b482",
+      "targetID": "saved-session-picker",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125606.398,
+      "test": "LocalizationHelpUITests/testCaptureEnglishGuideScreens()"
+    },
+    "Help-sessions-ko-2": {
+      "sha256": "4b98ea6e4188c6f02ab7823ffe7d07bd638c49bd46c121da6e15d07d71bddab1",
+      "markerSHA256": "011b91b85e5a1e30dba502fe813feefe1a0c34ce40f7eee116dc61189d69dbdc",
+      "targetID": "sessions-export-json",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125678.844,
+      "test": "LocalizationHelpUITests/testCaptureKoreanGuideScreens()"
+    },
+    "Help-sessions-en-2": {
+      "sha256": "a60fc655715da7dea4334c3ac0e33ec6a788da5084868bd2975afc5af75d6548",
+      "markerSHA256": "36d4de3b6ea64af3fd78c28a3d92f3ec0a38a32a5277804adb823ec930a8948b",
+      "targetID": "sessions-export-json",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125608.419,
+      "test": "LocalizationHelpUITests/testCaptureEnglishGuideScreens()"
+    },
+    "Help-sessions-ko-3": {
+      "sha256": "e996f17932232adfbb038cfc62561834fb7da4d0f1abc4c4718e65f4a00946b1",
+      "markerSHA256": "8e416491fa5d4ce67895d691749959daea7893830717a30ab8ed1c59aa882512",
+      "targetID": "replay-saved-session",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125684.611,
+      "test": "LocalizationHelpUITests/testCaptureKoreanGuideScreens()"
+    },
+    "Help-sessions-en-3": {
+      "sha256": "183b9a08c7db728cfdad475bfea2024ff3968e5829eb033e167606ca17cec209",
+      "markerSHA256": "32609b4f7a8839034b85929221fbc8725325eb25c93762e875f75cff4c4aad54",
+      "targetID": "replay-saved-session",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125614.274,
+      "test": "LocalizationHelpUITests/testCaptureEnglishGuideScreens()"
+    },
+    "Help-replay-ko-1": {
+      "sha256": "9893a27b1d2e304e4f195785a6e6160e3521f43c2e7810e5ae455cbd2b92d969",
+      "markerSHA256": "4ee9655523a11dd2c52f4fec0899be3fde902eb530250b45e59acc36e6561a73",
+      "targetID": "session-replay-play",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125696.78,
+      "test": "LocalizationHelpUITests/testCaptureKoreanGuideScreens()"
+    },
+    "Help-replay-en-1": {
+      "sha256": "1dbdef18e1f322384071afe5cf80d296de23931f19524a645cf16440d2bfa020",
+      "markerSHA256": "8127b9eed47865e612c8a0d7606b344515f5bd5262182dfd2b25b2c8981aee97",
+      "targetID": "session-replay-play",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125627.972,
+      "test": "LocalizationHelpUITests/testCaptureEnglishGuideScreens()"
+    },
+    "Help-replay-ko-2": {
+      "sha256": "104f4e21b762f9311e832bab136c64b4aff8f695b557c3b81dd5a4e5231f621f",
+      "markerSHA256": "f78c0223fbb6c3a74eb26bb1589a249f1f7752188e23aab2a19627f3867b9bf3",
+      "targetID": "replay-time-slider",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125700.486,
+      "test": "LocalizationHelpUITests/testCaptureKoreanGuideScreens()"
+    },
+    "Help-replay-en-2": {
+      "sha256": "04e85e803389aa7a43ad41d57f9cb42a6133dfe71712c67cf67e6b95447722e7",
+      "markerSHA256": "4d0d4a559a8cd92443919fcf57b78a75b3f43ad5dafaddf546f8af6a5ff7d96e",
+      "targetID": "replay-time-slider",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125631.59,
+      "test": "LocalizationHelpUITests/testCaptureEnglishGuideScreens()"
+    },
+    "Help-editor-ko-1": {
+      "sha256": "9f78abfef5a830e52c46735bf74fbff8008832fdc1df580be30d5e9e60a1be54",
+      "markerSHA256": "9a4653a1b860ea89574b9e5a9acc17bb633f26f02955770466f6965914232128",
+      "targetID": "resize-dashboard-widget-fixture-0",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125660.127,
+      "test": "LocalizationHelpUITests/testCaptureKoreanGuideScreens()"
+    },
+    "Help-editor-en-1": {
+      "sha256": "37905ab4df12b7c8ee374ff6c90f01641e33db44eb5ec7184c0ddb1fdd4d1316",
+      "markerSHA256": "9a4653a1b860ea89574b9e5a9acc17bb633f26f02955770466f6965914232128",
+      "targetID": "resize-dashboard-widget-fixture-0",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125589.793,
+      "test": "LocalizationHelpUITests/testCaptureEnglishGuideScreens()"
+    },
+    "Help-editor-ko-2": {
+      "sha256": "9f78abfef5a830e52c46735bf74fbff8008832fdc1df580be30d5e9e60a1be54",
+      "markerSHA256": "1e5ff3b30307d9d67072797930d4e442d6d34addc92c995f42dec4ed0fdc668f",
+      "targetID": "undo-dashboard-layout",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125661.59,
+      "test": "LocalizationHelpUITests/testCaptureKoreanGuideScreens()"
+    },
+    "Help-editor-en-2": {
+      "sha256": "37905ab4df12b7c8ee374ff6c90f01641e33db44eb5ec7184c0ddb1fdd4d1316",
+      "markerSHA256": "1e5ff3b30307d9d67072797930d4e442d6d34addc92c995f42dec4ed0fdc668f",
+      "targetID": "undo-dashboard-layout",
+      "fixture": "synthetic-offline",
+      "simulatorUUID": "CA4D86DA-20B0-4223-8CBB-248C41281533",
+      "timestamp": 1791125591.463,
+      "test": "LocalizationHelpUITests/testCaptureEnglishGuideScreens()"
+    }
+  },
+  "screenInputs": {
+    "mobile-ios/App/AppLocalization.swift": "d05040b71ffadcc10711ddc73b48e5fab4a953efe03628d48284ab0eabde1545",
+    "mobile-ios/App/BLEDiscoveryController.swift": "833d551f8135f21b851e2e90ba066b005450d274ce6fb92329988ddf1d718997",
+    "mobile-ios/App/BLETransport.swift": "168302e07bca6f3b6b9c41b679c885c8dcf8374c9e67957d1620986ff6de3dad",
+    "mobile-ios/App/BackgroundUploader.swift": "ba88504aa33e5769965351f0795305384239e252f396f9cbca18cfb0f59e5132",
+    "mobile-ios/App/CredentialStore.swift": "9bc773a8d7374b5f27be7e66dddd0960ab39d2757aea87f88a717df2f3639ea0",
+    "mobile-ios/App/DashboardEditorCanvas.swift": "3ef5724438d820379d604a5dca3239e2c90d754c1c6f63bd75159e1731fcea36",
+    "mobile-ios/App/DashboardEditorView.swift": "26154fffc22d2d213b4c1e4c0d01e688fafa7f9a43800c19d61e526ddd5c0933",
+    "mobile-ios/App/DashboardEditorViewport.swift": "e45edcc657bc659455e1e8384da2785878200286f3e22a4c31ff02a53b9e1553",
+    "mobile-ios/App/DashboardGridLayout.swift": "1d0d4ac8d2592994b6b10a15705191cf4860a7c7e253a0ac0d69030ba6f86fc2",
+    "mobile-ios/App/DashboardView.swift": "e3dd39d3d9fb537e3bbda60969861f651d8e83dace636cb4055e3066c027bb13",
+    "mobile-ios/App/DemoAdapterController.swift": "da77673bcf0fb1b5edc8a35401d0a5e25caa1b586015c37978b908cb8e18493d",
+    "mobile-ios/App/DiagnosticAdapterController.swift": "c0e23df18c6748d1e10b67f235614581e3002d335b37967b2f418f55f76089a5",
+    "mobile-ios/App/LegacyURLSessionCancellationSession.swift": "ad64823d133cb0b1a842cbe34ed1b552c0239639976938949a47abd605dd4248",
+    "mobile-ios/App/LiveAdapterController.swift": "b360eaacfe322711f3e6a8cdab7b44621a458919c829a9727ef5c8afa1cb1826",
+    "mobile-ios/App/LiveCockpitView.swift": "ed9a732905424d086abbf97047a7eb571b6327cec36f4de71bc874ceb386eb0a",
+    "mobile-ios/App/LocalOnlyBackgroundTaskCancellation.swift": "d282ec1fd57d888e29d4b6e2667d6db90694871497e48ee340aaee50db434d51",
+    "mobile-ios/App/LocationService.swift": "8ecc3d1a545c2f119c20cf3a1456b65b664fedf7245ce889ad8f4da20b5c93ea",
+    "mobile-ios/App/MeasurementCSVExportDocument.swift": "c3deca178f23f07173bf5722a837d64759cbcf34d191aa3f090a1b5260f153b4",
+    "mobile-ios/App/MeasurementExportDocument.swift": "78cabe77c22d11705a1b9d2c2bbc2bd4b1fdbb536f0fa4f3634e40eafa0ad95b",
+    "mobile-ios/App/MeasurementExportRequest.swift": "94a8a49bac4d04f61b7b0c0081d7577437d6fbf2b3027b003cdaba13ad98e9ec",
+    "mobile-ios/App/RecordedHistoryCard.swift": "28656d5eddbd4ba98391f916ff5ea0818f350e09318c3ee2cd9ee72fbdff87a4",
+    "mobile-ios/App/RecordedRouteView.swift": "8ffd901b3f7e4947af18dd7b29e71a70fc06a1a3f2e98c19da744ba8a6c411bb",
+    "mobile-ios/App/RecordedSignalHistoryView.swift": "e429f333e97a2ec983de7a31fda8a27b292c102c28a20eb5b73d642b6c2fc96d",
+    "mobile-ios/App/ReplayAnalysisView.swift": "7a897f25ade75825c9728d1ce83f1750dbb60e2d62968b48582b7ed7cc3fff08",
+    "mobile-ios/App/ReplayController.swift": "7bdce9f1300a40ea17b1b1bf5aeb455ec9461d5aafe9fd19956edbe927c64db6",
+    "mobile-ios/App/SessionsView.swift": "1be1fa64e9ccc53a8f0065b993e12fbb0b89cbe4d83ded2448ffd51d63a66fc6",
+    "mobile-ios/App/SignalCatalogEditorView.swift": "61d4322f909cf1001f73b45d7dbfe7194ac70d437321fe407c706815cf37b350",
+    "mobile-ios/App/SignalsView.swift": "0bd53e72bb20a13e82e5ec17ba46975b6ffa3c81374369c6a3567856ad0d17ef",
+    "mobile-ios/App/TelemetryApp.swift": "54abc0c622884f03dd8f70b4b4211aaf5ca9ddcf9aee026c89adde234871e7e5",
+    "mobile-ios/App/TelemetryChartCard.swift": "d40b98f98e6d13f13ab12937d7d26ad75d54b7e85135494f7169fd700ede1b72",
+    "mobile-ios/App/TelemetryDisplayState.swift": "060ce52870899012b3cb46882eab62c0683de35de36d49964a801d88bbc9fc99",
+    "mobile-ios/App/TelemetryMetricCard.swift": "c6ff23e1b5816f5fb2fab2db6de61d5886a002be5d10563f78a8f182706ea268",
+    "mobile-ios/App/TelemetryModel.swift": "4aec4cda73bdaf082c47d61ebdd9d18df39fb8f186f3dec0e36bda2c11f58927",
+    "mobile-ios/App/TelemetryProductScope.swift": "e524f610004f4fc6b7e1a02a606fac4827905d0c733a7487ef50d1cec5d658fb",
+    "mobile-ios/App/TelemetryRunStatusView.swift": "91cfbd0579fb7de91eaed440024135084a52e73277e4f0f6fb9e6e1083162cb2",
+    "mobile-ios/App/TelemetryTheme.swift": "75217032f323b99343a7cd857ce867aac8daed21bac4a6af2843dfbabf718862",
+    "mobile-ios/App/TelemetryTypography.swift": "6712c7df096d235e7d4d834d37758af808cd8c2ea98de858cb158275286f2d44",
+    "mobile-ios/App/WiFiTransport.swift": "edd08f09206ac5d307ad3681f740a65095599894a06ee1406488f18a1569fa00",
+    "mobile-ios/App/Resources/AppStringTemplates.json": "95381efa340e7eca4ffd030172ca93fb5ec2b28266f6e830a5c330cc6076107c",
+    "mobile-ios/App/Resources/en.lproj/InfoPlist.strings": "9619871d5172877f7f5f25073666faa44b5c9681b9605f578d7d304e34c942b0",
+    "mobile-ios/App/Resources/en.lproj/Localizable.strings": "f2b2191a4ff28f56ba5a5e47caad085b2a03fd5fdbff84b453375f720989d6b6",
+    "mobile-ios/App/Resources/ko.lproj/InfoPlist.strings": "d5ee051671393ca49ee63c3a4353dc33fb28a73509174582d4d11178ca14de4a",
+    "mobile-ios/App/Resources/ko.lproj/Localizable.strings": "ebfa8e9ae07e848e0ebd6609089d18fac5519e521a8cdb1f9674ce31db33ec70"
+  },
+  "captureSummary": {
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0
+  }
+}

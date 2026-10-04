@@ -29,7 +29,7 @@ struct LiveCockpitView: View {
                     }
 
                     if let error = model.storageStatus {
-                        Label(error, systemImage: "exclamationmark.triangle.fill")
+                        Label(AppLocalization.text(error), systemImage: "exclamationmark.triangle.fill")
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(TelemetryTheme.critical)
                             .telemetrySurface(.standard)
@@ -67,21 +67,21 @@ struct LiveCockpitView: View {
                 TelemetryRunStatusView(model: model)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Menu {
-                    Text("\(model.runMode == .replay ? "ROW" : "SEQ"): \(model.frame?.status.seq.description ?? "-")")
-                    Text("\(model.runMode == .replay ? "RECORDED AGE" : "FRAME AGE"): \(age.map { String(format: "%.0f ms", $0 * 1000) } ?? "NO SAMPLE")")
+                    Text(AppLocalization.text("\(model.runMode == .replay ? "ROW" : "SEQ"): \(model.frame?.status.seq.description ?? "-")"))
+                    Text(AppLocalization.text("\(model.runMode == .replay ? "RECORDED AGE" : "FRAME AGE"): \(age.map { String(format: "%.0f ms", $0 * 1000) } ?? "NO SAMPLE")"))
                     if TelemetryProductScope.allowsRemoteDelivery {
-                        Text("DROP: \(model.clientDrops + (model.frame?.status.drop ?? 0))")
-                        Text("RTT: \(model.serverRTTMilliseconds.map { String(format: "%.0f ms", $0) } ?? "-")")
+                        Text(AppLocalization.text("DROP: \(model.clientDrops + (model.frame?.status.drop ?? 0))"))
+                        Text(AppLocalization.text("RTT: \(model.serverRTTMilliseconds.map { String(format: "%.0f ms", $0) } ?? "-")"))
                     }
                 } label: {
                     Image(systemName: "info.circle").frame(minWidth: 44, minHeight: 44)
                 }
                 .foregroundStyle(TelemetryTheme.mutedText)
-                .accessibilityLabel("Connection details")
+                .accessibilityLabel(AppLocalization.text("Connection details"))
                 .accessibilityIdentifier("connection-details")
             }
             if model.runMode != .replay && !idle {
-                Text(model.adapterStatus)
+                Text(AppLocalization.text(model.adapterStatus))
                     .font(.caption).foregroundStyle(TelemetryTheme.mutedText)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -93,10 +93,10 @@ struct LiveCockpitView: View {
 
     private func telemetryStat(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label)
+            Text(AppLocalization.text(label))
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(TelemetryTheme.quietText)
-            Text(value)
+            Text(AppLocalization.text(value))
                 .font(.caption2.monospacedDigit().weight(.semibold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
@@ -111,31 +111,31 @@ struct LiveCockpitView: View {
         return VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("PRIMARY SIGNAL")
+                    Text(AppLocalization.text("PRIMARY SIGNAL"))
                         .font(.caption.weight(.bold))
                         .tracking(1.3)
                         .foregroundStyle(TelemetryTheme.accent)
-                    Text("Speed")
+                    Text(AppLocalization.text("Speed"))
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(.white)
-                    Text("FRONT LEFT WHEEL")
+                    Text(AppLocalization.text("FRONT LEFT WHEEL"))
                         .font(.caption.weight(.bold))
                         .tracking(0.8)
                         .foregroundStyle(TelemetryTheme.mutedText)
                 }
                 Spacer()
-                Text(model.runMode == .replay ? "RECORDED" : "UI TARGET 10 HZ")
+                Text(AppLocalization.text(model.runMode == .replay ? "RECORDED" : "UI TARGET 10 HZ"))
                     .font(.caption2.weight(.bold))
                     .tracking(0.8)
                     .foregroundStyle(TelemetryTheme.mutedText)
             }
             HStack(alignment: .lastTextBaseline, spacing: 10) {
-                Text(format(value, decimals: 1))
+                Text(AppLocalization.text(format(value, decimals: 1)))
                     .font(TelemetryTypography.primaryMeasurement)
                     .monospacedDigit()
                     .foregroundStyle(fresh ? TelemetryTheme.accent : TelemetryTheme.mutedText)
                     .contentTransition(.numericText())
-                Text("km/h")
+                Text(AppLocalization.text("km/h"))
                     .font(.title3.weight(.medium))
                     .foregroundStyle(TelemetryTheme.mutedText)
                 Spacer()
@@ -145,7 +145,7 @@ struct LiveCockpitView: View {
                     symbol: fresh ? "checkmark.seal.fill" : "exclamationmark.triangle.fill"
                 )
             }
-            Text("Frame age \(formatAge(model.lastFrameAt, now: now)) · Local recording \(model.localRecordingEnabled ? "on" : "off")")
+            Text(AppLocalization.text("Frame age \(formatAge(model.lastFrameAt, now: now)) · Local recording \(model.localRecordingEnabled ? "on" : "off")"))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(TelemetryTheme.quietText)
         }
@@ -197,7 +197,7 @@ struct LiveCockpitView: View {
         let color = model.runMode == .replay ? TelemetryTheme.accent : fresh ? TelemetryTheme.valid : TelemetryTheme.warning
         return VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
             HStack {
-                Label("GPS POSITION", systemImage: "location.fill")
+                Label(AppLocalization.text("GPS POSITION"), systemImage: "location.fill")
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(.white)
                 Spacer()
@@ -208,11 +208,11 @@ struct LiveCockpitView: View {
                 )
             }
             VStack(alignment: .leading, spacing: 4) {
-                Text("\(number(fix?.data.lat, digits: 6)), \(number(fix?.data.lon, digits: 6))")
+                Text(AppLocalization.text("\(number(fix?.data.lat, digits: 6)), \(number(fix?.data.lon, digits: 6))"))
                     .font(.callout.monospacedDigit())
                     .foregroundStyle(.white)
                     .textSelection(.enabled)
-                Text(model.locationStatus.uppercased())
+                Text(AppLocalization.text(model.locationStatus.uppercased()))
                     .font(.caption2.weight(.bold))
                     .tracking(0.6)
                     .foregroundStyle(color)
@@ -224,7 +224,7 @@ struct LiveCockpitView: View {
                 locationValue("HEADING", number(fix?.data.hdg) + "°")
                 locationValue("ACCURACY", "±" + number(fix?.data.acc) + " m")
             }
-            Text(model.runMode == .replay ? "Recorded GPS · not current position" : "Age \(number(age)) s · Stored locally")
+            Text(AppLocalization.text(model.runMode == .replay ? "Recorded GPS · not current position" : "Age \(number(age)) s · Stored locally"))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(TelemetryTheme.quietText)
         }
@@ -235,11 +235,11 @@ struct LiveCockpitView: View {
 
     private func locationValue(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(label)
+            Text(AppLocalization.text(label))
                 .font(.caption2.weight(.bold))
                 .tracking(0.6)
                 .foregroundStyle(TelemetryTheme.quietText)
-            Text(value)
+            Text(AppLocalization.text(value))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.white)
                 .lineLimit(1)
@@ -260,35 +260,35 @@ struct LiveCockpitView: View {
             : AnyLayout(HStackLayout(alignment: .center, spacing: 8))
         return VStack(alignment: .leading, spacing: 4) {
             layout {
-                Text("REPLAY" + (model.replayController.recordingMode.map { " · " + $0.rawValue } ?? ""))
+                Text(AppLocalization.text("REPLAY" + (model.replayController.recordingMode.map { " · " + $0.rawValue } ?? "")))
                     .font(.caption2.weight(.bold)).foregroundStyle(TelemetryTheme.accent)
-                Text(String(format: "%.1f / %.1f s", model.replayController.position, model.replayController.duration))
+                Text(AppLocalization.text(String(format: "%.1f / %.1f s", model.replayController.position, model.replayController.duration)))
                 .font(.caption.monospacedDigit()).foregroundStyle(TelemetryTheme.mutedText)
-                .accessibilityLabel("Recorded time")
-                .accessibilityValue(String(format: "%.1f of %.1f seconds", model.replayController.position, model.replayController.duration))
+                .accessibilityLabel(AppLocalization.text("Recorded time"))
+                .accessibilityValue(AppLocalization.text(String(format: "%.1f of %.1f seconds", model.replayController.position, model.replayController.duration)))
                 .accessibilityIdentifier("cockpit-replay-position")
             }
             HStack(spacing: 4) {
                 if model.replayController.isPlaying {
                     Button(action: model.pauseReplayPlayback) {
                         Image(systemName: "pause.fill").frame(minWidth: 44, minHeight: 44)
-                    }.accessibilityLabel("Pause").accessibilityIdentifier("cockpit-replay-pause")
+                    }.accessibilityLabel(AppLocalization.text("Pause")).accessibilityIdentifier("cockpit-replay-pause")
                 } else {
                     Button(action: model.playReplay) {
                         Image(systemName: "play.fill").frame(minWidth: 44, minHeight: 44)
-                    }.accessibilityLabel("Play").accessibilityIdentifier("cockpit-replay-play")
+                    }.accessibilityLabel(AppLocalization.text("Play")).accessibilityIdentifier("cockpit-replay-play")
                         .disabled(model.replayController.position >= model.replayController.duration)
                 }
                 Button { Task { await model.seekReplay(to: 0) } } label: {
                     Image(systemName: "backward.end.fill").frame(minWidth: 44, minHeight: 44)
-                }.accessibilityLabel("Start").accessibilityIdentifier("cockpit-replay-start")
+                }.accessibilityLabel(AppLocalization.text("Start")).accessibilityIdentifier("cockpit-replay-start")
                     .disabled(model.replayController.duration <= 0)
                 Button(action: model.stopReplay) {
                     Image(systemName: "stop.fill").frame(minWidth: 44, minHeight: 44)
-                }.accessibilityLabel("Stop Replay").accessibilityIdentifier("cockpit-replay-stop")
+                }.accessibilityLabel(AppLocalization.text("Stop Replay")).accessibilityIdentifier("cockpit-replay-stop")
                 Button { showingReplayDetails = true } label: {
                     Image(systemName: "info.circle").frame(minWidth: 44, minHeight: 44)
-                }.accessibilityLabel("Playback details").accessibilityIdentifier("cockpit-replay-details")
+                }.accessibilityLabel(AppLocalization.text("Playback details")).accessibilityIdentifier("cockpit-replay-details")
             }
             .font(.body).buttonStyle(.bordered).controlSize(.small)
         }
@@ -301,14 +301,14 @@ struct LiveCockpitView: View {
             NavigationStack {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text(TelemetryDisplayState.modeTitle(.replay, recordingMode: model.replayController.recordingMode))
-                        Text(String(format: "%.1f / %.1f recorded seconds", model.replayController.position, model.replayController.duration))
-                        Text("Vehicle and GPS acquisition are off during replay")
-                        Text("Playback rate: \(model.replayController.playbackRate)x")
+                        Text(AppLocalization.text(TelemetryDisplayState.modeTitle(.replay, recordingMode: model.replayController.recordingMode)))
+                        Text(AppLocalization.text(String(format: "%.1f / %.1f recorded seconds", model.replayController.position, model.replayController.duration)))
+                        Text(AppLocalization.text("Vehicle and GPS acquisition are off during replay"))
+                        Text(AppLocalization.text("Playback rate: \(model.replayController.playbackRate)x"))
                     }.padding()
                 }
-                .navigationTitle("Playback details").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingReplayDetails = false } } }
+                .navigationTitle(AppLocalization.text("Playback details")).navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button(AppLocalization.text("Done")) { showingReplayDetails = false } } }
             }
         }
     }
@@ -329,19 +329,19 @@ struct LiveCockpitView: View {
                             .foregroundStyle(.white)
                     }
                     Spacer()
-                    Button("Edit", systemImage: "slider.horizontal.3") {
+                    Button(AppLocalization.text("Edit"), systemImage: "slider.horizontal.3") {
                         editorPresented = true
                     }
                     .buttonStyle(.bordered)
                     .accessibilityIdentifier("profile-edit-dashboard")
                 }
                 if profile.pages.count > 1 {
-                    Picker("Dashboard page", selection: Binding(
+                    Picker(AppLocalization.text("Dashboard page"), selection: Binding(
                         get: { selectedPageID ?? page.id },
                         set: { selectedPageID = $0 }
                     )) {
                         ForEach(profile.pages) { item in
-                            Text(item.name).tag(item.id)
+                            Text(verbatim: item.name).tag(item.id)
                         }
                     }
                     .pickerStyle(.menu)
@@ -450,14 +450,14 @@ struct LiveCockpitView: View {
                     .trim(from: semi ? 0.5 : 0, to: semi ? 0.5 + 0.5 * progress : progress)
                     .stroke(color, style: StrokeStyle(lineWidth: 11, lineCap: .round))
                     .rotationEffect(.degrees(semi ? 0 : -90))
-                Text(format(value, decimals: widget.configuration.decimals))
+                Text(AppLocalization.text(format(value, decimals: widget.configuration.decimals)))
                     .font(TelemetryTypography.gaugeMeasurement)
                     .monospacedDigit()
                     .foregroundStyle(.white)
             }
             .frame(maxWidth: .infinity)
             .aspectRatio(semi ? 1.7 : 1, contentMode: .fit)
-            Text(widget.configuration.unit)
+            Text(verbatim: widget.configuration.unit)
                 .font(.caption)
                 .foregroundStyle(TelemetryTheme.mutedText)
         }
@@ -484,12 +484,12 @@ struct LiveCockpitView: View {
             } else {
                 ProgressView(value: progress)
                     .tint(color)
-                Text(format(value, decimals: widget.configuration.decimals))
+                Text(AppLocalization.text(format(value, decimals: widget.configuration.decimals)))
                     .font(TelemetryTypography.gaugeMeasurement)
                     .monospacedDigit()
                     .foregroundStyle(.white)
             }
-            Text(widget.configuration.unit)
+            Text(verbatim: widget.configuration.unit)
                 .font(.caption)
                 .foregroundStyle(TelemetryTheme.mutedText)
         }
@@ -517,11 +517,11 @@ struct LiveCockpitView: View {
                 Text(widget.configuration.label)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
-                Text(hasCondition ? state : format(value, decimals: widget.configuration.decimals))
+                Text(AppLocalization.text(hasCondition ? state : format(value, decimals: widget.configuration.decimals)))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(TelemetryTheme.mutedText)
                 if !hasCondition {
-                    Text(state).font(.caption2).foregroundStyle(TelemetryTheme.mutedText)
+                    Text(AppLocalization.text(state)).font(.caption2).foregroundStyle(TelemetryTheme.mutedText)
                 }
             }
             Spacer()
@@ -543,7 +543,7 @@ struct LiveCockpitView: View {
                 Text(widget.configuration.label)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
-                Text(state)
+                Text(AppLocalization.text(state))
                     .font(.caption.weight(.bold))
                     .foregroundStyle(TelemetryTheme.mutedText)
             }
@@ -558,12 +558,12 @@ struct LiveCockpitView: View {
             Text(widget.configuration.label)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(TelemetryTheme.mutedText)
-            Text(value)
+            Text(AppLocalization.text(value))
                 .font(.system(.body, design: .monospaced))
                 .foregroundStyle(.white)
                 .textSelection(.enabled)
                 .lineLimit(3)
-            Text(status)
+            Text(AppLocalization.text(status))
                 .font(.caption)
                 .foregroundStyle(TelemetryTheme.quietText)
         }
@@ -612,13 +612,13 @@ struct LiveCockpitView: View {
                 Label(widget.configuration.label, systemImage: "location.fill")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
-                Text("\(number(fix?.data.lat, digits: 6)), \(number(fix?.data.lon, digits: 6))")
+                Text(AppLocalization.text("\(number(fix?.data.lat, digits: 6)), \(number(fix?.data.lon, digits: 6))"))
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.white)
-                Text("Speed \(number(fix?.data.spd.map { $0 * 3.6 })) km/h · ±\(number(fix?.data.acc)) m")
+                Text(AppLocalization.text("Speed \(number(fix?.data.spd.map { $0 * 3.6 })) km/h · ±\(number(fix?.data.acc)) m"))
                     .font(.caption)
                     .foregroundStyle(TelemetryTheme.mutedText)
-                Text(fix == nil ? "NO FIX" : "GPS FIX")
+                Text(AppLocalization.text(fix == nil ? "NO FIX" : "GPS FIX"))
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(fix == nil ? TelemetryTheme.warning : TelemetryTheme.valid)
             }
@@ -639,7 +639,7 @@ struct LiveCockpitView: View {
             Text(widget.configuration.label)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(TelemetryTheme.mutedText)
-            Text(state)
+            Text(AppLocalization.text(state))
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(state.contains("INVALID") ? TelemetryTheme.critical : TelemetryTheme.mutedText)
                 .fixedSize(horizontal: false, vertical: true)
@@ -743,7 +743,7 @@ private struct TrackMapView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Label(title, systemImage: "map")
+            Label(AppLocalization.text(title), systemImage: "map")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white)
             if let coordinate {
@@ -778,9 +778,9 @@ private struct TrackMapView: View {
                     }
                     .frame(minHeight: 170)
                     .background(TelemetryTheme.plot)
-                    .accessibilityLabel("Local route preview")
+                    .accessibilityLabel(AppLocalization.text("Local route preview"))
                 }
-                Text("\(String(format: "%.6f", coordinate.latitude)), \(String(format: "%.6f", coordinate.longitude))")
+                Text(AppLocalization.text("\(String(format: "%.6f", coordinate.latitude)), \(String(format: "%.6f", coordinate.longitude))"))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(TelemetryTheme.mutedText)
             } else {
@@ -815,35 +815,35 @@ private struct RecordingSessionBar: View {
         VStack(spacing: TelemetryTheme.Spacing.xSmall) {
             if dynamicTypeSize.isAccessibilitySize {
                 Menu {
-                    Text(model.runMode == .demo ? "DEMO · synthetic data" : "LIVE · vehicle data")
-                    Text(model.localRecordingEnabled ? "Recording on" : "Recording off")
-                    Text(model.collecting ? "GPS collecting" : "GPS off")
-                    Text(model.lastMarkAt.map { "Last mark " + $0.formatted(date: .omitted, time: .shortened) } ?? "No mark")
+                    Text(AppLocalization.text(model.runMode == .demo ? "DEMO · synthetic data" : "LIVE · vehicle data"))
+                    Text(AppLocalization.text(model.localRecordingEnabled ? "Recording on" : "Recording off"))
+                    Text(AppLocalization.text(model.collecting ? "GPS collecting" : "GPS off"))
+                    Text(AppLocalization.text(model.lastMarkAt.map { "Last mark " + $0.formatted(date: .omitted, time: .shortened) } ?? "No mark"))
                 } label: {
-                    Label(model.runMode == .demo ? "DEMO" : "LIVE", systemImage: "info.circle")
+                    Label(AppLocalization.text(model.runMode == .demo ? "DEMO" : "LIVE"), systemImage: "info.circle")
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(TelemetryTheme.accent)
                         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                 }
-                .accessibilityLabel("Recording and GPS status")
-                .accessibilityValue((model.localRecordingEnabled ? "Recording on" : "Recording off") + " · " + (model.collecting ? "GPS collecting" : "GPS off"))
+                .accessibilityLabel(AppLocalization.text("Recording and GPS status"))
+                .accessibilityValue(AppLocalization.text((model.localRecordingEnabled ? "Recording on" : "Recording off") + " · " + (model.collecting ? "GPS collecting" : "GPS off")))
                 .accessibilityIdentifier("session-status-details")
             } else {
                 HStack(spacing: TelemetryTheme.Spacing.small) {
-                    Text(model.runMode == .demo ? "DEMO" : "LIVE")
+                    Text(AppLocalization.text(model.runMode == .demo ? "DEMO" : "LIVE"))
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(TelemetryTheme.accent)
                         .accessibilityIdentifier("cockpit-recording-mode")
-                    Text(model.localRecordingEnabled ? "RECORDING" : "REC OFF")
+                    Text(AppLocalization.text(model.localRecordingEnabled ? "RECORDING" : "REC OFF"))
                         .font(.caption2.weight(.bold))
                         .tracking(0.7)
                         .foregroundStyle(model.localRecordingEnabled ? TelemetryTheme.critical : TelemetryTheme.valid)
-                    Text(model.collecting ? "GPS ON" : "GPS OFF")
+                    Text(AppLocalization.text(model.collecting ? "GPS ON" : "GPS OFF"))
                         .font(.caption2.weight(.bold))
                         .tracking(0.7)
                         .foregroundStyle(model.collecting ? TelemetryTheme.accent : TelemetryTheme.quietText)
                     Spacer()
-                    Text(model.lastMarkAt.map { "Last mark " + $0.formatted(date: .omitted, time: .shortened) } ?? "No mark")
+                    Text(AppLocalization.text(model.lastMarkAt.map { "Last mark " + $0.formatted(date: .omitted, time: .shortened) } ?? "No mark"))
                         .font(.caption2)
                         .foregroundStyle(TelemetryTheme.mutedText)
                         .lineLimit(1)
@@ -869,7 +869,7 @@ private struct RecordingSessionBar: View {
                 if model.localRecordingEnabled { model.stopRecording() }
                 else { model.startRecording() }
             } label: {
-                Label(model.localRecordingEnabled ? "Stop recording" : "Start recording",
+                Label(AppLocalization.text(model.localRecordingEnabled ? "Stop recording" : "Start recording"),
                       systemImage: model.localRecordingEnabled ? "stop.fill" : "record.circle")
                     .font(.headline.weight(.bold))
                     .fixedSize(horizontal: false, vertical: true)
@@ -878,11 +878,11 @@ private struct RecordingSessionBar: View {
             .buttonStyle(.borderedProminent)
             .tint(model.localRecordingEnabled ? TelemetryTheme.critical : TelemetryTheme.accent)
             .accessibilityIdentifier("toggle-recording")
-            .accessibilityValue(model.localRecordingEnabled ? "Recording on" : "Recording off")
+            .accessibilityValue(AppLocalization.text(model.localRecordingEnabled ? "Recording on" : "Recording off"))
             .disabled(model.runMode == .replay)
 
             Button(action: model.mark) {
-                Label("Mark", systemImage: "flag.fill").frame(minWidth: 44, minHeight: 44)
+                Label(AppLocalization.text("Mark"), systemImage: "flag.fill").frame(minWidth: 44, minHeight: 44)
             }
             .labelStyle(.iconOnly).buttonStyle(.bordered)
             .tint(TelemetryTheme.mutedText)
@@ -893,14 +893,14 @@ private struct RecordingSessionBar: View {
                 if model.collecting { model.stopLocation() }
                 else { model.startLocation() }
             } label: {
-                Label("GPS", systemImage: model.collecting ? "location.fill" : "location")
+                Label(AppLocalization.text("GPS"), systemImage: model.collecting ? "location.fill" : "location")
                     .frame(minWidth: 44, minHeight: 44)
             }
             .labelStyle(.iconOnly).buttonStyle(.bordered)
             .tint(model.collecting ? TelemetryTheme.accent : TelemetryTheme.mutedText)
             .disabled(model.storageStatus != nil || model.runMode == .replay)
-            .accessibilityLabel(model.collecting ? "Stop GPS" : "Start GPS")
-            .accessibilityValue(model.collecting ? "GPS collecting" : "GPS off")
+            .accessibilityLabel(AppLocalization.text(model.collecting ? "Stop GPS" : "Start GPS"))
+            .accessibilityValue(AppLocalization.text(model.collecting ? "GPS collecting" : "GPS off"))
             .accessibilityIdentifier("toggle-gps")
         }
     }

@@ -29,7 +29,7 @@ struct SessionsView: View {
                             ReplayAnalysisView(model: model)
                             replayTimeCard
                             savedSessionCard
-                            DisclosureGroup("Session details") { sessionStats }
+                            DisclosureGroup(AppLocalization.text("Session details")) { sessionStats }
                         } else {
                             sessionHero
                             sessionControls
@@ -44,12 +44,12 @@ struct SessionsView: View {
                 .scrollIndicators(.hidden)
                 .background(TelemetryTheme.background.ignoresSafeArea())
             }
-            .navigationTitle("Sessions")
+            .navigationTitle(AppLocalization.text("Sessions"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if model.runMode == .replay {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button("Stop Replay", action: model.stopReplay)
+                        Button(AppLocalization.text("Stop Replay"), action: model.stopReplay)
                             .accessibilityIdentifier("stop-replay-header")
                     }
                 }
@@ -85,7 +85,7 @@ struct SessionsView: View {
         VStack(alignment: .leading, spacing: 6) {
             TelemetryRunStatusView(model: model)
             if let storageStatus = model.storageStatus {
-                Label(storageStatus, systemImage: "exclamationmark.triangle.fill")
+                Label(AppLocalization.text(storageStatus), systemImage: "exclamationmark.triangle.fill")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(TelemetryTheme.critical)
                     .fixedSize(horizontal: false, vertical: true)
@@ -102,34 +102,34 @@ struct SessionsView: View {
         return layout {
             if model.replayController.isPlaying {
                 Button { model.pauseReplayPlayback() } label: {
-                    Label("Pause", systemImage: "pause.fill").frame(minHeight: 44)
+                    Label(AppLocalization.text("Pause"), systemImage: "pause.fill").frame(minHeight: 44)
                 }
                 .accessibilityIdentifier("session-replay-pause")
             } else {
                 Button { model.playReplay() } label: {
-                    Label("Play", systemImage: "play.fill").frame(minHeight: 44)
+                    Label(AppLocalization.text("Play"), systemImage: "play.fill").frame(minHeight: 44)
                 }
                 .disabled(model.replayController.position >= model.replayController.duration)
                 .accessibilityIdentifier("session-replay-play")
             }
-            Text(String(format: "%.1f / %.1f s", model.replayController.position, model.replayController.duration))
+            Text(AppLocalization.text(String(format: "%.1f / %.1f s", model.replayController.position, model.replayController.duration)))
                 .font(.caption.monospacedDigit())
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityLabel("Recorded time")
-                .accessibilityValue(String(format: "%.1f of %.1f seconds", model.replayController.position, model.replayController.duration))
+                .accessibilityLabel(AppLocalization.text("Recorded time"))
+                .accessibilityValue(AppLocalization.text(String(format: "%.1f of %.1f seconds", model.replayController.position, model.replayController.duration)))
                 .accessibilityIdentifier("session-replay-position")
             Menu {
                 ForEach([0.5, 1.0, 2.0], id: \.self) { rate in
-                    Button(String(format: "%g×", rate)) { model.setReplayPlaybackRate(rate) }
+                    Button(AppLocalization.text(String(format: "%g×", rate))) { model.setReplayPlaybackRate(rate) }
                 }
             } label: {
-                Label(String(format: "%g×", model.replayController.playbackRate), systemImage: "speedometer")
+                Label(AppLocalization.text(String(format: "%g×", model.replayController.playbackRate)), systemImage: "speedometer")
                     .frame(minHeight: 44)
             }
             .disabled(model.replayController.duration <= 0)
-            .accessibilityLabel("Replay speed")
-            .accessibilityValue(String(format: "%g times", model.replayController.playbackRate))
+            .accessibilityLabel(AppLocalization.text("Replay speed"))
+            .accessibilityValue(AppLocalization.text(String(format: "%g times", model.replayController.playbackRate)))
             .accessibilityIdentifier("session-replay-speed")
         }
         .buttonStyle(.bordered).tint(TelemetryTheme.accent)
@@ -139,10 +139,10 @@ struct SessionsView: View {
 
     private var savedSessionCard: some View {
         VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
-            Label("SAVED SESSIONS", systemImage: "archivebox")
+            Label(AppLocalization.text("SAVED SESSIONS"), systemImage: "archivebox")
                 .font(.headline)
             Button { showingSessionPicker = true } label: {
-                Text(selectedSessionDescription)
+                Text(AppLocalization.text(selectedSessionDescription))
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -152,27 +152,27 @@ struct SessionsView: View {
                 ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
                 : AnyLayout(HStackLayout())
             actionsLayout {
-                Button("Refresh") { Task { await model.refreshSavedSessions() } }
+                Button(AppLocalization.text("Refresh")) { Task { await model.refreshSavedSessions() } }
                     .accessibilityIdentifier("refresh-saved-sessions")
-                Button("Open Replay") { Task { await model.replaySelectedSession() } }
+                Button(AppLocalization.text("Open Replay")) { Task { await model.replaySelectedSession() } }
                     .disabled(model.selectedSavedSessionID == nil || model.localRecordingEnabled)
                     .accessibilityIdentifier("replay-saved-session")
             }
             .buttonStyle(.bordered)
             if model.runMode == .replay {
-                Button("Stop Replay", action: model.stopReplay)
+                Button(AppLocalization.text("Stop Replay"), action: model.stopReplay)
                     .buttonStyle(.bordered)
                     .accessibilityIdentifier("stop-replay")
             }
-            Text(model.archiveStatus).font(.caption)
+            Text(AppLocalization.text(model.archiveStatus)).font(.caption)
             if model.replayController.loading {
                 HStack {
-                    ProgressView("Loading recording")
-                    Button("Cancel loading", action: model.stopReplay)
+                    ProgressView(AppLocalization.text("Loading recording"))
+                    Button(AppLocalization.text("Cancel loading"), action: model.stopReplay)
                         .accessibilityIdentifier("cancel-replay-loading")
                 }
             }
-            Text("Explore recorded time without acquisition or recording. Use CSV/JSON to preserve the original measurements. Play advances only recorded time; seek pauses playback.")
+            Text(AppLocalization.text("Explore recorded time without acquisition or recording. Use CSV/JSON to preserve the original measurements. Play advances only recorded time; seek pauses playback."))
                 .font(.caption2).foregroundStyle(TelemetryTheme.mutedText)
         }
         .telemetrySurface(.standard)
@@ -182,7 +182,7 @@ struct SessionsView: View {
     }
 
     private func sessionDescription(_ session: PersistedMeasurementSession) -> String {
-        "\(Date(timeIntervalSince1970: session.startedAt).formatted(date: .abbreviated, time: .standard)) · \(session.mode.rawValue)\(session.endedAt == nil ? " · OPEN" : "")"
+        "\(Date(timeIntervalSince1970: session.startedAt).formatted(.dateTime.year().month(.abbreviated).day().hour().minute().second().locale(Locale(identifier: AppLanguageStore.shared.language.rawValue)))) · \(session.mode.rawValue)\(session.endedAt == nil ? " · " + AppLocalization.text("OPEN") : "")"
     }
 
     private var selectedSessionDescription: String {
@@ -195,7 +195,7 @@ struct SessionsView: View {
     private var sessionPickerSheet: some View {
         NavigationStack {
             List {
-                Button("Current recording / last stopped") {
+                Button(AppLocalization.text("Current recording / last stopped")) {
                     model.selectedSavedSessionID = nil
                     showingSessionPicker = false
                 }
@@ -204,7 +204,7 @@ struct SessionsView: View {
                         model.selectedSavedSessionID = session.sessionID
                         showingSessionPicker = false
                     } label: {
-                        Text(sessionDescription(session))
+                        Text(AppLocalization.text(sessionDescription(session)))
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -212,11 +212,11 @@ struct SessionsView: View {
                     .accessibilityAddTraits(session.sessionID == model.selectedSavedSessionID ? .isSelected : [])
                 }
             }
-            .navigationTitle("Saved sessions")
+            .navigationTitle(AppLocalization.text("Saved sessions"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { showingSessionPicker = false }
+                    Button(AppLocalization.text("Cancel")) { showingSessionPicker = false }
                 }
             }
         }
@@ -228,36 +228,36 @@ struct SessionsView: View {
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
             : AnyLayout(HStackLayout(spacing: 8))
         return VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
-            Label("RECORDED TIME", systemImage: "clock.arrow.circlepath")
+            Label(AppLocalization.text("RECORDED TIME"), systemImage: "clock.arrow.circlepath")
                 .font(.headline)
-            Text(model.replayController.recordingMode == .demo ? "DEMO recording · acquisition off" : "Saved recording · acquisition off")
+            Text(AppLocalization.text(model.replayController.recordingMode == .demo ? "DEMO recording · acquisition off" : "Saved recording · acquisition off"))
                 .foregroundStyle(TelemetryTheme.accent)
                 .accessibilityIdentifier("replay-recording-origin")
-            Text(String(format: "%.1f / %.1f seconds", model.replayController.position, model.replayController.duration))
+            Text(AppLocalization.text(String(format: "%.1f / %.1f seconds", model.replayController.position, model.replayController.duration)))
                 .monospacedDigit()
                 .accessibilityIdentifier("replay-position")
             if !hasTimeRange && !model.replayController.loading && model.replayController.snapshot != nil {
-                Text(model.replayController.measurementCount == 0
+                Text(AppLocalization.text(model.replayController.measurementCount == 0
                      ? "No recorded samples · no time range"
-                     : "Single recorded instant · no time range")
+                     : "Single recorded instant · no time range"))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(TelemetryTheme.mutedText)
                     .accessibilityIdentifier("replay-single-instant-hint")
             }
             controlsLayout {
                 if model.replayController.isPlaying {
-                    Button("Pause") { model.pauseReplayPlayback() }
+                    Button(AppLocalization.text("Pause")) { model.pauseReplayPlayback() }
                         .accessibilityIdentifier("replay-pause")
                 } else {
-                    Button("Play") { model.playReplay() }
+                    Button(AppLocalization.text("Play")) { model.playReplay() }
                         .disabled(model.replayController.position >= model.replayController.duration)
                         .accessibilityIdentifier("replay-play")
                 }
-                Picker("Speed", selection: Binding(get: { model.replayController.playbackRate },
+                Picker(AppLocalization.text("Speed"), selection: Binding(get: { model.replayController.playbackRate },
                     set: { model.setReplayPlaybackRate($0) })) {
-                    Text("0.5×").tag(0.5)
-                    Text("1×").tag(1.0)
-                    Text("2×").tag(2.0)
+                    Text(AppLocalization.text("0.5×")).tag(0.5)
+                    Text(AppLocalization.text("1×")).tag(1.0)
+                    Text(AppLocalization.text("2×")).tag(2.0)
                 }
                 .pickerStyle(.segmented)
                 .disabled(!hasTimeRange)
@@ -280,9 +280,9 @@ struct SessionsView: View {
             }
             .disabled(!hasTimeRange)
             .frame(minHeight: 44)
-            .accessibilityLabel("Recorded time")
-            .accessibilityValue(String(format: "%.1f of %.1f seconds", model.replayController.position, model.replayController.duration))
-            .accessibilityHint("Adjust recorded time; seeking pauses playback.")
+            .accessibilityLabel(AppLocalization.text("Recorded time"))
+            .accessibilityValue(AppLocalization.text(String(format: "%.1f of %.1f seconds", model.replayController.position, model.replayController.duration)))
+            .accessibilityHint(AppLocalization.text("Adjust recorded time; seeking pauses playback."))
             .accessibilityAdjustableAction { direction in
                 let step = max(0.1, model.replayController.duration / 100)
                 let target: Double
@@ -295,57 +295,57 @@ struct SessionsView: View {
             }
             .accessibilityIdentifier("replay-time-slider")
             controlsLayout {
-                Button("Start") { Task { await model.seekReplay(to: 0) } }
+                Button(AppLocalization.text("Start")) { Task { await model.seekReplay(to: 0) } }
                     .frame(maxWidth: .infinity)
                     .disabled(!hasTimeRange)
                     .accessibilityIdentifier("replay-seek-start")
-                Button("End") { let end = model.replayController.duration; Task { await model.seekReplay(to: end) } }
+                Button(AppLocalization.text("End")) { let end = model.replayController.duration; Task { await model.seekReplay(to: end) } }
                     .frame(maxWidth: .infinity)
                     .disabled(!hasTimeRange)
                     .accessibilityIdentifier("replay-seek-end")
             }
             .buttonStyle(.bordered).controlSize(.large)
             controlsLayout {
-                TextField("Seconds", text: $seekText)
+                TextField(AppLocalization.text("Seconds"), text: $seekText)
                     .textFieldStyle(.roundedBorder)
                     .focused($seekFieldFocused)
                     .submitLabel(.go)
                     .onSubmit(performSeekFromText)
                     .disabled(!hasTimeRange)
-                    .accessibilityLabel("Seek to recorded seconds")
+                    .accessibilityLabel(AppLocalization.text("Seek to recorded seconds"))
                     .accessibilityIdentifier("replay-seek-seconds")
-                Button("Go", action: performSeekFromText)
+                Button(AppLocalization.text("Go"), action: performSeekFromText)
                     .disabled(!hasTimeRange)
                     .accessibilityIdentifier("replay-seek-go")
             }
             .buttonStyle(.bordered).controlSize(.large)
             if let seekError {
-                Text(seekError).font(.caption).foregroundStyle(TelemetryTheme.critical)
+                Text(AppLocalization.text(seekError)).font(.caption).foregroundStyle(TelemetryTheme.critical)
                     .accessibilityIdentifier("replay-seek-error")
             }
             if hasTimeRange {
-                Text(String(format: "Recorded range: 0–%.1f seconds. Values outside this range seek to the nearest end.", model.replayController.duration))
+                Text(AppLocalization.text(String(format: "Recorded range: 0–%.1f seconds. Values outside this range seek to the nearest end.", model.replayController.duration)))
                     .font(.caption).foregroundStyle(TelemetryTheme.mutedText)
             }
             if model.replayController.duration > 0 && model.replayController.position >= model.replayController.duration {
-                Text("End reached · Start to replay")
+                Text(AppLocalization.text("End reached · Start to replay"))
                     .font(.caption.weight(.semibold)).foregroundStyle(TelemetryTheme.accent)
                     .accessibilityIdentifier("replay-end-hint")
             }
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--audit-ui-layout") {
-                Text("Dynamic Type: " + String(describing: dynamicTypeSize))
+                Text(AppLocalization.text("Dynamic Type: " + String(describing: dynamicTypeSize)))
                     .accessibilityIdentifier("ui-dynamic-type-audit")
             }
             #endif
-            if model.replayController.seeking { ProgressView("Seeking recorded time") }
+            if model.replayController.seeking { ProgressView(AppLocalization.text("Seeking recorded time")) }
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--audit-replay-slider") {
-                Text(playbackAdvancedDuringScrub ? "Playback advanced during editing" : "Playback held during editing")
+                Text(AppLocalization.text(playbackAdvancedDuringScrub ? "Playback advanced during editing" : "Playback held during editing"))
                     .accessibilityIdentifier("slider-editing-audit")
             }
             #endif
-            Text("Play and seek rebuild recorded values and MARK without acquisition. Seek pauses playback. Signal freshness is unknown when the recording has no timeout policy. Values and original timestamps remain unchanged.")
+            Text(AppLocalization.text("Play and seek rebuild recorded values and MARK without acquisition. Seek pauses playback. Signal freshness is unknown when the recording has no timeout policy. Values and original timestamps remain unchanged."))
                 .font(.caption2).foregroundStyle(TelemetryTheme.mutedText)
         }
         .telemetrySurface(.standard)
@@ -380,11 +380,11 @@ struct SessionsView: View {
             TelemetryRunStatusView(model: model)
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(model.runMode == .replay ? "REPLAY SNAPSHOT" : model.localRecordingEnabled ? "RECORDING" : "READY TO RECORD")
+                    Text(AppLocalization.text(model.runMode == .replay ? "REPLAY SNAPSHOT" : model.localRecordingEnabled ? "RECORDING" : "READY TO RECORD"))
                         .font(.caption.weight(.bold))
                         .tracking(1.1)
                         .foregroundStyle(model.localRecordingEnabled ? TelemetryTheme.critical : TelemetryTheme.accent)
-                    Text(model.runMode == .replay ? "Saved recording; acquisition is off" : model.localRecordingEnabled ? "Measurement session active" : "Local-first measurement storage")
+                    Text(AppLocalization.text(model.runMode == .replay ? "Saved recording; acquisition is off" : model.localRecordingEnabled ? "Measurement session active" : "Local-first measurement storage"))
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(.white)
                 }
@@ -393,11 +393,11 @@ struct SessionsView: View {
                     .font(.title2)
                     .foregroundStyle(model.localRecordingEnabled ? TelemetryTheme.critical : TelemetryTheme.valid)
             }
-            Text(model.runMode == .replay ? "Acquisition and recording are off" : model.localRecordingStatus)
+            Text(AppLocalization.text(model.runMode == .replay ? "Acquisition and recording are off" : model.localRecordingStatus))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(TelemetryTheme.mutedText)
             if let storageStatus = model.storageStatus {
-                Label(storageStatus, systemImage: "exclamationmark.triangle.fill")
+                Label(AppLocalization.text(storageStatus), systemImage: "exclamationmark.triangle.fill")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(TelemetryTheme.critical)
             }
@@ -413,7 +413,7 @@ struct SessionsView: View {
             Button {
                 if model.localRecordingEnabled { model.stopRecording() } else { model.startRecording() }
             } label: {
-                Label(model.localRecordingEnabled ? "Stop recording" : "Start recording",
+                Label(AppLocalization.text(model.localRecordingEnabled ? "Stop recording" : "Start recording"),
                       systemImage: model.localRecordingEnabled ? "stop.fill" : "record.circle")
                     .font(.headline.weight(.bold))
                     .frame(maxWidth: .infinity)
@@ -426,7 +426,7 @@ struct SessionsView: View {
             .accessibilityIdentifier("sessions-toggle-recording")
 
             Button(action: model.mark) {
-                Label("Mark", systemImage: "flag.fill")
+                Label(AppLocalization.text("Mark"), systemImage: "flag.fill")
                     .font(.headline.weight(.bold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 13)
@@ -452,11 +452,11 @@ struct SessionsView: View {
 
     private func sessionStat(_ label: String, _ value: String, _ symbol: String) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            Label(label, systemImage: symbol)
+            Label(AppLocalization.text(label), systemImage: symbol)
                 .font(.caption2.weight(.bold))
                 .tracking(0.7)
                 .foregroundStyle(TelemetryTheme.mutedText)
-            Text(value)
+            Text(AppLocalization.text(value))
                 .font(.title3.weight(.semibold))
                 .monospacedDigit()
                 .foregroundStyle(.white)
@@ -477,29 +477,29 @@ struct SessionsView: View {
     private var exportCard: some View {
         VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
             HStack {
-                Label("EXPORT", systemImage: "square.and.arrow.up")
+                Label(AppLocalization.text("EXPORT"), systemImage: "square.and.arrow.up")
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(.white)
                 Spacer()
-                Text("SQLITE BACKED")
+                Text(AppLocalization.text("SQLITE BACKED"))
                     .font(.caption2.weight(.bold))
                     .tracking(0.7)
                     .foregroundStyle(TelemetryTheme.quietText)
             }
             HStack(spacing: TelemetryTheme.Spacing.small) {
-                Button("JSON") { prepareExport(.json) }
+                Button(AppLocalization.text("JSON")) { prepareExport(.json) }
                 .disabled(exportRequest.busy)
                 .buttonStyle(.bordered)
                 .accessibilityIdentifier("sessions-export-json")
-                Button("CSV") { prepareExport(.csv) }
+                Button(AppLocalization.text("CSV")) { prepareExport(.csv) }
                 .disabled(exportRequest.busy)
                 .buttonStyle(.bordered)
                 .accessibilityIdentifier("sessions-export-csv")
             }
-            Text(model.exportStatus)
+            Text(AppLocalization.text(model.exportStatus))
                 .font(.caption)
                 .foregroundStyle(TelemetryTheme.mutedText)
-            Text("Exports preserve original measurement timestamps, receive timestamps, raw CAN frames, decoded signals, GPS, and system events.")
+            Text(AppLocalization.text("Exports preserve original measurement timestamps, receive timestamps, raw CAN frames, decoded signals, GPS, and system events."))
                 .font(.caption2)
                 .foregroundStyle(TelemetryTheme.quietText)
         }

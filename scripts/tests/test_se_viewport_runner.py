@@ -32,12 +32,12 @@ class SEViewportRunnerTests(unittest.TestCase):
             with self.subTest(runtimes=runtimes), self.assertRaises(ValueError):
                 runner.select_ui_destination({'runtimes': runtimes}, se_viewport=True)
 
-    def test_two_se_reexecutions_remain_subset_of_25_unique_tests(self):
+    def test_two_se_reexecutions_remain_subset_of_30_unique_tests(self):
         self.assertEqual(runner.SE_VIEWPORT_TESTS, [
             'TelemetryUITests/SmallViewportUIRegression/testSmallViewportLiveAndEditorReachability',
             'TelemetryUITests/SmallViewportStatusUIRegression/testStatusAndEditingHelpRemainAccessibleAtMaximumText'])
         existing = [test for group in runner.TEST_GROUPS.values() for test in group]
-        self.assertEqual((len(existing), len(set(existing))), (25, 25))
+        self.assertEqual((len(existing), len(set(existing))), (30, 30))
         self.assertTrue(set(runner.SE_VIEWPORT_TESTS).issubset(runner.TEST_GROUPS['layout']))
         clean = {'totalTestCount': 2, 'passedTests': 2, 'failedTests': 0, 'skippedTests': 0}
         runner.verify_summary(clean, len(runner.SE_VIEWPORT_TESTS))

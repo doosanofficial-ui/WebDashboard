@@ -27,11 +27,11 @@ struct SignalsView: View {
                 .scrollIndicators(.hidden)
                 .background(TelemetryTheme.background.ignoresSafeArea())
             }
-            .navigationTitle("Signals")
+            .navigationTitle(AppLocalization.text("Signals"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Edit", systemImage: "slider.horizontal.3") {
+                    Button(AppLocalization.text("Edit"), systemImage: "slider.horizontal.3") {
                         signalEditorPresented = true
                     }
                     .disabled(model.adapterProfile == nil)
@@ -49,7 +49,7 @@ struct SignalsView: View {
     private func healthCard(at now: Date) -> some View {
         VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
             TelemetryRunStatusView(model: model)
-            Text(model.runMode == .replay ? "Recorded values · acquisition off" : model.adapterStatus)
+            Text(AppLocalization.text(model.runMode == .replay ? "Recorded values · acquisition off" : model.adapterStatus))
                 .font(.caption).foregroundStyle(TelemetryTheme.mutedText)
             HStack {
                 healthValue(model.runMode == .replay ? "RECORDED AGE" : "FRAME AGE", frameAge(at: now))
@@ -64,10 +64,10 @@ struct SignalsView: View {
 
     private func healthValue(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label)
+            Text(AppLocalization.text(label))
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(TelemetryTheme.quietText)
-            Text(value)
+            Text(AppLocalization.text(value))
                 .font(.caption.monospacedDigit().weight(.semibold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
@@ -81,20 +81,20 @@ struct SignalsView: View {
             HStack(spacing: 7) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(TelemetryTheme.quietText)
-                TextField("Filter signal, CAN ID, source", text: $searchText)
+                TextField(AppLocalization.text("Filter signal, CAN ID, source"), text: $searchText)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
             }
             .padding(.horizontal, TelemetryTheme.Spacing.small)
             .padding(.vertical, 10)
             .background(TelemetryTheme.surface, in: RoundedRectangle(cornerRadius: TelemetryTheme.Radius.small, style: .continuous))
-            Button(showStaleOnly ? "ALL" : "STALE") {
+            Button(AppLocalization.text(showStaleOnly ? "ALL" : "STALE")) {
                 showStaleOnly.toggle()
             }
             .font(.caption2.weight(.bold))
             .buttonStyle(.bordered)
             .tint(showStaleOnly ? TelemetryTheme.warning : TelemetryTheme.mutedText)
-            .accessibilityLabel(showStaleOnly ? "Show all signals" : "Show stale signals")
+            .accessibilityLabel(AppLocalization.text(showStaleOnly ? "Show all signals" : "Show stale signals"))
             .accessibilityIdentifier("signals-stale-filter")
         }
         .accessibilityElement(children: .contain)
@@ -105,21 +105,21 @@ struct SignalsView: View {
         let rows = filteredRows(at: now)
         return VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
             HStack {
-                Text("SIGNAL CATALOG")
+                Text(AppLocalization.text("SIGNAL CATALOG"))
                     .font(.caption.weight(.bold))
                     .tracking(1.0)
                     .foregroundStyle(TelemetryTheme.accent)
                 Spacer()
-                Text("\(rows.count) ITEMS")
+                Text(AppLocalization.text("\(rows.count) ITEMS"))
                     .font(.caption2.monospacedDigit().weight(.bold))
                     .foregroundStyle(TelemetryTheme.quietText)
             }
             if (model.runMode == .replay && signalRows.isEmpty) || (model.adapterProfile == nil && model.frame == nil && model.connection != "Connected") {
                 VStack(alignment: .leading, spacing: 6) {
-                    Label(model.runMode == .replay ? "No recorded signal at this time" : "No signal source", systemImage: "waveform.slash")
+                    Label(AppLocalization.text(model.runMode == .replay ? "No recorded signal at this time" : "No signal source"), systemImage: "waveform.slash")
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(.white)
-                    Text(model.runMode == .replay ? "Seek forward to a recorded signal. Acquisition remains off." : "Choose a saved recording or import a verified adapter profile. No placeholder values are shown.")
+                    Text(AppLocalization.text(model.runMode == .replay ? "Seek forward to a recorded signal. Acquisition remains off." : "Choose a saved recording or import a verified adapter profile. No placeholder values are shown."))
                         .font(.caption)
                         .foregroundStyle(TelemetryTheme.mutedText)
                 }
@@ -127,14 +127,14 @@ struct SignalsView: View {
                 .accessibilityIdentifier("signal-source-empty")
             } else if rows.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(showStaleOnly && searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                         ? "No confirmed stale signals" : "No matching signals")
+                    Text(AppLocalization.text(showStaleOnly && searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                         ? "No confirmed stale signals" : "No matching signals"))
                         .font(.headline)
                     if showStaleOnly && model.runMode == .replay && model.replaySignalFreshness.values.contains(.unknown) {
-                        Text("Freshness is unknown for this recording.")
+                        Text(AppLocalization.text("Freshness is unknown for this recording."))
                             .font(.caption).foregroundStyle(TelemetryTheme.mutedText)
                     }
-                    Button("Show all signals") { searchText = ""; showStaleOnly = false }
+                    Button(AppLocalization.text("Show all signals")) { searchText = ""; showStaleOnly = false }
                         .buttonStyle(.bordered).controlSize(.large)
                         .accessibilityIdentifier("signals-clear-filters")
                 }
@@ -160,18 +160,18 @@ struct SignalsView: View {
                 .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(format(value, decimals: row.decimals))
+                Text(AppLocalization.text(format(value, decimals: row.decimals)))
                     .font(.system(size: 30, weight: .semibold, design: .rounded)).monospacedDigit()
                     .foregroundStyle(value?.isFinite == true ? .white : TelemetryTheme.mutedText)
-                Text(row.unit.isEmpty ? "-" : row.unit)
+                Text(verbatim: row.unit.isEmpty ? "-" : row.unit)
                     .font(.caption).foregroundStyle(TelemetryTheme.mutedText)
             }
-            Text(label).font(.caption.weight(.semibold)).foregroundStyle(color)
+            Text(AppLocalization.text(label)).font(.caption.weight(.semibold)).foregroundStyle(color)
             if model.runMode == .replay {
-                Text(TelemetryDisplayState.freshnessLabel(model.replaySignalFreshness[row.id]))
+                Text(AppLocalization.text(TelemetryDisplayState.freshnessLabel(model.replaySignalFreshness[row.id])))
                     .font(.caption).foregroundStyle(TelemetryTheme.mutedText)
             }
-            Text(row.detail).font(.caption2.monospaced()).foregroundStyle(TelemetryTheme.quietText)
+            Text(AppLocalization.text(row.detail)).font(.caption2.monospaced()).foregroundStyle(TelemetryTheme.quietText)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .telemetrySurface(.standard, padding: TelemetryTheme.Spacing.small)
@@ -182,26 +182,28 @@ struct SignalsView: View {
     private func rawCANCard() -> some View {
         VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
             HStack {
-                Label(model.showingDiagnosticResponse ? "DIAGNOSTIC RESPONSE" : "RAW CAN",
+                Label(AppLocalization.text(model.showingDiagnosticResponse ? "DIAGNOSTIC RESPONSE" : "RAW CAN"),
                       systemImage: model.showingDiagnosticResponse ? "arrow.left.arrow.right" : "hexagon")
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(.white)
                 Spacer()
-                Text("READ ONLY")
+                Text(AppLocalization.text("READ ONLY"))
                     .font(.caption2.weight(.bold))
                     .tracking(0.7)
                     .foregroundStyle(TelemetryTheme.warning)
             }
-            Text(model.rawCANText)
+            Text(AppLocalization.text(model.rawCANText))
+                .accessibilityIdentifier("raw-can-content")
                 .font(.system(.body, design: .monospaced).weight(.semibold))
                 .foregroundStyle(.white)
                 .textSelection(.enabled)
                 .lineLimit(2)
-            Text("Receive timestamp is the adapter/iPhone arrival time, not a bus transmission timestamp.")
+            Text(AppLocalization.text("Receive timestamp is the adapter/iPhone arrival time, not a bus transmission timestamp."))
                 .font(.caption2)
                 .foregroundStyle(TelemetryTheme.quietText)
         }
         .telemetrySurface(.plot)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("raw-can-card")
     }
 
@@ -209,28 +211,28 @@ struct SignalsView: View {
         DisclosureGroup(isExpanded: $showDeveloperControls) {
             VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
                 HStack(spacing: TelemetryTheme.Spacing.small) {
-                    Button("Demo adapter", action: model.startDemoAdapter)
+                    Button(AppLocalization.text("Demo adapter"), action: model.startDemoAdapter)
                         .buttonStyle(.borderedProminent)
                         .tint(TelemetryTheme.accentMuted)
                         .accessibilityIdentifier("start-adapter-demo")
-                    Button("Stop", role: .destructive, action: model.stopDemoAdapter)
+                    Button(AppLocalization.text("Stop"), role: .destructive, action: model.stopDemoAdapter)
                         .buttonStyle(.bordered)
                 }
                 HStack(spacing: TelemetryTheme.Spacing.small) {
-                    Button("Start live", action: model.startLiveAdapter)
+                    Button(AppLocalization.text("Start live"), action: model.startLiveAdapter)
                         .buttonStyle(.bordered)
                         .disabled(model.adapterProfile == nil)
                         .accessibilityIdentifier("start-live-adapter")
-                    Button("Stop live", role: .destructive, action: model.stopLiveAdapter)
+                    Button(AppLocalization.text("Stop live"), role: .destructive, action: model.stopLiveAdapter)
                         .buttonStyle(.bordered)
                 }
-                Text("Live adapters require an observed profile; no ELM327 UUIDs or commands are guessed.")
+                Text(AppLocalization.text("Live adapters require an observed profile; no ELM327 UUIDs or commands are guessed."))
                     .font(.caption)
                     .foregroundStyle(TelemetryTheme.mutedText)
             }
             .padding(.top, TelemetryTheme.Spacing.xSmall)
         } label: {
-            Label("Developer / Adapter", systemImage: "wrench.and.screwdriver")
+            Label(AppLocalization.text("Developer / Adapter"), systemImage: "wrench.and.screwdriver")
                 .font(.caption.weight(.bold))
                 .tracking(0.7)
                 .foregroundStyle(TelemetryTheme.accent)

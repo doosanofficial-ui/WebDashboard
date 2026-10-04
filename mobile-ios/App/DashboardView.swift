@@ -6,6 +6,7 @@ struct DashboardView: View {
     @Bindable var model: TelemetryModel
     @State private var editorPresented = false
     @State private var selectedPageID: String?
+    @State private var languageStore = AppLanguageStore.shared
 
     var body: some View {
         TabView {
@@ -15,11 +16,16 @@ struct DashboardView: View {
                     editorPresented: $editorPresented,
                     selectedPageID: $selectedPageID
                 )
-                .navigationTitle("Telemetry")
+                .navigationTitle(AppLocalization.text("Telemetry"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        NavigationLink { HelpGuideView(guide: HelpGuide.all[1]) } label: {
+                            Label(AppLocalization.text("Help"), systemImage: "questionmark.circle")
+                        }.accessibilityIdentifier("live-help")
+                    }
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button("Edit", systemImage: "slider.horizontal.3") {
+                        Button(AppLocalization.text("Edit"), systemImage: "slider.horizontal.3") {
                             editorPresented = true
                         }
                         .accessibilityIdentifier("edit-dashboard")
@@ -29,17 +35,21 @@ struct DashboardView: View {
                     DashboardEditorView(model: model)
                 }
             }
-            .tabItem { Label("Live", systemImage: "gauge.with.dots.needle.67percent") }
+            .tabItem { Label(AppLocalization.text("Live"), systemImage: "gauge.with.dots.needle.67percent") }
 
             SignalsView(model: model)
-                .tabItem { Label("Signals", systemImage: "waveform.path.ecg") }
+                .tabItem { Label(AppLocalization.text("Signals"), systemImage: "waveform.path.ecg") }
 
             SessionsView(model: model)
-                .tabItem { Label("Sessions", systemImage: "record.circle") }
+                .tabItem { Label(AppLocalization.text("Sessions"), systemImage: "record.circle") }
 
             SetupView(model: model)
-                .tabItem { Label("Setup", systemImage: "slider.horizontal.3") }
+                .tabItem { Label(AppLocalization.text("Setup"), systemImage: "slider.horizontal.3") }
+
+            AppHelpView()
+                .tabItem { Label(AppLocalization.text("Help"), systemImage: "questionmark.circle") }
         }
+        .environment(\.locale, Locale(identifier: languageStore.language.rawValue))
         .tint(TelemetryTheme.accent)
         .preferredColorScheme(.dark)
     }
@@ -57,6 +67,7 @@ private struct SetupView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: TelemetryTheme.Spacing.medium) {
+                    LanguagePicker().padding().telemetrySurface(.standard)
                     firstRunCard
                     permissionsCard
                     adapterCard
@@ -67,7 +78,7 @@ private struct SetupView: View {
             }
             .scrollIndicators(.hidden)
             .background(TelemetryTheme.background.ignoresSafeArea())
-            .navigationTitle("Setup")
+            .navigationTitle(AppLocalization.text("Setup"))
             .navigationBarTitleDisplayMode(.inline)
             .fileImporter(isPresented: $importingAdapterProfile, allowedContentTypes: [.json]) { result in
                 guard case .success(let url) = result else { return }
@@ -90,7 +101,7 @@ private struct SetupView: View {
     private var serverCard: some View {
         VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
             HStack {
-                Label("TELEMETRY SERVER", systemImage: "network")
+                Label(AppLocalization.text("TELEMETRY SERVER"), systemImage: "network")
                     .font(.caption.weight(.bold))
                     .tracking(1.0)
                     .foregroundStyle(TelemetryTheme.accent)
@@ -101,21 +112,21 @@ private struct SetupView: View {
                     symbol: model.connection == "Connected" ? "checkmark.circle.fill" : "wifi.exclamationmark"
                 )
             }
-            TextField("https://laptop.local:8443", text: $model.serverText)
+            TextField(AppLocalization.text("https://laptop.local:8443"), text: $model.serverText)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .keyboardType(.URL)
                 .textFieldStyle(.roundedBorder)
                 .accessibilityIdentifier("server-url")
-            Text("Use the trusted HTTPS origin on the same network. The server must be reachable from the iPhone.")
+            Text(AppLocalization.text("Use the trusted HTTPS origin on the same network. The server must be reachable from the iPhone."))
                 .font(.caption)
                 .foregroundStyle(TelemetryTheme.mutedText)
             HStack(spacing: TelemetryTheme.Spacing.small) {
-                Button("Connect", action: model.connect)
+                Button(AppLocalization.text("Connect"), action: model.connect)
                     .buttonStyle(.borderedProminent)
                     .tint(TelemetryTheme.accent)
                     .accessibilityIdentifier("connect-server")
-                Button("Disconnect", action: model.disconnect)
+                Button(AppLocalization.text("Disconnect"), action: model.disconnect)
                     .buttonStyle(.bordered)
                     .disabled(model.connection == "Disconnected")
             }
@@ -127,11 +138,11 @@ private struct SetupView: View {
     private var firstRunCard: some View {
         VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
             TelemetryRunStatusView(model: model)
-            Text("FIRST-RUN CHECKLIST")
+            Text(AppLocalization.text("FIRST-RUN CHECKLIST"))
                 .font(.caption.weight(.bold))
                 .tracking(1.0)
                 .foregroundStyle(TelemetryTheme.accent)
-            Text("CAN diagnostics, GPS, recording, CSV/JSON and Replay work locally without a server or account.")
+            Text(AppLocalization.text("CAN diagnostics, GPS, recording, CSV/JSON and Replay work locally without a server or account."))
                 .font(.caption)
                 .foregroundStyle(TelemetryTheme.mutedText)
             setupStep(
@@ -150,7 +161,7 @@ private struct SetupView: View {
             ) {
                 if model.collecting { model.stopLocation() } else { model.startLocation() }
             }
-            Text("Use the verified adapter profile below for local CAN diagnostics. Saved recordings and exports are in Sessions.")
+            Text(AppLocalization.text("Use the verified adapter profile below for local CAN diagnostics. Saved recordings and exports are in Sessions."))
                 .font(.caption)
                 .foregroundStyle(TelemetryTheme.mutedText)
         }
@@ -168,16 +179,16 @@ private struct SetupView: View {
     ) -> some View {
         Button(action: action) {
             HStack(spacing: TelemetryTheme.Spacing.small) {
-                Text(number)
+                Text(AppLocalization.text(number))
                     .font(.headline.weight(.bold))
                     .foregroundStyle(TelemetryTheme.background)
                     .frame(width: 30, height: 30)
                     .background(ready ? TelemetryTheme.valid : TelemetryTheme.accent, in: Circle())
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
+                    Text(AppLocalization.text(title))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
-                    Text(detail)
+                    Text(AppLocalization.text(detail))
                         .font(.caption)
                         .foregroundStyle(TelemetryTheme.mutedText)
                         .lineLimit(1)
@@ -188,17 +199,17 @@ private struct SetupView: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(title), \(detail)")
+        .accessibilityLabel(AppLocalization.text("\(title), \(detail)"))
     }
 
     private var permissionsCard: some View {
         VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
-            Label("Location permissions", systemImage: "location.shield")
+            Label(AppLocalization.text("Location permissions"), systemImage: "location.shield")
                 .font(.headline.weight(.semibold))
-            Text("Enable Precise Location for GPS recording. Background location supports an explicitly started session during app switching. No account or pairing credential is required.")
+            Text(AppLocalization.text("Enable Precise Location for GPS recording. Background location supports an explicitly started session during app switching. No account or pairing credential is required."))
                 .font(.caption)
                 .foregroundStyle(TelemetryTheme.mutedText)
-            Button("Open system settings") {
+            Button(AppLocalization.text("Open system settings")) {
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 }
@@ -212,31 +223,32 @@ private struct SetupView: View {
     private var adapterCard: some View {
         VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
             HStack {
-                Label("ADAPTER PROFILE", systemImage: "cable.connector.horizontal")
+                Label(AppLocalization.text("ADAPTER PROFILE"), systemImage: "cable.connector.horizontal")
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(.white)
                 Spacer()
-                Text(model.adapterProfile == nil ? "NOT CONFIGURED" : "LOADED")
+                Text(AppLocalization.text(model.adapterProfile == nil ? "NOT CONFIGURED" : "LOADED"))
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(model.adapterProfile == nil ? TelemetryTheme.warning : TelemetryTheme.valid)
             }
-            Text(model.adapterProfileStatus)
+            Text(AppLocalization.text(model.adapterProfileStatus))
                 .font(.caption)
                 .foregroundStyle(TelemetryTheme.mutedText)
             HStack(spacing: TelemetryTheme.Spacing.small) {
-                Button("Import JSON") { importingAdapterProfile = true }
+                Button(AppLocalization.text("Import JSON")) { importingAdapterProfile = true }
                     .buttonStyle(.bordered)
                     .accessibilityIdentifier("import-adapter-profile")
-                Button("Edit signals") { signalEditorPresented = true }
+                Button(AppLocalization.text("Edit signals")) { signalEditorPresented = true }
                     .buttonStyle(.bordered)
                     .disabled(model.adapterProfile == nil)
                     .accessibilityIdentifier("edit-signal-catalog")
             }
-            Text("The profile must contain observed BLE UUIDs or a verified Wi-Fi endpoint. No ELM327 identifiers are guessed.")
+            Text(AppLocalization.text("The profile must contain observed BLE UUIDs or a verified Wi-Fi endpoint. No ELM327 identifiers are guessed."))
                 .font(.caption)
                 .foregroundStyle(TelemetryTheme.mutedText)
         }
         .telemetrySurface(.standard)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("setup-adapter-card")
     }
 
@@ -244,30 +256,30 @@ private struct SetupView: View {
         DisclosureGroup(isExpanded: $developerExpanded) {
             VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.medium) {
                 HStack(spacing: TelemetryTheme.Spacing.small) {
-                    Button("Start live adapter", action: model.startLiveAdapter)
+                    Button(AppLocalization.text("Start live adapter"), action: model.startLiveAdapter)
                         .buttonStyle(.borderedProminent)
                         .tint(TelemetryTheme.accent)
                         .disabled(model.adapterProfile == nil)
                         .accessibilityIdentifier("start-live-adapter")
-                    Button("Stop", role: .destructive, action: model.stopLiveAdapter)
+                    Button(AppLocalization.text("Stop"), role: .destructive, action: model.stopLiveAdapter)
                         .buttonStyle(.bordered)
                 }
                 DisclosureGroup(isExpanded: $bleExpanded) {
                     VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
                         HStack(spacing: TelemetryTheme.Spacing.small) {
-                            Button("Scan BLE", action: model.scanBLE)
+                            Button(AppLocalization.text("Scan BLE"), action: model.scanBLE)
                                 .buttonStyle(.bordered)
                                 .accessibilityIdentifier("scan-ble-adapters")
-                            Button("Stop", action: model.stopBLEScan)
+                            Button(AppLocalization.text("Stop"), action: model.stopBLEScan)
                                 .buttonStyle(.bordered)
-                            Button("Copy", action: model.copyBLEObservation)
+                            Button(AppLocalization.text("Copy"), action: model.copyBLEObservation)
                                 .buttonStyle(.bordered)
                                 .accessibilityIdentifier("copy-ble-observation")
-                            Button("Save", action: model.saveBLEObservation)
+                            Button(AppLocalization.text("Save"), action: model.saveBLEObservation)
                                 .buttonStyle(.bordered)
                                 .accessibilityIdentifier("save-ble-observation")
                         }
-                        Text(model.bleDiscoveryStatus)
+                        Text(AppLocalization.text(model.bleDiscoveryStatus))
                             .font(.caption)
                             .foregroundStyle(TelemetryTheme.mutedText)
                             .accessibilityIdentifier("ble-discovery-status")
@@ -275,24 +287,24 @@ private struct SetupView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(device.name)
                                     .font(.subheadline.weight(.semibold))
-                                Text("\(device.id.uuidString) · RSSI \(device.rssi) · \(device.state)")
+                                Text(AppLocalization.text("\(device.id.uuidString) · RSSI \(device.rssi) · \(device.state)"))
                                     .font(.caption2.monospaced())
                                     .foregroundStyle(TelemetryTheme.mutedText)
-                                Button("Inspect GATT") {
+                                Button(AppLocalization.text("Inspect GATT")) {
                                     model.inspectBLEDevice(device.id)
                                 }
                                 .buttonStyle(.bordered)
-                                Button("Use as Santa Fe diagnostic profile") {
+                                Button(AppLocalization.text("Use as Santa Fe diagnostic profile")) {
                                     model.createSantaFeDiagnosticProfile(from: device.id)
                                 }
                                 .buttonStyle(.borderedProminent)
                                 .disabled(device.services.isEmpty)
                                 .accessibilityIdentifier("use-ble-profile-\(device.id.uuidString)")
                                 ForEach(device.services) { service in
-                                    Text("Service \(service.id)")
+                                    Text(AppLocalization.text("Service \(service.id)"))
                                         .font(.caption2.monospaced())
                                     ForEach(service.characteristics) { characteristic in
-                                        Text("\(characteristic.id) [\(characteristic.properties.joined(separator: ", "))]")
+                                        Text(AppLocalization.text("\(characteristic.id) [\(characteristic.properties.joined(separator: ", "))]"))
                                             .font(.caption2.monospaced())
                                             .foregroundStyle(TelemetryTheme.quietText)
                                     }
@@ -303,17 +315,17 @@ private struct SetupView: View {
                     }
                     .padding(.top, TelemetryTheme.Spacing.xSmall)
                 } label: {
-                    Label("BLE discovery (read-only)", systemImage: "dot.radiowaves.left.and.right")
+                    Label(AppLocalization.text("BLE discovery (read-only)"), systemImage: "dot.radiowaves.left.and.right")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
                 }
-                Text("Exports are in Sessions. Demo adapter controls stay out of the operator setup path.")
+                Text(AppLocalization.text("Exports are in Sessions. Demo adapter controls stay out of the operator setup path."))
                     .font(.caption)
                     .foregroundStyle(TelemetryTheme.mutedText)
             }
             .padding(.top, TelemetryTheme.Spacing.xSmall)
         } label: {
-            Label("Developer / diagnostics", systemImage: "wrench.and.screwdriver")
+            Label(AppLocalization.text("Developer / diagnostics"), systemImage: "wrench.and.screwdriver")
                 .font(.headline.weight(.semibold))
                 .foregroundStyle(.white)
         }

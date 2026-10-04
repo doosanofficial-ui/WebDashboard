@@ -5,7 +5,7 @@ final class TelemetryUITests: XCTestCase {
 
     func testDashboardMarkAndConnectionValidation() {
         let app = XCUIApplication()
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
         let mark = app.buttons["mark-event"]
         for _ in 0..<5 where !mark.isHittable { app.swipeUp() }
@@ -29,7 +29,7 @@ final class TelemetryUITests: XCTestCase {
 
     func testDashboardShowsLocalMeasurementRecorderState() {
         let app = XCUIApplication()
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
         app.tabBars.buttons["Sessions"].tap()
         XCTAssertTrue(app.otherElements["sessions-hero"].waitForExistence(timeout: 5))
@@ -37,7 +37,7 @@ final class TelemetryUITests: XCTestCase {
 
     func testRecordingToggleIsVisibleInLiveCockpit() {
         let app = XCUIApplication()
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["toggle-recording"].waitForExistence(timeout: 5))
     }
@@ -62,7 +62,7 @@ final class TelemetryUITests: XCTestCase {
             existingAlwaysPermission.tap()
         }
 
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
 
         let recording = app.buttons["toggle-recording"]
@@ -103,7 +103,7 @@ final class TelemetryUITests: XCTestCase {
         }
         defer { _ = locationPermission }
 
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
 
         let recordingState = app.staticTexts.matching(NSPredicate(format: "label == %@", "RECORDING")).firstMatch
@@ -136,7 +136,7 @@ final class TelemetryUITests: XCTestCase {
 
     func testCockpitAnchorsAreVisible() {
         let app = XCUIApplication()
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.otherElements["live-status-strip"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.otherElements["primary-metric"].waitForExistence(timeout: 5))
@@ -146,14 +146,14 @@ final class TelemetryUITests: XCTestCase {
 
     func testDashboardRendersProfileDefinedWidgetLabel() {
         let app = XCUIApplication()
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Speed"].waitForExistence(timeout: 5))
     }
 
     func testDemoAdapterControlIsExplicitlyAvailable() {
         let app = XCUIApplication()
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
         app.tabBars.buttons["Signals"].tap()
         app.buttons["Developer / Adapter"].tap()
@@ -162,7 +162,7 @@ final class TelemetryUITests: XCTestCase {
 
     func testAdapterProfileImportAndLiveControlsAreVisible() {
         let app = XCUIApplication()
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
         app.tabBars.buttons["Setup"].tap()
         app.buttons["Developer / diagnostics"].tap()
@@ -173,7 +173,7 @@ final class TelemetryUITests: XCTestCase {
 
     func testBLEObservationCaptureControlIsVisible() {
         let app = XCUIApplication()
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
         app.tabBars.buttons["Setup"].tap()
         app.buttons["Developer / diagnostics"].tap()
@@ -183,7 +183,7 @@ final class TelemetryUITests: XCTestCase {
 
     func testBLEScanControlExposesStableAutomationIdentifier() {
         let app = XCUIApplication()
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
         app.tabBars.buttons["Setup"].tap()
         app.buttons["Developer / diagnostics"].tap()
@@ -205,7 +205,7 @@ final class TelemetryUITests: XCTestCase {
         }
         defer { _ = bluetoothPermission }
 
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
         app.tabBars.buttons["Setup"].tap()
         app.buttons["Developer / diagnostics"].tap()
@@ -226,7 +226,7 @@ final class TelemetryUITests: XCTestCase {
 
     func testMeasurementExportControlIsVisible() {
         let app = XCUIApplication()
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
         app.tabBars.buttons["Sessions"].tap()
         let export = app.buttons["sessions-export-json"]
@@ -237,7 +237,7 @@ final class TelemetryUITests: XCTestCase {
 
     func testMeasurementCSVExportControlIsVisible() {
         let app = XCUIApplication()
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
         app.tabBars.buttons["Sessions"].tap()
         let export = app.buttons["sessions-export-csv"]
@@ -247,7 +247,7 @@ final class TelemetryUITests: XCTestCase {
 
     func testDashboardEditorExposesPageAndLayoutControls() {
         let app = XCUIApplication()
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
         app.buttons["edit-dashboard"].tap()
         XCTAssertTrue(app.buttons["add-dashboard-page"].waitForExistence(timeout: 5))
@@ -256,7 +256,7 @@ final class TelemetryUITests: XCTestCase {
 
     func testDashboardEditorExposesWidgetCreationMenu() {
         let app = XCUIApplication()
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
         app.buttons["edit-dashboard"].tap()
         XCTAssertTrue(app.buttons["add-dashboard-widget"].waitForExistence(timeout: 5))
@@ -264,7 +264,7 @@ final class TelemetryUITests: XCTestCase {
 
     func testDashboardEditorExposesWidgetConfigurationInspector() {
         let app = XCUIApplication()
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
         app.buttons["edit-dashboard"].tap()
         XCTAssertTrue(app.otherElements["editor-widget-ws-fl"].waitForExistence(timeout: 5))
@@ -274,7 +274,7 @@ final class TelemetryUITests: XCTestCase {
 
     func testDashboardEditorConditionFieldsAreAvailable() {
         let app = XCUIApplication()
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
         app.buttons["edit-dashboard"].tap()
         app.otherElements["editor-widget-ws-fl"].tap()

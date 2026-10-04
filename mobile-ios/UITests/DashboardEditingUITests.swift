@@ -6,7 +6,7 @@ final class DashboardEditingUITests: XCTestCase {
     override func tearDown() { XCUIDevice.shared.orientation = .portrait; super.tearDown() }
     private func openEditor(_ app: XCUIApplication) {
         XCUIDevice.shared.orientation = .portrait
-        app.launch()
+        app.launchArguments += ["--app-language", "en"]; app.launch()
         let edit = app.buttons["profile-edit-dashboard"]
         XCTAssertTrue(edit.waitForExistence(timeout: 10)); edit.tap()
         XCTAssertTrue(app.buttons["undo-dashboard-layout"].waitForExistence(timeout: 5))
@@ -19,7 +19,7 @@ final class DashboardEditingUITests: XCTestCase {
         let ax = XCTAttachment(string: app.debugDescription); ax.name = name + "-AX"; ax.lifetime = .keepAlways; add(ax)
     }
     func testSelectedCardKeepsConfigurationAvailableOnDemand() {
-        let app = XCUIApplication(); app.launch(); capture(app, "SYNTHETIC-concept-live-idle"); openEditor(app)
+        let app = XCUIApplication(); app.launchArguments += ["--app-language", "en"]; app.launch(); capture(app, "SYNTHETIC-concept-live-idle"); openEditor(app)
         let active = widget("fixture-0", app); XCTAssertTrue(active.waitForExistence(timeout: 5)); active.tap()
         let configuration = app.buttons["widget-configuration-disclosure"]
         XCTAssertTrue(configuration.waitForExistence(timeout: 5))
