@@ -64,7 +64,32 @@ jobs:
       - name: Verify observed BLE profile selection
         run: python3 scripts/verify_ble_profile.py
 
+  native-seed:
+    outputs:
+      seed_manifest_sha256: ${{ steps.seed.outputs.manifest_sha256 }}
+    # One host build before any Simulator; shards never recompile or use an older SHA.
+    runs-on: xcode-27
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify Seed artifact admission and failure contracts
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
+      - name: Build and qualify exact-input Seed within the original 240-second budget
+        id: seed
+        run: python3 scripts/verify_replay_seed.py --output "$RUNNER_TEMP/replay-seed"
+      - name: Preserve qualified Seed and build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: replay-seed-${{ github.sha }}
+          path: ${{ runner.temp }}/replay-seed
+          if-no-files-found: error
+          retention-days: 14
+
   native-replay-ui:
+    needs: native-seed
     strategy:
       fail-fast: false
       matrix:
@@ -73,10 +98,16 @@ jobs:
     runs-on: xcode-27
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+      SEED_MANIFEST_SHA256: ${{ needs.native-seed.outputs.seed_manifest_sha256 }}
     # Include isolated Simulator preparation/build plus the bounded 20-minute UI run.
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
+      - name: Download exact-SHA qualified Seed
+        uses: actions/download-artifact@v7
+        with:
+          name: replay-seed-${{ github.sha }}
+          path: ${{ runner.temp }}/replay-seed
       - name: Require Xcode, iOS SDK and runtime 27.x
         run: python3 scripts/verify_ios_lifecycle.py --check-toolchain
       - name: Install XcodeGen
@@ -87,7 +118,7 @@ jobs:
       - name: Verify exact 30-test partition
         run: python3 -m unittest discover -s scripts/tests -p test_offline_replay_groups.py -v
       - name: Verify offline Replay on isolated Simulator
-        run: python3 scripts/verify_offline_replay.py --group "${{ matrix.group }}" --result-directory "$RUNNER_TEMP/offline-replay"
+        run: python3 scripts/verify_offline_replay.py --group "${{ matrix.group }}" --seed-artifact "$RUNNER_TEMP/replay-seed" --seed-manifest-sha256 "$SEED_MANIFEST_SHA256" --result-directory "$RUNNER_TEMP/offline-replay"
       - name: Preserve offline UI evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -99,12 +130,19 @@ jobs:
 
   # Separate repeats of two layout tests; the unique full-suite aggregate is 30.
   native-se-viewport:
+    needs: native-seed
     runs-on: xcode-27
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+      SEED_MANIFEST_SHA256: ${{ needs.native-seed.outputs.seed_manifest_sha256 }}
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
+      - name: Download exact-SHA qualified Seed
+        uses: actions/download-artifact@v7
+        with:
+          name: replay-seed-${{ github.sha }}
+          path: ${{ runner.temp }}/replay-seed
       - name: Require Xcode, iOS SDK and runtime 27.x
         run: python3 scripts/verify_ios_lifecycle.py --check-toolchain
       - name: Check exact SE selection and separate re-execution count
@@ -115,7 +153,7 @@ jobs:
             brew install xcodegen
           fi
       - name: Re-execute two viewport tests on iPhone SE (3rd generation), iOS 27.x
-        run: python3 scripts/verify_offline_replay.py --se-viewport --result-directory "$RUNNER_TEMP/se-viewport"
+        run: python3 scripts/verify_offline_replay.py --se-viewport --seed-artifact "$RUNNER_TEMP/replay-seed" --seed-manifest-sha256 "$SEED_MANIFEST_SHA256" --result-directory "$RUNNER_TEMP/se-viewport"
       - name: Preserve SE re-execution evidence
         if: always()
         uses: actions/upload-artifact@v7

@@ -54,6 +54,31 @@ time.sleep(30)
             try: os.killpg(receipt["processGroup"],9)
             except ProcessLookupError: pass
 
+    def test_launch_missing_file_preserves_unlaunched_receipt(self):
+        root = Path(self.directory.name)
+        receipt = root/'receipt.json'
+        with self.assertRaises(FileNotFoundError):
+            runner.run_seed_phase([str(root/'missing-executable')], root/'seed.log', receipt, 5)
+        self.assertTrue(receipt.exists(), 'Launch failures must preserve a receipt')
+        value = json.loads(receipt.read_text())
+        self.assertFalse(value['launched'])
+        self.assertIsNone(value['exitCode'])
+        self.assertEqual(value['launchError']['errno'], 2)
+        self.assertFalse(value['groupTermSent'])
+
+    def test_launch_enoexec_preserves_unlaunched_receipt(self):
+        root = Path(self.directory.name)
+        binary = root/'not-an-executable'
+        binary.write_text('invalid executable bytes')
+        binary.chmod(0o700)
+        with self.assertRaises(OSError):
+            runner.run_seed_phase([str(binary)], root/'seed.log', root/'receipt.json', 5)
+        self.assertTrue((root/'receipt.json').exists(), 'ENOEXEC must preserve a receipt')
+        value = json.loads((root/'receipt.json').read_text())
+        self.assertFalse(value['launched'])
+        self.assertIsNone(value['exitCode'])
+        self.assertEqual(value['launchError']['errno'], 8)
+
     def test_success_records_command_elapsed_and_output(self):
         receipt, log=self.run_phase("print('synthetic Seed completed')")
         self.assertEqual(receipt["exitCode"],0)
@@ -62,6 +87,14 @@ time.sleep(30)
         self.assertEqual(receipt["processGroup"],receipt["pid"])
         self.assertEqual(receipt["command"][0],sys.executable)
         self.assertIn("synthetic Seed completed",log)
+
+    def test_progress_receipt_identifies_owned_group_and_final_log_bytes(self):
+        receipt, log = self.run_phase("print('progress visible',flush=True)")
+        self.assertIn('progress', receipt, 'Timeout diagnosis requires process and log progress evidence')
+        self.assertGreater(len(receipt['progress']), 0)
+        self.assertTrue(all(sample['ownedProcessGroup'] == receipt['processGroup'] for sample in receipt['progress']))
+        self.assertEqual(receipt['progress'][-1]['logBytes'], len(log.encode()))
+        self.assertIn('cpuCount', receipt['resources'])
 
     def test_nonzero_exit_preserves_failure_and_receipt(self):
         with self.assertRaises(subprocess.CalledProcessError) as error:

@@ -4,6 +4,7 @@ import argparse
 import json
 import datetime
 import os
+import platform
 import signal
 import time
 import sys
@@ -14,6 +15,7 @@ import tempfile
 import uuid
 
 from verify_ios_lifecycle import output, stage_sources, select_runtime_and_type, verify_summary, record_toolchain, run_test_command
+from verify_replay_seed import private_artifact, run_artifact, install_fixture, current_commit
 
 
 # Explicit, disjoint 11 + 14 + 4 selectors: source coverage is enforced by unit tests.
@@ -93,10 +95,12 @@ def run_seed_phase(command, log, receipt, timeout):
     """Record one Seed phase and bound only its newly owned POSIX process group."""
     if os.name != "posix":
         raise ValueError("Seed phase requires POSIX process groups")
+    from verify_replay_seed import resource_snapshot, owned_progress
     began = time.monotonic()
     evidence = {"command": command, "startedUTC": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "timeoutSeconds": timeout, "timedOut": False,
-                "groupTermSent": False, "groupKillSent": False, "launched": False}
+                "groupTermSent": False, "groupKillSent": False, "launched": False,
+                "resources": resource_snapshot(), "progress": []}
     def save():
         receipt.write_text(json.dumps(evidence, indent=2), encoding="utf-8")
     if timeout <= 0:
@@ -105,12 +109,31 @@ def run_seed_phase(command, log, receipt, timeout):
         save()
         raise subprocess.TimeoutExpired(command, 0)
     with log.open("w", encoding="utf-8") as stream:
-        child = subprocess.Popen(command, stdout=stream, stderr=subprocess.STDOUT,
-                                 stdin=subprocess.DEVNULL, start_new_session=True)
-        evidence.update(pid=child.pid, processGroup=child.pid, launched=True)
+        child = None
         save()
         try:
-            code = child.wait(timeout=timeout)
+            child = subprocess.Popen(command, stdout=stream, stderr=subprocess.STDOUT,
+                                     stdin=subprocess.DEVNULL, start_new_session=True)
+            evidence.update(pid=child.pid, processGroup=child.pid, launched=True)
+            save()
+            evidence["progress"].append(owned_progress(child.pid, log, began))
+            while True:
+                remaining = began + timeout - time.monotonic()
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired(command, timeout)
+                try:
+                    code = child.wait(timeout=min(15, remaining))
+                    break
+                except subprocess.TimeoutExpired:
+                    evidence["progress"].append(owned_progress(child.pid, log, began))
+                    save()
+                    if time.monotonic() >= began + timeout:
+                        raise subprocess.TimeoutExpired(command, timeout)
+        except OSError as error:
+            if child is None:
+                evidence["launchError"] = {"type": type(error).__name__, "errno": error.errno,
+                                           "message": str(error)}
+            raise
         except subprocess.TimeoutExpired:
             evidence["timedOut"] = True
             try:
@@ -137,7 +160,10 @@ def run_seed_phase(command, log, receipt, timeout):
             child.wait(timeout=10)
             raise
         finally:
-            evidence.update(exitCode=child.returncode, elapsedSeconds=time.monotonic()-began,
+            if child is not None:
+                evidence["progress"].append(owned_progress(child.pid, log, began))
+            evidence.update(exitCode=child.returncode if child is not None else None,
+                            elapsedSeconds=time.monotonic()-began,
                             finishedUTC=datetime.datetime.now(datetime.timezone.utc).isoformat())
             save()
         if code:
@@ -147,6 +173,10 @@ def run_seed_phase(command, log, receipt, timeout):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--result-directory", type=Path, required=True)
+    parser.add_argument("--seed-artifact", type=Path, required=True,
+                        help="Qualified executable for this exact commit; no shard rebuild fallback")
+    parser.add_argument("--seed-manifest-sha256", required=True,
+                        help="Trusted producer job output, supplied separately from the downloaded artifact")
     selection = parser.add_mutually_exclusive_group()
     selection.add_argument("--se-viewport", action="store_true",
                            help="Re-execute the two viewport tests on iPhone SE (3rd generation), iOS 27.x only")
@@ -157,13 +187,21 @@ def main():
     results = args.result_directory.resolve()
     results.mkdir(parents=True, exist_ok=False)
     root = Path(__file__).resolve().parents[1]
+    toolchain = record_toolchain(results)
     simulator = None
     with tempfile.TemporaryDirectory(prefix="telemetry-offline-ui-") as directory:
         workspace = Path(directory)
+        seed_artifact = private_artifact(root, args.seed_artifact.resolve(), workspace / "seed-artifact",
+                                          toolchain, platform.machine(), current_commit(root),
+                                          args.seed_manifest_sha256)
+        fixture = workspace / "fixture"
+        fixture.mkdir(mode=0o700)
+        run_artifact(seed_artifact, fixture, results)
+        (results / "seed-admission.json").write_text(json.dumps(seed_artifact["manifest"], indent=2))
+        print("SEED ADMISSION AND FIXTURE PASS: trusted producer digest/private bytes; before Simulator", flush=True)
         staged = workspace / "source"
         stage_sources(root, staged)
         try:
-            toolchain = record_toolchain(results)
             catalog = json.loads(output(["xcrun", "simctl", "list", "runtimes", "--json"]))
             runtime, device_type = select_ui_destination(catalog, args.se_viewport)
             selected = next(r for r in catalog["runtimes"] if r["identifier"] == runtime)
@@ -187,24 +225,7 @@ def main():
                     str(derived / "Build/Products/Debug-iphonesimulator/Telemetry.app")], timeout=120)
             container = Path(output(["xcrun", "simctl", "get_app_container", simulator,
                                      "local.webdashboard.Telemetry", "data"]).strip())
-            seed = workspace / "Seed"
-            (seed / "Sources/Seed").mkdir(parents=True)
-            (seed / "Package.swift").write_text('''// swift-tools-version: 5.9
-import PackageDescription
-let package = Package(name: "Seed", platforms: [.macOS(.v13)],
- dependencies: [.package(path: "../source/TelemetryCore")],
- targets: [.executableTarget(name: "Seed", dependencies: [.product(name: "TelemetryCore", package: "TelemetryCore")])])
-''')
-            shutil.copyfile(root / "scripts/tests/offline_replay_seed.swift", seed / "Sources/Seed/main.swift")
-            # Preserve the original shared 240-second budget; distinguish compile from fixture execution.
-            seed_deadline = time.monotonic() + 240
-            run_seed_phase(["swift", "build", "--package-path", str(seed), "-v"],
-                           results / "seed-build.log", results / "seed-build.json",
-                           seed_deadline - time.monotonic())
-            run_seed_phase(["swift", "run", "--skip-build", "--package-path", str(seed), "Seed",
-                            str(container / "Library/Application Support/Telemetry")],
-                           results / "seed.log", results / "seed-run.json",
-                           seed_deadline - time.monotonic())
+            install_fixture(fixture, container / "Library/Application Support/Telemetry")
             bundle = results / "ReplayUI.xcresult"
             focused_methods = {"background-export-lifecycle": "testNativeExportBackgroundReturnCancelAndReentry",
                                "active-slider-drag": "testPlayingLongSliderDragPreservesCapturedUserTarget",
