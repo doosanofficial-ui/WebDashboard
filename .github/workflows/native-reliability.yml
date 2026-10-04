@@ -63,6 +63,10 @@ jobs:
         run: python3 scripts/verify_ble_profile.py
 
   native-replay-ui:
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [replay, layout]
     # Official Xcode 27 preview image; no runtime downloads or older fallback.
     runs-on: xcode-27
     env:
@@ -78,16 +82,44 @@ jobs:
           if ! brew list xcodegen >/dev/null 2>&1; then
             brew install xcodegen
           fi
+      - name: Verify exact 23-test partition
+        run: python3 -m unittest discover -s scripts/tests -p test_offline_replay_groups.py -v
       - name: Verify offline Replay on isolated Simulator
-        run: python3 scripts/verify_offline_replay.py --result-directory "$RUNNER_TEMP/offline-replay"
+        run: python3 scripts/verify_offline_replay.py --group "${{ matrix.group }}" --result-directory "$RUNNER_TEMP/offline-replay"
       - name: Preserve offline UI evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: offline-replay-${{ github.sha }}
+          name: offline-replay-${{ matrix.group }}-${{ github.sha }}
           path: ${{ runner.temp }}/offline-replay
           if-no-files-found: error
           retention-days: 14
+
+  native-replay-ui-aggregate:
+    if: always()
+    needs: native-replay-ui
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require both UI group jobs to succeed
+        env:
+          UI_GROUP_RESULT: ${{ needs.native-replay-ui.result }}
+        run: |
+          if [ "$UI_GROUP_RESULT" != "success" ]; then
+            echo "UI groups did not succeed: $UI_GROUP_RESULT" >&2
+            exit 1
+          fi
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: offline-replay-replay-${{ github.sha }}
+          path: ui-results/replay
+      - uses: actions/download-artifact@v7
+        with:
+          name: offline-replay-layout-${{ github.sha }}
+          path: ui-results/layout
+      - name: Require all 23 UI tests across both disjoint groups
+        run: python3 scripts/verify_offline_replay.py --verify-groups ui-results
 
   native-app:
     # Official Xcode 27 preview image; no runtime downloads or older fallback.

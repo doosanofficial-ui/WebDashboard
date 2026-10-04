@@ -2,6 +2,7 @@
 """Seed and test Replay UI on a new disposable Simulator; never contacts a physical device."""
 import argparse
 import json
+import sys
 from pathlib import Path
 import shutil
 import subprocess
@@ -11,10 +12,51 @@ import uuid
 from verify_ios_lifecycle import output, stage_sources, select_runtime_and_type, verify_summary, record_toolchain, run_test_command
 
 
+# Explicit, disjoint 11 + 12 selectors: source coverage is enforced by unit tests.
+TEST_GROUPS = {'replay': ['TelemetryUITests/OfflineReplayUITests/testSessionReplayShowsAnalysisAndSynchronizedRecordedTime',
+            'TelemetryUITests/OfflineReplayUITests/testRecordedSignalHistoryContainsOnlySelectedTimePrefix',
+            'TelemetryUITests/OfflineReplayUITests/testRecordedGPSRouteContainsOnlySelectedTimePrefix',
+            'TelemetryUITests/OfflineReplayUITests/testPlayingLongSliderDragPreservesCapturedUserTarget',
+            'TelemetryUITests/OfflineReplayUITests/testNativeExportBackgroundReturnCancelAndReentry',
+            'TelemetryUITests/OfflineReplayUITests/testRecordedPlaybackPauseSpeedAndAutomaticEnd',
+            'TelemetryUITests/OfflineReplayUITests/testRecordedTimeSeekingAcrossTabsAndEditorReturn',
+            'TelemetryUITests/OfflineReplayUITests/testNativeExportCancelReentryAndReplayAcrossTabs',
+            'TelemetryUITests/OfflineReplayUITests/testNativeJSONCSVSaveConfirmsCompletion',
+            'TelemetryUITests/OfflineReplayUITests/testSetupPresentsLocalWorkflowWithoutServerOrCredential',
+            'TelemetryUITests/OfflineReplayUITests/testSeededSessionPickerSnapshotAndReadOnlyControls'],
+ 'layout': ['TelemetryUITests/DashboardEditingUITests/testSelectedCardKeepsConfigurationAvailableOnDemand',
+            'TelemetryUITests/DashboardEditingUITests/testMoveReleaseUndoRedoAndReentryPreserveNeighbor',
+            'TelemetryUITests/DashboardEditingUITests/testResizeReleaseUndoPreserveNeighbor',
+            'TelemetryUITests/DashboardEditingUITests/testOverlappingResizeKeepsSelectedHandleUsableForNextResize',
+            'TelemetryUITests/DashboardEditingUITests/testLandscapeMoveUsesCurrentMeasuredGeometry',
+            'TelemetryUITests/UIClarityUITests/testSyntheticDemoNeverClaimsLiveVehicleAcquisition',
+            'TelemetryUITests/UIClarityUITests/testReplayUnknownFreshnessDoesNotBecomeProvenStale',
+            'TelemetryUITests/UIClarityUITests/testSelectedSOCProfileIsVisibleBeforeGenericUnavailableSignals',
+            'TelemetryUITests/UIClarityUITests/testRecordedTimeAccessibilityAtLargeTextAndLandscape',
+            'TelemetryUITests/UIClarityUITests/testSingleInstantRecordingExplainsUnavailableTimeNavigation',
+            'TelemetryUITests/TelemetryUITests/testMeasurementExportControlIsVisible',
+            'TelemetryUITests/TelemetryUITests/testMeasurementCSVExportControlIsVisible']}
+
+
+def verify_group_results(root):
+    executed = []
+    for group, tests in TEST_GROUPS.items():
+        selection = json.loads((root / group / "selection.json").read_text())
+        if selection != {"group": group, "tests": tests}:
+            raise ValueError(f"Unexpected/missing group selectors: {group}")
+        verify_summary(json.loads((root / group / "summary.json").read_text()), len(tests))
+        executed.extend(tests)
+    if len(executed) != 23 or len(set(executed)) != 23:
+        raise ValueError("Expected exactly 23 disjoint UI tests")
+    print("OFFLINE REPLAY FULL GATE PASS: 23 tests across both groups, zero failures/skips")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--result-directory", type=Path, required=True)
-    parser.add_argument("--only-test", choices=["background-export-lifecycle", "active-slider-drag", "ui-clarity", "single-instant", "large-text", "recorded-history", "recorded-route", "native-save-reentry"],
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--group", choices=TEST_GROUPS, help="Disjoint portion of the full 23-test CI gate")
+    selection.add_argument("--only-test", choices=["background-export-lifecycle", "active-slider-drag", "ui-clarity", "single-instant", "large-text", "recorded-history", "recorded-route", "native-save-reentry"],
                         help="Run one new native lifecycle test; default executes all twenty-three UI regressions")
     args = parser.parse_args()
     results = args.result_directory.resolve()
@@ -78,6 +120,10 @@ let package = Package(name: "Seed", platforms: [.macOS(.v13)],
                 "-only-testing:TelemetryUITests/UIClarityUITests",
                 "-only-testing:TelemetryUITests/DashboardEditingUITests"]
             expected_count = 2 if args.only_test == "native-save-reentry" else 5 if args.only_test == "ui-clarity" else 1 if args.only_test else 23
+            if args.group:
+                selected_tests = ["-only-testing:" + test for test in TEST_GROUPS[args.group]]
+                expected_count = len(TEST_GROUPS[args.group])
+                (results / "selection.json").write_text(json.dumps({"group": args.group, "tests": TEST_GROUPS[args.group]}, indent=2))
             command = base + ["-resultBundlePath", str(bundle)] + selected_tests + ["test"]
             (results / "command.json").write_text(json.dumps(command, indent=2))
             run_test_command(command, results / "test.log", timeout=1200)
@@ -100,4 +146,7 @@ let package = Package(name: "Seed", platforms: [.macOS(.v13)],
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) == 3 and sys.argv[1] == "--verify-groups":
+        verify_group_results(Path(sys.argv[2]))
+    else:
+        main()
