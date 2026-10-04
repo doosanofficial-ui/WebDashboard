@@ -45,10 +45,15 @@ jobs:
             exit 1
           }
   native-core:
-    runs-on: macos-15
+    # Official Xcode 27 preview image; no runtime downloads or older fallback.
+    runs-on: xcode-27
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+      - name: Require Xcode, iOS SDK and runtime 27.x
+        run: python3 scripts/verify_ios_lifecycle.py --check-toolchain
       - run: swift test --package-path mobile-ios/TelemetryCore
       - name: Verify telemetry coordinator source harness
         run: python3 scripts/verify_telemetry_model.py
@@ -58,11 +63,16 @@ jobs:
         run: python3 scripts/verify_ble_profile.py
 
   native-replay-ui:
-    runs-on: macos-15
+    # Official Xcode 27 preview image; no runtime downloads or older fallback.
+    runs-on: xcode-27
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
     # Include isolated Simulator preparation/build plus the bounded 20-minute UI run.
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
+      - name: Require Xcode, iOS SDK and runtime 27.x
+        run: python3 scripts/verify_ios_lifecycle.py --check-toolchain
       - name: Install XcodeGen
         run: |
           if ! brew list xcodegen >/dev/null 2>&1; then
@@ -80,10 +90,15 @@ jobs:
           retention-days: 14
 
   native-app:
-    runs-on: macos-15
+    # Official Xcode 27 preview image; no runtime downloads or older fallback.
+    runs-on: xcode-27
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+      - name: Require Xcode, iOS SDK and runtime 27.x
+        run: python3 scripts/verify_ios_lifecycle.py --check-toolchain
       - name: Install XcodeGen
         run: |
           if ! brew list xcodegen >/dev/null 2>&1; then

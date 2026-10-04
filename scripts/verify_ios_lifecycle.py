@@ -7,6 +7,9 @@ physical iPhone, BLE, GPS, CarPlay or visual-interaction qualification.
 import argparse
 import json
 import platform
+import re
+import os
+import sys
 from pathlib import Path
 import subprocess
 import uuid
@@ -21,21 +24,58 @@ def stage_sources(root, destination):
                     ignore=shutil.ignore_patterns("*.xcodeproj", ".build", ".swiftpm", ".DS_Store"))
 
 
+def is_ios27_version(version):
+    """Accept numeric 27.x versions, preserving the actual minor/patch in evidence."""
+    return isinstance(version, str) and re.fullmatch(r"27(?:\.[0-9]+)+", version) is not None
+
+
+def run_test_command(command, log, timeout):
+    """A nonzero xcodebuild exit is failure even if result counters look green."""
+    with log.open("w", encoding="utf-8") as stream:
+        subprocess.run(command, stdout=stream, stderr=subprocess.STDOUT,
+                       check=True, timeout=timeout)
+
+
 def select_runtime_and_type(data):
     candidates = []
     for runtime in data.get("runtimes", []):
         identifier = runtime.get("identifier", "")
-        if not runtime.get("isAvailable") or ".SimRuntime.iOS-" not in identifier:
+        if (not runtime.get("isAvailable") or not identifier.startswith("com.apple.CoreSimulator.SimRuntime.iOS-")
+                or not is_ios27_version(runtime.get("version"))
+                or identifier.removeprefix("com.apple.CoreSimulator.SimRuntime.iOS-") != runtime["version"].replace(".", "-")):
             continue
         phones = [entry for entry in runtime.get("supportedDeviceTypes", [])
                   if entry.get("productFamily") == "iPhone" and entry.get("identifier")]
         if phones:
-            version = tuple(int(part) for part in runtime["version"].split("."))
-            candidates.append((version, identifier, phones[-1]["identifier"]))
+            candidates.append((identifier, phones[-1]["identifier"]))
     if not candidates:
-        raise ValueError("BLOCKED: no available iOS runtime with a supported iPhone device type")
-    _, runtime, device_type = max(candidates)
-    return runtime, device_type
+        raise ValueError("BLOCKED: iOS 27.x runtime with a supported iPhone is required; no fallback")
+    return candidates[0]
+
+
+def verify_toolchain(versions, ios_sdk, simulator_sdk):
+    version = re.search(r"^Xcode (.+)$", versions, re.MULTILINE)
+    build = re.search(r"^Build version (.+)$", versions, re.MULTILINE)
+    evidence = {"xcode_version": version.group(1) if version else None,
+                "xcode_build": build.group(1) if build else None,
+                "ios_sdk": ios_sdk.strip(), "simulator_sdk": simulator_sdk.strip()}
+    if (not is_ios27_version(evidence["xcode_version"]) or not evidence["xcode_build"]
+            or not is_ios27_version(evidence["ios_sdk"]) or not is_ios27_version(evidence["simulator_sdk"])):
+        raise ValueError(f"BLOCKED: Xcode/iOS SDK/Simulator SDK 27.x required: {evidence}")
+    return evidence
+
+
+def record_toolchain(results):
+    versions = output(["xcodebuild", "-version"])
+    ios_sdk = output(["xcrun", "--sdk", "iphoneos", "--show-sdk-version"])
+    simulator_sdk = output(["xcrun", "--sdk", "iphonesimulator", "--show-sdk-version"])
+    raw = {"xcode": versions, "ios_sdk": ios_sdk.strip(), "simulator_sdk": simulator_sdk.strip(),
+           "developer_directory_override": os.environ.get("DEVELOPER_DIR"),
+           "xcode_select_default": output(["xcode-select", "-p"]).strip()}
+    (results / "xcode-version.txt").write_text(versions, encoding="utf-8")
+    (results / "toolchain.json").write_text(json.dumps(raw, indent=2), encoding="utf-8")
+    print(json.dumps(raw), flush=True)
+    return verify_toolchain(versions, ios_sdk, simulator_sdk)
 
 
 def verify_summary(summary, expected_count):
@@ -67,15 +107,15 @@ def main():
     try:
         staged = Path(workspace.name) / "source"
         stage_sources(root, staged)
-        versions = output(["xcodebuild", "-version"])
-        (results / "xcode-version.txt").write_text(versions, encoding="utf-8")
-        print(versions, flush=True)
+        toolchain = record_toolchain(results)
         catalog = json.loads(output(["xcrun", "simctl", "list", "runtimes", "--json"]))
         runtime, device_type = select_runtime_and_type(catalog)
         identifier = output(["xcrun", "simctl", "create", "TelemetryLifecycle-" + uuid.uuid4().hex,
                              device_type, runtime]).strip()
         simulator = str(uuid.UUID(identifier)).upper()
-        evidence = {"runtime": runtime, "device_type": device_type,
+        selected = next(r for r in catalog["runtimes"] if r["identifier"] == runtime)
+        evidence = {**toolchain, "runtime": runtime, "runtime_version": selected["version"],
+                    "runtime_build": selected.get("buildversion"), "device_type": device_type,
                     "simulator": simulator, "host_bundle": "local.webdashboard.Telemetry.LifecycleHost"}
         (results / "environment.json").write_text(json.dumps(evidence, indent=2), encoding="utf-8")
         print(json.dumps(evidence), flush=True)
@@ -109,4 +149,14 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if sys.argv[1:] == ["--check-toolchain"]:
+        toolchain = verify_toolchain(output(["xcodebuild", "-version"]),
+            output(["xcrun", "--sdk", "iphoneos", "--show-sdk-version"]),
+            output(["xcrun", "--sdk", "iphonesimulator", "--show-sdk-version"]))
+        catalog = json.loads(output(["xcrun", "simctl", "list", "runtimes", "--json"]))
+        runtime, device_type = select_runtime_and_type(catalog)
+        selected = next(r for r in catalog["runtimes"] if r["identifier"] == runtime)
+        print(json.dumps({**toolchain, "runtime": runtime, "runtime_version": selected["version"],
+                          "runtime_build": selected.get("buildversion"), "device_type": device_type}, indent=2))
+    else:
+        main()

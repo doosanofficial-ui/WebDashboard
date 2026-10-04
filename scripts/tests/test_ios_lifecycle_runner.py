@@ -2,6 +2,8 @@ import importlib.util
 from pathlib import Path
 import unittest
 import tempfile
+import sys
+import subprocess
 
 SPEC = importlib.util.spec_from_file_location("ios_lifecycle_runner", Path(__file__).resolve().parents[1] / "verify_ios_lifecycle.py")
 runner = importlib.util.module_from_spec(SPEC)
@@ -29,12 +31,41 @@ class LifecycleRunnerTests(unittest.TestCase):
             (root / "mobile-ios").mkdir()
             with self.assertRaises(FileExistsError):
                 runner.stage_sources(root, root)
-    def test_selects_latest_available_ios_and_compatible_iphone(self):
+    def test_selects_pinned_ios27_even_when_ios28_is_available(self):
         data = {"runtimes": [
             {"identifier": "com.apple.CoreSimulator.SimRuntime.iOS-18-0", "version": "18.0", "isAvailable": True, "supportedDeviceTypes": [{"identifier": "iphone", "productFamily": "iPhone"}]},
             {"identifier": "com.apple.CoreSimulator.SimRuntime.iOS-27-0", "version": "27.0", "isAvailable": True, "supportedDeviceTypes": [{"identifier": "ipad", "productFamily": "iPad"}, {"identifier": "iphone-new", "productFamily": "iPhone"}]},
-            {"identifier": "com.apple.CoreSimulator.SimRuntime.iOS-28-0", "version": "28.0", "isAvailable": False, "supportedDeviceTypes": [{"identifier": "phone", "productFamily": "iPhone"}]}]}
+            {"identifier": "com.apple.CoreSimulator.SimRuntime.iOS-28-0", "version": "28.0", "isAvailable": True, "supportedDeviceTypes": [{"identifier": "phone", "productFamily": "iPhone"}]}]}
         self.assertEqual(runner.select_runtime_and_type(data), ("com.apple.CoreSimulator.SimRuntime.iOS-27-0", "iphone-new"))
+
+    def test_ios26_cannot_be_a_fallback(self):
+        with self.assertRaises(ValueError):
+            runner.select_runtime_and_type({"runtimes": [{"identifier": "com.apple.CoreSimulator.SimRuntime.iOS-26-2", "version": "26.2", "isAvailable": True, "supportedDeviceTypes": [{"identifier": "phone", "productFamily": "iPhone"}]}]})
+
+    def test_toolchain_rejects_wrong_xcode_or_sdk_and_records_build(self):
+        evidence = runner.verify_toolchain("Xcode 27.0\nBuild version 27A266a\n", "27.0", "27.0")
+        self.assertEqual(evidence["xcode_build"], "27A266a")
+        for xcode, ios, simulator in [("Xcode 26.2\nBuild version 17C52", "27.0", "27.0"), ("Xcode 27.0\nBuild version 27A266a", "26.2", "27.0"), ("Xcode 27.0\nBuild version 27A266a", "27.0", "28.0")]:
+            with self.subTest(xcode=xcode, ios=ios, simulator=simulator), self.assertRaises(ValueError):
+                runner.verify_toolchain(xcode, ios, simulator)
+
+    def test_numeric_ios27_patch_versions_are_allowed_and_preserved(self):
+        self.assertEqual(runner.verify_toolchain("Xcode 27.0.1\nBuild version 27A999", "27.0.2", "27.1")["xcode_version"], "27.0.1")
+        data = {"runtimes": [{"identifier": "com.apple.CoreSimulator.SimRuntime.iOS-27-0-1", "version": "27.0.1", "isAvailable": True, "supportedDeviceTypes": [{"identifier": "phone", "productFamily": "iPhone"}]}]}
+        self.assertEqual(runner.select_runtime_and_type(data)[0], data["runtimes"][0]["identifier"])
+        for version in ("26.9", "28.0", "270.0", "27.beta", "27.0beta"):
+            with self.subTest(version=version), self.assertRaises(ValueError):
+                runner.verify_toolchain(f"Xcode {version}\nBuild version fixture", "27.0", "27.0")
+
+    def test_test_command_nonzero_cannot_be_green_with_passing_counters(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "test.log"
+            with self.assertRaises(subprocess.CalledProcessError) as failure:
+                runner.run_test_command([sys.executable, "-c", "print('23 passed, 0 failed'); raise SystemExit(65)"], log, 10)
+            self.assertEqual(failure.exception.returncode, 65)
+            self.assertIn("23 passed", log.read_text())
+            runner.run_test_command([sys.executable, "-c", "print('success')"], log, 10)
+            self.assertIn("success", log.read_text())
 
     def test_missing_compatible_runtime_is_a_blocker_not_pass(self):
         with self.assertRaises(ValueError):

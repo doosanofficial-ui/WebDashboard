@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 import uuid
 
-from verify_ios_lifecycle import output, stage_sources, select_runtime_and_type, verify_summary
+from verify_ios_lifecycle import output, stage_sources, select_runtime_and_type, verify_summary, record_toolchain, run_test_command
 
 
 def main():
@@ -26,6 +26,7 @@ def main():
         staged = workspace / "source"
         stage_sources(root, staged)
         try:
+            toolchain = record_toolchain(results)
             catalog = json.loads(output(["xcrun", "simctl", "list", "runtimes", "--json"]))
             runtime, device_type = select_runtime_and_type(catalog)
             selected = next(r for r in catalog["runtimes"] if r["identifier"] == runtime)
@@ -34,8 +35,10 @@ def main():
             device_type = preferred or device_type
             simulator = str(uuid.UUID(output(["xcrun", "simctl", "create", "OfflineReplay-" + uuid.uuid4().hex,
                                               device_type, runtime]).strip())).upper()
-            (results / "environment.json").write_text(json.dumps({"runtime": runtime, "device_type": device_type,
+            (results / "environment.json").write_text(json.dumps({**toolchain, "runtime": runtime, "runtime_version": selected["version"],
+                "runtime_build": selected.get("buildversion"), "device_type": device_type,
                 "simulator": simulator, "scope": "Simulator fixture only; no vehicle/GPS acquisition"}, indent=2))
+            print((results / "environment.json").read_text(), flush=True)
             output(["xcrun", "simctl", "boot", simulator])
             output(["xcrun", "simctl", "bootstatus", simulator, "-b"], timeout=180)
             output(["xcodegen", "generate", "--spec", str(staged / "project.yml")], timeout=120)
@@ -77,8 +80,7 @@ let package = Package(name: "Seed", platforms: [.macOS(.v13)],
             expected_count = 2 if args.only_test == "native-save-reentry" else 5 if args.only_test == "ui-clarity" else 1 if args.only_test else 23
             command = base + ["-resultBundlePath", str(bundle)] + selected_tests + ["test"]
             (results / "command.json").write_text(json.dumps(command, indent=2))
-            with (results / "test.log").open("w") as log:
-                subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, timeout=1200)
+            run_test_command(command, results / "test.log", timeout=1200)
             summary = json.loads(output(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)]))
             (results / "summary.json").write_text(json.dumps(summary, indent=2))
             native = results / "native-exports"
