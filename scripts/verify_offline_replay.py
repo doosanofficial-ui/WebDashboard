@@ -2,6 +2,10 @@
 """Seed and test Replay UI on a new disposable Simulator; never contacts a physical device."""
 import argparse
 import json
+import datetime
+import os
+import signal
+import time
 import sys
 from pathlib import Path
 import shutil
@@ -77,6 +81,61 @@ def verify_group_results(root):
     print("OFFLINE REPLAY FULL GATE PASS: 25 tests across both groups, zero failures/skips")
 
 
+def run_seed_phase(command, log, receipt, timeout):
+    """Record one Seed phase and bound only its newly owned POSIX process group."""
+    if os.name != "posix":
+        raise ValueError("Seed phase requires POSIX process groups")
+    began = time.monotonic()
+    evidence = {"command": command, "startedUTC": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "timeoutSeconds": timeout, "timedOut": False,
+                "groupTermSent": False, "groupKillSent": False, "launched": False}
+    def save():
+        receipt.write_text(json.dumps(evidence, indent=2), encoding="utf-8")
+    if timeout <= 0:
+        evidence.update(timedOut=True, elapsedSeconds=0, exitCode=None,
+                        finishedUTC=datetime.datetime.now(datetime.timezone.utc).isoformat())
+        save()
+        raise subprocess.TimeoutExpired(command, 0)
+    with log.open("w", encoding="utf-8") as stream:
+        child = subprocess.Popen(command, stdout=stream, stderr=subprocess.STDOUT,
+                                 stdin=subprocess.DEVNULL, start_new_session=True)
+        evidence.update(pid=child.pid, processGroup=child.pid, launched=True)
+        save()
+        try:
+            code = child.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            evidence["timedOut"] = True
+            try:
+                os.killpg(child.pid, signal.SIGTERM)
+                evidence["groupTermSent"] = True
+            except ProcessLookupError:
+                pass
+            try:
+                child.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                pass
+            # Leader exit does not imply that its compiler descendants exited.
+            try:
+                os.killpg(child.pid, 0)  # Probe only the group created above.
+            except ProcessLookupError:
+                evidence["groupStillExistsAfterLeaderWait"] = False
+            else:
+                evidence["groupStillExistsAfterLeaderWait"] = True
+                try:
+                    os.killpg(child.pid, signal.SIGKILL)
+                    evidence["groupKillSent"] = True
+                except ProcessLookupError:
+                    pass
+            child.wait(timeout=10)
+            raise
+        finally:
+            evidence.update(exitCode=child.returncode, elapsedSeconds=time.monotonic()-began,
+                            finishedUTC=datetime.datetime.now(datetime.timezone.utc).isoformat())
+            save()
+        if code:
+            raise subprocess.CalledProcessError(code, command)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--result-directory", type=Path, required=True)
@@ -129,10 +188,15 @@ let package = Package(name: "Seed", platforms: [.macOS(.v13)],
  targets: [.executableTarget(name: "Seed", dependencies: [.product(name: "TelemetryCore", package: "TelemetryCore")])])
 ''')
             shutil.copyfile(root / "scripts/tests/offline_replay_seed.swift", seed / "Sources/Seed/main.swift")
-            with (results / "seed.log").open("w") as log:
-                subprocess.run(["swift", "run", "--package-path", str(seed), "Seed",
-                                str(container / "Library/Application Support/Telemetry")],
-                               stdout=log, stderr=subprocess.STDOUT, check=True, timeout=240)
+            # Preserve the original shared 240-second budget; distinguish compile from fixture execution.
+            seed_deadline = time.monotonic() + 240
+            run_seed_phase(["swift", "build", "--package-path", str(seed), "-v"],
+                           results / "seed-build.log", results / "seed-build.json",
+                           seed_deadline - time.monotonic())
+            run_seed_phase(["swift", "run", "--skip-build", "--package-path", str(seed), "Seed",
+                            str(container / "Library/Application Support/Telemetry")],
+                           results / "seed.log", results / "seed-run.json",
+                           seed_deadline - time.monotonic())
             bundle = results / "ReplayUI.xcresult"
             focused_methods = {"background-export-lifecycle": "testNativeExportBackgroundReturnCancelAndReentry",
                                "active-slider-drag": "testPlayingLongSliderDragPreservesCapturedUserTarget",

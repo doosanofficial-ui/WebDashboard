@@ -293,6 +293,34 @@ final class ReplayControllerRaceTests: XCTestCase {
         XCTAssertEqual(c.snapshot?.signals.first?.value, 71)
     }
 
+    func testPauseAfterComputedPlaybackTickRetainsAcceptedPosition() async throws {
+        let gate = ReplayGate()
+        let controller = ReplayController(snapshotProvider: { timeline, time in
+            let state = try await timeline.snapshot(at: time)
+            await gate.suspendIfArmed()
+            return state
+        })
+        let recording = try fixture("synthetic-pause-computed-tick")
+        _ = try await controller.load(sessionID: recording.session.sessionID) { recording }
+        _ = try await controller.seek(at: 1)
+        let previous = try XCTUnwrap(controller.snapshot)
+        XCTAssertTrue(controller.play(at: 100))
+        await gate.arm()
+        let tick = Task { try await controller.advancePlayback(at: 104) }
+        await gate.waitUntilEntered() // End snapshot computed, not yet published.
+        controller.pause()
+        await gate.release()
+        assertDiscarded(await tick.result)
+        XCTAssertEqual(controller.position, 1)
+        XCTAssertEqual(controller.snapshot?.signals, previous.signals)
+        XCTAssertEqual(controller.snapshot?.timestamp, previous.timestamp)
+        XCTAssertEqual(controller.snapshot?.markTimestamp, previous.markTimestamp)
+        XCTAssertFalse(controller.isPlaying)
+        let laterTick = try await controller.advancePlayback(at: 200)
+        XCTAssertNil(laterTick)
+        XCTAssertEqual(controller.position, 1)
+    }
+
     func testCancelledComputedManySignalSeekCannotPublish() async throws {
         let budget = ReplayStressBudget(); defer { budget.finish() }
         let gate = ReplayGate()

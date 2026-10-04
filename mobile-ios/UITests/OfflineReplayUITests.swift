@@ -340,8 +340,14 @@ final class OfflineReplayUITests: XCTestCase {
         XCTAssertTrue(app.buttons["stop-replay-header"].waitForExistence(timeout: 5))
         func reveal(_ id: String) -> XCUIElement {
             let button = app.buttons[id]
-            for _ in 0..<8 where !button.isHittable { app.swipeUp() }
-            for _ in 0..<8 where !button.isHittable { app.swipeDown() }
+            for _ in 0..<8 {
+                if button.isHittable { break }
+                app.swipeUp()
+            }
+            for _ in 0..<8 {
+                if button.isHittable { break }
+                app.swipeDown()
+            }
             XCTAssertTrue(button.isHittable, app.debugDescription)
             return button
         }
@@ -354,7 +360,12 @@ final class OfflineReplayUITests: XCTestCase {
         let advanced = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label != %@", "0.0 / 5.0 seconds"), object: position)
         XCTAssertEqual(XCTWaiter.wait(for: [advanced], timeout: 5), .completed)
         reveal("replay-pause").tap()
+        // Confirm the Pause action took effect before observing its accepted position.
+        XCTAssertTrue(app.buttons["replay-play"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["replay-pause"].exists)
+        XCTAssertTrue(app.buttons["replay-play"].isEnabled, "Pause must occur before automatic end")
         let paused = position.label
+        XCTAssertNotEqual(paused, "5.0 / 5.0 seconds", "Pause must retain a pre-end position")
         let changed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label != %@", paused), object: position)
         changed.isInverted = true
         XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 1), .completed)
