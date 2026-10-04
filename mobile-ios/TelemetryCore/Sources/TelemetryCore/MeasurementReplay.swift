@@ -105,8 +105,8 @@ public enum MeasurementReplay {
 
     private struct SystemPayload: Decodable { let name: String }
 
-    /// An immutable, fully validated closed recording. Seeking builds a fresh
-    /// store from a sequence prefix, so backwards seeks cannot keep future data.
+    /// An immutable, fully validated closed recording. Seeking restores only
+    /// the latest rows in the selected prefix, never state from a future seek.
     public struct Timeline: Sendable {
         public let duration: Double
         public let sessionID: String
@@ -116,8 +116,12 @@ public enum MeasurementReplay {
         private let signalTimeouts: [String: Double]
         private let signalIndex: [String: [RecordedSignalPoint]]
         private let locationIndex: [RecordedLocationPoint]
+        private let frameOffsets: [UInt32]
+        private let diagnosticOffsets: [UInt32]
+        private let markOffsets: [UInt32]
 
         fileprivate init(export: MeasurementExport, signalTimeouts: [String: Double]) throws {
+            guard export.measurements.count <= 200_000 else { throw MeasurementReplayError.rowLimitExceeded }
             self.signalTimeouts = signalTimeouts
             self.export = export
             sessionID = export.session.sessionID
@@ -134,12 +138,29 @@ public enum MeasurementReplay {
                 return last
             }
             duration = elapsed.last ?? 0
+            // Reserve by original kind: the combined requested offset capacity
+            // is bounded by the row count, including non-MARK system rows.
+            var frameCount = 0, diagnosticCount = 0, systemCount = 0
+            for (offset, row) in export.measurements.enumerated() {
+                if offset % 256 == 0 { try Task.checkCancellation() }
+                switch row.kind {
+                case "CAN": frameCount += 1
+                case "DIAGNOSTIC_RESPONSE": diagnosticCount += 1
+                case "SYSTEM": systemCount += 1
+                default: break
+                }
+            }
+            var frames: [UInt32] = [], diagnostics: [UInt32] = [], marks: [UInt32] = []
+            frames.reserveCapacity(frameCount)
+            diagnostics.reserveCapacity(diagnosticCount)
+            marks.reserveCapacity(systemCount)
             var index: [String: [RecordedSignalPoint]] = [:]
             var locations: [RecordedLocationPoint] = []
             var locationSegment = 0
             var previousLocationSource: TelemetrySource?
             for (offset, row) in export.measurements.enumerated() {
                 if offset % 256 == 0 { try Task.checkCancellation() }
+                guard let rowOffset = UInt32(exactly: offset) else { throw MeasurementReplayError.rowLimitExceeded }
                 let id: String, value: Double, unit: String, source: RecordedSignalSource
                 switch try MeasurementReplay.decode(row) {
                 case .signal(let sample):
@@ -154,7 +175,11 @@ public enum MeasurementReplay {
                     previousLocationSource = location.source
                     if !point.isPlottable { locationSegment += 1 }
                     continue
-                default: continue
+                case .can: frames.append(rowOffset); continue
+                case .diagnosticResponse: diagnostics.append(rowOffset); continue
+                case .system(let name, _, _):
+                    if name == "MARK" { marks.append(rowOffset) }
+                    continue
                 }
                 let previous = index[id]?.last
                 let segment = (previous?.sourceSegment ?? 0) + (previous != nil && previous?.source != source ? 1 : 0)
@@ -163,6 +188,9 @@ public enum MeasurementReplay {
             }
             signalIndex = index
             locationIndex = locations
+            frameOffsets = frames
+            diagnosticOffsets = diagnostics
+            markOffsets = marks
         }
 
         /// Selected-time prefix, bounded per signal. Never substitutes zero for
@@ -212,9 +240,40 @@ public enum MeasurementReplay {
                 let middle = lower + (upper - lower) / 2
                 if elapsed[middle] <= position { lower = middle + 1 } else { upper = middle }
             }
-            let prefix = MeasurementExport(session: export.session,
-                measurements: Array(export.measurements.prefix(lower)))
-            let recorded = try await MeasurementReplay.snapshot(prefix)
+            // Index lookups select original rows. Each latest signal retains
+            // raw fields via the same decoder/store projection as full replay.
+            var selected: [PersistedMeasurement] = []
+            for (index, points) in signalIndex.values.enumerated() {
+                if index % 256 == 0 { try Task.checkCancellation() }
+                var low = 0, high = points.count
+                while low < high {
+                    let mid = low + (high - low) / 2
+                    if points[mid].elapsedSeconds <= position { low = mid + 1 } else { high = mid }
+                }
+                if low > 0 { selected.append(points[low - 1].measurement) }
+            }
+            var locationLow = 0, locationHigh = locationIndex.count
+            while locationLow < locationHigh {
+                let mid = locationLow + (locationHigh - locationLow) / 2
+                if locationIndex[mid].elapsedSeconds <= position { locationLow = mid + 1 } else { locationHigh = mid }
+            }
+            // Keep even a rejected GPS fix as the latest raw location.
+            if locationLow > 0 { selected.append(locationIndex[locationLow - 1].measurement) }
+            for offsets in [frameOffsets, diagnosticOffsets, markOffsets] {
+                try Task.checkCancellation()
+                var low = 0, high = offsets.count
+                while low < high {
+                    let mid = low + (high - low) / 2
+                    if Int(offsets[mid]) < lower { low = mid + 1 } else { high = mid }
+                }
+                if low > 0 { selected.append(export.measurements[Int(offsets[low - 1])]) }
+            }
+            try Task.checkCancellation()
+            let recorded = try await MeasurementReplay.snapshot(MeasurementExport(session: export.session, measurements: selected))
+            try Task.checkCancellation()
+            // Non-indexed rows (including other SYSTEM events) still determine
+            // the snapshot reference time, even after a wall-clock rollback.
+            let timestamp = lower > 0 ? export.measurements[lower - 1].receivedAtEpoch : export.session.startedAt
             let origin = export.measurements.first?.receivedAtMonotonicNanos ?? 0
             var ages: [String: Double] = [:]
             var freshness: [String: SignalFreshness] = [:]
@@ -230,7 +289,7 @@ public enum MeasurementReplay {
             }
             // Original value/quality/timestamps are evidence. Freshness is a
             // separate derived state; absent recorded policy remains unknown.
-            return Snapshot(timestamp: recorded.timestamp, signals: recorded.signals, frame: recorded.frame,
+            return Snapshot(timestamp: timestamp, signals: recorded.signals, frame: recorded.frame,
                 diagnostic: recorded.diagnostic, location: recorded.location, markTimestamp: recorded.markTimestamp,
                 signalAges: ages, signalFreshness: freshness)
         }

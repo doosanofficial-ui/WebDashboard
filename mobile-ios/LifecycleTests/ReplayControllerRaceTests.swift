@@ -1,5 +1,8 @@
 import Foundation
 import XCTest
+#if canImport(Darwin)
+import Darwin
+#endif
 import TelemetryCore
 @testable import TelemetryLifecycleHost
 
@@ -290,6 +293,69 @@ final class ReplayControllerRaceTests: XCTestCase {
         XCTAssertEqual(c.snapshot?.signals.first?.value, 71)
     }
 
+    func testCancelledComputedManySignalSeekCannotPublish() async throws {
+        let budget = ReplayStressBudget(); defer { budget.finish() }
+        let gate = ReplayGate()
+        let controller = ReplayController(snapshotProvider: { timeline, time in
+            let state = try await timeline.snapshot(at:time)
+            await gate.suspendIfArmed() // Handshake proves real computation completed before publication.
+            return state
+        })
+        let recording = try manySignalFixture()
+        _ = try await controller.load(sessionID:recording.session.sessionID) {recording}
+        _ = try await controller.seek(at:0)
+        let previous = try XCTUnwrap(controller.snapshot)
+        await gate.arm()
+        let task = Task {try await controller.seek(at:4)}
+        await gate.waitUntilEntered();task.cancel();await gate.release()
+        let result = await task.result
+        switch result {
+        case .failure(let error): XCTAssertTrue(error is CancellationError)
+        case .success: XCTFail("Cancelled computed seek must reject its result")
+        }
+        XCTAssertEqual(controller.position,0)
+        XCTAssertEqual(controller.snapshot?.signals,previous.signals)
+        XCTAssertEqual(controller.snapshot?.timestamp,previous.timestamp)
+        XCTAssertEqual(controller.snapshot?.signalAges,previous.signalAges)
+        XCTAssertEqual(controller.snapshot?.signalFreshness,previous.signalFreshness)
+        XCTAssertEqual(controller.snapshot?.signals.count,512)
+        XCTAssertFalse(controller.seeking)
+        budget.checkpoint()
+    }
+
+    func testStopAfterComputedManySignalSeekDiscardsResultAndAllOwnedState() async throws {
+        let budget = ReplayStressBudget(); defer { budget.finish() }
+        let gate = ReplayGate()
+        let controller = ReplayController(snapshotProvider: { timeline, time in
+            let state = try await timeline.snapshot(at:time)
+            await gate.suspendIfArmed()
+            return state
+        })
+        let recording = try manySignalFixture()
+        _ = try await controller.load(sessionID:recording.session.sessionID) {recording}
+        await gate.arm()
+        let task = Task {try await controller.seek(at:0)}
+        await gate.waitUntilEntered();controller.stop();await gate.release()
+        let result = await task.result
+        switch result {
+        case .success(let snapshot): XCTAssertNil(snapshot)
+        case .failure(let error): XCTFail("Stop should discard this uncancelled result: \(error)")
+        }
+        assertStopped(controller)
+        XCTAssertFalse(controller.isPlaying);XCTAssertEqual(controller.playbackRate,1)
+        budget.checkpoint()
+    }
+
+    private func manySignalFixture() throws -> MeasurementExport {
+        var rows:[PersistedMeasurement]=[]
+        for layer in 0..<3 {for id in 0..<512 {
+            let sequence=Int64(rows.count+1),epoch=300-Double(layer),nanos=UInt64(layer)*2_000_000_000
+            let signal=DecodedSignalSample(signalID:String(format:"signal-%04d",id),value:Double(id+layer),rawValue:UInt64(id+10),enumName:"layer-\(layer)",unit:layer == 1 ? "V":"%",frameSequence:UInt64(sequence),receivedAtEpoch:epoch,receivedAtMonotonicNanos:nanos,source:layer == 1 ? .diagnostic:.rawCAN)
+            rows.append(.init(sequence:sequence,sessionID:"many-races",kind:"SIGNAL",sourceTimestamp:epoch,receivedAtEpoch:epoch,receivedAtMonotonicNanos:nanos,payloadJSON:String(decoding:try JSONEncoder().encode(signal),as:UTF8.self)))
+        }}
+        return .init(session:.init(sessionID:"many-races",startedAt:290,endedAt:310,mode:.live),measurements:rows)
+    }
+
     private func fixture(_ id: String, firstValue: Double = 40) throws -> MeasurementExport {
         func signal(_ sequence: Int64, _ epoch: Double, _ mono: UInt64, _ value: Double) throws -> PersistedMeasurement {
             let sample = DecodedSignalSample(signalID: "soc", value: value,
@@ -344,4 +410,42 @@ private actor ReplayGate {
         releaseContinuation?.resume()
         releaseContinuation = nil
     }
+}
+
+/// Test-only, bounded synthetic workload monitor. A guard aborts this test
+/// process, never a device or another job. Sampling cannot catch every spike.
+private final class ReplayStressBudget: @unchecked Sendable {
+    private let start = ProcessInfo.processInfo.systemUptime
+    private let lock = NSLock()
+    private var peak: UInt64 = 0
+    private var timer: DispatchSourceTimer?
+    init() {
+        let timer = DispatchSource.makeTimerSource(queue:DispatchQueue.global())
+        timer.schedule(deadline:.now(),repeating:.milliseconds(100))
+        timer.setEventHandler { [weak self] in self?.checkpoint() }
+        self.timer = timer; timer.resume()
+    }
+    func checkpoint() {
+        let seconds = ProcessInfo.processInfo.systemUptime-start
+        var bytes: UInt64 = 0
+        #if canImport(Darwin)
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout.size(ofValue:info)/4)
+        let result = withUnsafeMutablePointer(to:&info) { pointer in
+            pointer.withMemoryRebound(to:integer_t.self,capacity:Int(count)) {
+                task_info(mach_task_self_,task_flavor_t(TASK_VM_INFO),$0,&count)
+            }
+        }
+        guard result == KERN_SUCCESS else { fatalError("Stress memory monitor unavailable") }
+        bytes = info.phys_footprint
+        #endif
+        lock.lock(); peak=max(peak,bytes);lock.unlock()
+        if bytes > 1_073_741_824 || seconds > 60 { fatalError("Stress 1GiB/60s guard exceeded") }
+    }
+    func finish() {
+        checkpoint();timer?.cancel();timer=nil
+        lock.lock();let observed=peak;lock.unlock()
+        print("STRESS_BUDGET seconds=\(ProcessInfo.processInfo.systemUptime-start) observedPeakFootprint=\(observed)")
+    }
+    deinit {timer?.cancel()}
 }
