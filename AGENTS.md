@@ -117,6 +117,16 @@ This file defines always-on, repository-level instructions for AI agents in this
    - Clean temporary worktrees/branches.
    - Close or update related issues with actual merge references.
 
+## 10.1) Mandatory direct screenshot inspection for UI verification
+
+- UI portions of functional verification require screenshots of the relevant screens and states and direct inspection of their actual pixels by the verifying agent. Open every screenshot cited as visual verification evidence with an image-viewing tool.
+- Inspect expected content/state, readability, clipping/overlap, navigation/controls and relevant viewport, orientation and text-size variants. Record source commit/build, capture environment, screenshot links, findings and limitations using [the UI visual review record](docs/ui-visual-review.md).
+- Generated screenshots, existing files, automated tests and accessibility assertions alone do not satisfy this gate. Track automated functional results, directly inspected visual results and physical-device evidence separately.
+- Mark unopened screenshots, blocked/inaccessible evidence and uninspected physical-device UI as distinct unverified items. Report completion only for the directly inspected scope.
+- Provide shareable core screenshots and the review record to the parent/primary agent. Before notifying the user that UI verification is complete, that agent must directly open the core evidence and reconcile the findings; a worker summary alone is insufficient.
+- Preserve source/capture provenance and earlier evidence. Share synthetic or appropriately redacted captures; keep private vehicle/device evidence local unless sharing is explicitly authorized.
+- This gate does not reopen a paused installation or authorize interaction with another task's device, Simulator or UI. Record the blocked verification scope when current permissions prevent capture or review.
+
 ## 11) Copilot CLI orchestration policy
 - Copilot CLI is an allowed read-only worker for this repository.
 - Default non-interactive execution pattern:
