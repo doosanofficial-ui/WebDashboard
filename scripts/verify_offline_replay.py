@@ -18,7 +18,7 @@ from verify_ios_lifecycle import output, stage_sources, select_runtime_and_type,
 from verify_replay_seed import private_artifact, run_artifact, install_fixture, current_commit
 
 
-# Explicit, disjoint 11 + 14 + 4 + 1 selectors; the slow maximum-text test has its own budget.
+# Explicit, disjoint 11 + 14 + 4 + 1 + 1 selectors; each maximum-text language has its own budget.
 TEST_GROUPS = {'replay': ['TelemetryUITests/OfflineReplayUITests/testSessionReplayShowsAnalysisAndSynchronizedRecordedTime',
             'TelemetryUITests/OfflineReplayUITests/testRecordedSignalHistoryContainsOnlySelectedTimePrefix',
             'TelemetryUITests/OfflineReplayUITests/testRecordedGPSRouteContainsOnlySelectedTimePrefix',
@@ -51,8 +51,10 @@ TEST_GROUPS["help"] = [
     "TelemetryUITests/LocalizationHelpUITests/testCaptureKoreanGuideScreens",
     "TelemetryUITests/LocalizationHelpUITests/testLanguageSwitchPersistsAndHelpPreservesReplay",
     "TelemetryUITests/LocalizationHelpUITests/testKoreanHelpAtMaximumTextAndLandscape"]
-TEST_GROUPS["help-max"] = [
-    "TelemetryUITests/LocalizationHelpUITests/testEveryGuideAtMaximumTextShowsWholeNumberedImageAndClosesZoomInBothLanguages"]
+TEST_GROUPS["help-max-en"] = [
+    "TelemetryUITests/LocalizationHelpUITests/testEveryGuideAtMaximumTextShowsWholeNumberedImageAndClosesZoomInEnglish"]
+TEST_GROUPS["help-max-ko"] = [
+    "TelemetryUITests/LocalizationHelpUITests/testEveryGuideAtMaximumTextShowsWholeNumberedImageAndClosesZoomInKorean"]
 
 
 # These are re-executions of two layout tests, not two additional unique tests.
@@ -87,9 +89,9 @@ def verify_group_results(root):
             raise ValueError(f"Unexpected/missing group selectors: {group}")
         verify_summary(json.loads((root / group / "summary.json").read_text()), len(tests))
         executed.extend(tests)
-    if len(executed) != 30 or len(set(executed)) != 30:
-        raise ValueError("Expected exactly 30 disjoint UI tests")
-    print(f"OFFLINE REPLAY FULL GATE PASS: 30 tests across {len(TEST_GROUPS)} groups, zero failures/skips")
+    if len(executed) != 31 or len(set(executed)) != 31:
+        raise ValueError("Expected exactly 31 disjoint UI tests")
+    print(f"OFFLINE REPLAY FULL GATE PASS: 31 tests across {len(TEST_GROUPS)} groups, zero failures/skips")
 
 
 def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False):
@@ -366,7 +368,7 @@ def main():
     selection = parser.add_mutually_exclusive_group()
     selection.add_argument("--se-viewport", action="store_true",
                            help="Re-execute the two viewport tests on iPhone SE (3rd generation), iOS 27.x only")
-    selection.add_argument("--group", choices=TEST_GROUPS, help="Disjoint portion of the full 30-test CI gate")
+    selection.add_argument("--group", choices=TEST_GROUPS, help="Disjoint portion of the full 31-test CI gate")
     selection.add_argument("--only-test", choices=["background-export-lifecycle", "active-slider-drag", "ui-clarity", "single-instant", "large-text", "recorded-history", "recorded-route", "native-save-reentry", "help-capture"],
                         help="Run one new native lifecycle test; default executes all twenty-five UI regressions")
     args = parser.parse_args()
@@ -428,7 +430,7 @@ def main():
                 "-only-testing:TelemetryUITests/SmallViewportUIRegression",
                 "-only-testing:TelemetryUITests/SmallViewportStatusUIRegression",
                 "-only-testing:TelemetryUITests/LocalizationHelpUITests"]
-            expected_count = 2 if args.only_test == "native-save-reentry" else 5 if args.only_test == "ui-clarity" else 1 if args.only_test else 30
+            expected_count = 2 if args.only_test == "native-save-reentry" else 5 if args.only_test == "ui-clarity" else 1 if args.only_test else 31
             if args.only_test == "help-capture":
                 selected_tests = ["-only-testing:" + test for test in TEST_GROUPS["help"][:2]]
                 expected_count = 2

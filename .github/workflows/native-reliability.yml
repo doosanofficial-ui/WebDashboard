@@ -93,7 +93,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [replay, layout, help, help-max]
+        group: [replay, layout, help, help-max-en, help-max-ko]
     # Official Xcode 27 preview image; no runtime downloads or older fallback.
     runs-on: xcode-27
     env:
@@ -115,7 +115,7 @@ jobs:
           if ! brew list xcodegen >/dev/null 2>&1; then
             brew install xcodegen
           fi
-      - name: Verify exact 30-test partition
+      - name: Verify exact 31-test partition
         run: python3 -m unittest discover -s scripts/tests -p test_offline_replay_groups.py -v
       - name: Verify offline Replay on isolated Simulator
         run: python3 scripts/verify_offline_replay.py --group "${{ matrix.group }}" --seed-artifact "$RUNNER_TEMP/replay-seed" --seed-manifest-sha256 "$SEED_MANIFEST_SHA256" --result-directory "$RUNNER_TEMP/offline-replay"
@@ -128,7 +128,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # Separate repeats of two layout tests; the unique full-suite aggregate is 30.
+  # Separate repeats of two layout tests; the unique full-suite aggregate is 31.
   native-se-viewport:
     needs: native-seed
     runs-on: xcode-27
@@ -169,7 +169,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Require all four UI group jobs to succeed
+      - name: Require all five UI group jobs to succeed
         env:
           UI_GROUP_RESULT: ${{ needs.native-replay-ui.result }}
         run: |
@@ -192,9 +192,13 @@ jobs:
           path: ui-results/help
       - uses: actions/download-artifact@v7
         with:
-          name: offline-replay-help-max-${{ github.sha }}
-          path: ui-results/help-max
-      - name: Require all 30 UI tests across four disjoint groups
+          name: offline-replay-help-max-en-${{ github.sha }}
+          path: ui-results/help-max-en
+      - uses: actions/download-artifact@v7
+        with:
+          name: offline-replay-help-max-ko-${{ github.sha }}
+          path: ui-results/help-max-ko
+      - name: Require all 31 UI tests across five disjoint groups
         run: python3 scripts/verify_offline_replay.py --verify-groups ui-results
 
   native-app:

@@ -130,54 +130,60 @@ final class LocalizationHelpUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["help-step-progress"].label,"3단계 중 2단계")
         app.terminate()
     }
-    func testEveryGuideAtMaximumTextShowsWholeNumberedImageAndClosesZoomInBothLanguages() {
+    func testEveryGuideAtMaximumTextShowsWholeNumberedImageAndClosesZoomInEnglish() {
+        checkEveryGuideAtMaximumText(language:"en")
+    }
+
+    func testEveryGuideAtMaximumTextShowsWholeNumberedImageAndClosesZoomInKorean() {
+        checkEveryGuideAtMaximumText(language:"ko")
+    }
+
+    private func checkEveryGuideAtMaximumText(language:String) {
         continueAfterFailure=false
         XCUIDevice.shared.orientation = .portrait
         defer {XCUIDevice.shared.orientation = .portrait}
         let guides:[(String,Int)]=[("setup",2),("live",3),("signals",2),("sessions",3),("replay",2),("editor",2)]
-        for language in ["en","ko"] {
-            let app=XCUIApplication()
-            app.launchArguments=["--app-language",language,"-UIPreferredContentSizeCategoryName","UICTContentSizeCategoryAccessibilityXXXL"]
-            app.launch();tab(app,"Help","도움말",language)
-            for (guide,count) in guides {
-                let card=app.buttons["help-guide-"+guide];reveal(card,in:app);card.tap()
-                for step in 1...count {
-                    let progress=app.staticTexts["help-step-progress"]
-                    XCTAssertTrue(progress.waitForExistence(timeout:5))
-                    XCTAssertEqual(progress.label,language=="ko" ? "\(count)단계 중 \(step)단계":"Step \(step) of \(count)")
-                    let image=app.descendants(matching:.any).matching(identifier:"help-image-"+guide).firstMatch
-                    let enlarge=app.buttons["help-enlarge-screenshot"]
-                    for _ in 0..<32 {
-                        if image.exists {
-                            let imageFrame=image.frame
-                            if imageFrame.minY>app.navigationBars.firstMatch.frame.maxY && imageFrame.maxY<app.buttons["help-next"].frame.minY {break}
-                        }
-                        app.swipeUp()
+        let app=XCUIApplication()
+        app.launchArguments=["--app-language",language,"-UIPreferredContentSizeCategoryName","UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launch();tab(app,"Help","도움말",language)
+        for (guide,count) in guides {
+            let card=app.buttons["help-guide-"+guide];reveal(card,in:app);card.tap()
+            for step in 1...count {
+                let progress=app.staticTexts["help-step-progress"]
+                XCTAssertTrue(progress.waitForExistence(timeout:5))
+                XCTAssertEqual(progress.label,language=="ko" ? "\(count)단계 중 \(step)단계":"Step \(step) of \(count)")
+                let image=app.descendants(matching:.any).matching(identifier:"help-image-"+guide).firstMatch
+                let enlarge=app.buttons["help-enlarge-screenshot"]
+                for _ in 0..<32 {
+                    if image.exists {
+                        let imageFrame=image.frame
+                        if imageFrame.minY>app.navigationBars.firstMatch.frame.maxY && imageFrame.maxY<app.buttons["help-next"].frame.minY {break}
                     }
-                    XCTAssertTrue(image.exists,"Actual screenshot must be bundled for every step")
-                    let imageFrame=image.frame
-                    XCTAssertGreaterThan(imageFrame.minY,app.navigationBars.firstMatch.frame.maxY)
-                    XCTAssertLessThan(imageFrame.maxY,app.buttons["help-next"].frame.minY,"Full numbered image must be above the fixed navigation controls")
-                    XCTAssertTrue(app.windows.firstMatch.frame.contains(imageFrame))
-                    let shot=XCTAttachment(screenshot:app.windows.firstMatch.screenshot())
-                    shot.name="App-help-\(language)-\(guide)-step\(step)-AX5-numbered";shot.lifetime = .keepAlways;add(shot)
-                    if step==1 || step==count {
-                        XCTAssertTrue(enlarge.isHittable);enlarge.tap()
-                        let zoom=app.sliders.firstMatch;XCTAssertTrue(zoom.waitForExistence(timeout:5));XCTAssertTrue(zoom.isHittable)
-                        zoom.adjust(toNormalizedSliderPosition:0.5)
-                        XCUIDevice.shared.orientation = .landscapeLeft
-                        let done=app.buttons[language=="ko" ? "완료":"Done"]
-                        XCTAssertTrue(done.waitForExistence(timeout:5));XCTAssertTrue(done.isHittable)
-                        let zoomShot=XCTAttachment(screenshot:app.windows.firstMatch.screenshot())
-                        zoomShot.name="App-help-\(language)-\(guide)-step\(step)-AX5-landscape-zoom";zoomShot.lifetime = .keepAlways;add(zoomShot)
-                        done.tap();XCUIDevice.shared.orientation = .portrait
-                    }
-                    if step<count {app.buttons["help-next"].tap()}
+                    app.swipeUp()
                 }
-                app.navigationBars.buttons.firstMatch.tap()
+                XCTAssertTrue(image.exists,"Actual screenshot must be bundled for every step")
+                let imageFrame=image.frame
+                XCTAssertGreaterThan(imageFrame.minY,app.navigationBars.firstMatch.frame.maxY)
+                XCTAssertLessThan(imageFrame.maxY,app.buttons["help-next"].frame.minY,"Full numbered image must be above the fixed navigation controls")
+                XCTAssertTrue(app.windows.firstMatch.frame.contains(imageFrame))
+                let shot=XCTAttachment(screenshot:app.windows.firstMatch.screenshot())
+                shot.name="App-help-\(language)-\(guide)-step\(step)-AX5-numbered";shot.lifetime = .keepAlways;add(shot)
+                if step==1 || step==count {
+                    XCTAssertTrue(enlarge.isHittable);enlarge.tap()
+                    let zoom=app.sliders.firstMatch;XCTAssertTrue(zoom.waitForExistence(timeout:5));XCTAssertTrue(zoom.isHittable)
+                    zoom.adjust(toNormalizedSliderPosition:0.5)
+                    XCUIDevice.shared.orientation = .landscapeLeft
+                    let done=app.buttons[language=="ko" ? "완료":"Done"]
+                    XCTAssertTrue(done.waitForExistence(timeout:5));XCTAssertTrue(done.isHittable)
+                    let zoomShot=XCTAttachment(screenshot:app.windows.firstMatch.screenshot())
+                    zoomShot.name="App-help-\(language)-\(guide)-step\(step)-AX5-landscape-zoom";zoomShot.lifetime = .keepAlways;add(zoomShot)
+                    done.tap();XCUIDevice.shared.orientation = .portrait
+                }
+                if step<count {app.buttons["help-next"].tap()}
             }
-            app.terminate()
+            app.navigationBars.buttons.firstMatch.tap()
         }
+        app.terminate()
     }
 
 }
