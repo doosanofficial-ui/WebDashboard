@@ -1,5 +1,7 @@
 import json
 import os
+import errno
+import signal
 from pathlib import Path
 import subprocess
 import sys
@@ -104,6 +106,42 @@ time.sleep(30)
         receipt=json.loads((Path(self.directory.name)/"receipt.json").read_text())
         self.assertEqual(receipt["exitCode"],7)
         self.assertFalse(receipt["timedOut"])
+
+    def group_probe_failure(self, kill_denied=False):
+        root = Path(self.directory.name)
+        original_killpg = os.killpg
+        def signal_group(process_group, number):
+            if number == 0:
+                raise PermissionError(errno.EPERM, "synthetic owned group probe failure")
+            if kill_denied and number == signal.SIGKILL:
+                raise PermissionError(errno.EPERM, "synthetic owned group kill failure")
+            return original_killpg(process_group, number)
+        with patch.object(runner.os, "killpg", side_effect=signal_group):
+            with self.assertRaises(Exception) as caught:
+                self.run_phase("import time; time.sleep(30)", timeout=0.1)
+        self.assertIsInstance(caught.exception, subprocess.TimeoutExpired,
+                              "Cleanup observation must not replace the original bounded phase failure")
+        self.assertEqual(caught.exception.timeout, 0.1)
+        receipt = json.loads((root / "receipt.json").read_text())
+        self.assertTrue(receipt["timedOut"])
+        self.assertTrue(receipt["groupTermSent"])
+        self.assertIsNotNone(receipt["exitCode"], "The newly owned leader must still be reaped")
+        self.assertIsNone(receipt["groupStillExistsAfterLeaderWait"],
+                          "EPERM is unknown, never proof that descendants are absent")
+        expected = [{
+            "operation": "probe", "type": "PermissionError", "errno": errno.EPERM,
+            "message": "[Errno 1] synthetic owned group probe failure"}]
+        if kill_denied:
+            expected.append({"operation": "kill", "type": "PermissionError", "errno": errno.EPERM,
+                             "message": "[Errno 1] synthetic owned group kill failure"})
+            self.assertFalse(receipt["groupKillSent"], "Denied cleanup must never be recorded as successful")
+        self.assertEqual(receipt["groupCleanupErrors"], expected)
+
+    def test_group_probe_permission_error_cannot_replace_owned_timeout(self):
+        self.group_probe_failure()
+
+    def test_unknown_group_and_kill_denial_keep_original_timeout(self):
+        self.group_probe_failure(kill_denied=True)
 
     def test_timeout_terminates_only_new_owned_group_and_reaps_child(self):
         code="""import signal, subprocess, sys, time

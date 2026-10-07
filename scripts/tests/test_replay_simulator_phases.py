@@ -230,6 +230,15 @@ class PostBootstrapDiagnosticsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             results = (Path(directory) / 'results').resolve()
             container = Path(directory) / 'Devices/owned/data/Containers/Data/Application/app'
+            events = []
+            def capture_failure(*args, **kwargs):
+                events.append('capture')
+                if diagnostic_error:
+                    raise diagnostic_error
+                return {}
+            def cleanup_owned(*args, **kwargs):
+                events.append('cleanup')
+                return True
             def command_output(command, timeout=60):
                 if command[1:4] == ['simctl', 'list', 'runtimes']:
                     return json.dumps({'runtimes': [{'identifier': 'ios27', 'version': '27.0'}]})
@@ -257,8 +266,8 @@ class PostBootstrapDiagnosticsTests(unittest.TestCase):
                 stack.enter_context(patch.object(runner, 'select_ui_destination', return_value=('ios27', 'iphone')))
                 stack.enter_context(patch.object(runner, 'output', side_effect=command_output))
                 stack.enter_context(patch.object(runner, 'run_owned_phase', side_effect=phase))
-                capture = stack.enter_context(patch.object(runner, 'capture_simulator_bootstrap_failure', return_value={}, side_effect=diagnostic_error))
-                cleanup = stack.enter_context(patch.object(runner, 'cleanup_simulator', return_value=True))
+                capture = stack.enter_context(patch.object(runner, 'capture_simulator_bootstrap_failure', side_effect=capture_failure))
+                cleanup = stack.enter_context(patch.object(runner, 'cleanup_simulator', side_effect=cleanup_owned))
                 if failure_phase:
                     with self.assertRaises(Exception) as caught:
                         runner.main()
@@ -266,6 +275,8 @@ class PostBootstrapDiagnosticsTests(unittest.TestCase):
                 else:
                     runner.main()
             cleanup.assert_called_once_with(device, results)
+            self.assertEqual(events, ['capture', 'cleanup'] if failure_phase else ['cleanup'],
+                             'Owned failure evidence must be attempted before cleanup, including capture errors')
             if failure_phase == 'ui-test':
                 capture.assert_called_once_with(device, results, failure_phase='ui-test')
             elif failure_phase == 'bootstrap':

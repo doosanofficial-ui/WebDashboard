@@ -120,6 +120,10 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False)
             if not best_effort_recording:
                 raise
             recording_error(error)
+    def group_cleanup_error(operation, error):
+        evidence.setdefault("groupCleanupErrors", []).append({
+            "operation": operation, "type": type(error).__name__,
+            "errno": getattr(error, "errno", None), "message": str(error)})
     def stop_owned_group():
         if child is None:
             return
@@ -128,23 +132,34 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False)
             evidence["groupTermSent"] = True
         except ProcessLookupError:
             pass
+        except OSError as error:
+            group_cleanup_error("term", error)
         try:
             child.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            pass
+        except (OSError, subprocess.TimeoutExpired) as error:
+            group_cleanup_error("leader-wait", error)
         # Leader exit does not imply that its descendants exited.
         try:
             os.killpg(child.pid, 0)
         except ProcessLookupError:
             evidence["groupStillExistsAfterLeaderWait"] = False
+        except OSError as error:
+            evidence["groupStillExistsAfterLeaderWait"] = None
+            group_cleanup_error("probe", error)
         else:
             evidence["groupStillExistsAfterLeaderWait"] = True
+        if evidence["groupStillExistsAfterLeaderWait"] is not False:
             try:
                 os.killpg(child.pid, signal.SIGKILL)
                 evidence["groupKillSent"] = True
             except ProcessLookupError:
                 pass
-        child.wait(timeout=10)
+            except OSError as error:
+                group_cleanup_error("kill", error)
+        try:
+            child.wait(timeout=10)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            group_cleanup_error("final-reap", error)
     if timeout <= 0:
         evidence.update(timedOut=True, elapsedSeconds=0, exitCode=None,
                         finishedUTC=datetime.datetime.now(datetime.timezone.utc).isoformat())

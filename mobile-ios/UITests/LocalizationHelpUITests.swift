@@ -148,13 +148,17 @@ final class LocalizationHelpUITests: XCTestCase {
                     let image=app.descendants(matching:.any).matching(identifier:"help-image-"+guide).firstMatch
                     let enlarge=app.buttons["help-enlarge-screenshot"]
                     for _ in 0..<32 {
-                        if image.exists && image.frame.minY>app.navigationBars.firstMatch.frame.maxY && image.frame.maxY<app.buttons["help-next"].frame.minY {break}
+                        if image.exists {
+                            let imageFrame=image.frame
+                            if imageFrame.minY>app.navigationBars.firstMatch.frame.maxY && imageFrame.maxY<app.buttons["help-next"].frame.minY {break}
+                        }
                         app.swipeUp()
                     }
                     XCTAssertTrue(image.exists,"Actual screenshot must be bundled for every step")
-                    XCTAssertGreaterThan(image.frame.minY,app.navigationBars.firstMatch.frame.maxY)
-                    XCTAssertLessThan(image.frame.maxY,app.buttons["help-next"].frame.minY,"Full numbered image must be above the fixed navigation controls")
-                    XCTAssertTrue(app.windows.firstMatch.frame.contains(image.frame))
+                    let imageFrame=image.frame
+                    XCTAssertGreaterThan(imageFrame.minY,app.navigationBars.firstMatch.frame.maxY)
+                    XCTAssertLessThan(imageFrame.maxY,app.buttons["help-next"].frame.minY,"Full numbered image must be above the fixed navigation controls")
+                    XCTAssertTrue(app.windows.firstMatch.frame.contains(imageFrame))
                     let shot=XCTAttachment(screenshot:app.windows.firstMatch.screenshot())
                     shot.name="App-help-\(language)-\(guide)-step\(step)-AX5-numbered";shot.lifetime = .keepAlways;add(shot)
                     if step==1 || step==count {
