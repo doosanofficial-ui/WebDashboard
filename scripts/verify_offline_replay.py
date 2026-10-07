@@ -6,6 +6,7 @@ import datetime
 import os
 import platform
 import signal
+import threading
 import time
 import sys
 from pathlib import Path
@@ -100,11 +101,34 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False)
         raise ValueError("Owned phase requires POSIX process groups")
     from verify_replay_seed import resource_snapshot, owned_progress
     began = time.monotonic()
+    deadline = began + timeout
     evidence = {"command": command, "startedUTC": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "timeoutSeconds": timeout, "timedOut": False,
                 "groupTermSent": False, "groupKillSent": False, "launched": False,
                 "resources": resource_snapshot(), "progress": []}
     child = None
+    completion = {}
+    completion_ready = threading.Event()
+    waiter = None
+    def wait_for_completion():
+        # Optional process/log observations must not hide a timely child exit.
+        # Accept only completion observed by the original phase deadline.
+        try:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(command, timeout)
+            code = child.wait(timeout=remaining)
+            observed = time.monotonic()
+            completion['observedElapsedSeconds'] = observed - began
+            if observed > deadline:
+                raise subprocess.TimeoutExpired(command, timeout)
+            completion['exitCode'] = code
+        except subprocess.TimeoutExpired:
+            completion['error'] = subprocess.TimeoutExpired(command, timeout)
+        except BaseException as error:
+            completion['error'] = error
+        finally:
+            completion_ready.set()
     def recording_error(error):
         evidence.setdefault("recordingErrors", []).append(str(error))
         print("Phase evidence could not be recorded: " + str(error), file=sys.stderr)
@@ -180,20 +204,16 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False)
             child = subprocess.Popen(command, stdout=stream, stderr=subprocess.STDOUT,
                                      stdin=subprocess.DEVNULL, start_new_session=True)
             evidence.update(pid=child.pid, processGroup=child.pid, launched=True)
+            waiter = threading.Thread(target=wait_for_completion, name="owned-phase-wait", daemon=True)
+            waiter.start()
             save()
             record_progress()
-            while True:
-                remaining = began + timeout - time.monotonic()
-                if remaining <= 0:
-                    raise subprocess.TimeoutExpired(command, timeout)
-                try:
-                    code = child.wait(timeout=min(15, remaining))
-                    break
-                except subprocess.TimeoutExpired:
-                    record_progress()
-                    save()
-                    if time.monotonic() >= began + timeout:
-                        raise subprocess.TimeoutExpired(command, timeout)
+            while not completion_ready.wait(timeout=15):
+                record_progress()
+                save()
+            if 'error' in completion:
+                raise completion['error']
+            code = completion['exitCode']
             if code:
                 raise subprocess.CalledProcessError(code, command)
         except BaseException as error:
@@ -206,6 +226,11 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False)
             raise
         finally:
             primary_failure = sys.exc_info()[0] is not None
+            if waiter is not None and waiter.ident is not None:
+                waiter.join(timeout=1)
+                evidence['completionWaiterStopped'] = not waiter.is_alive()
+            if 'observedElapsedSeconds' in completion:
+                evidence['processCompletionObservedElapsedSeconds'] = completion['observedElapsedSeconds']
             if child is not None:
                 try:
                     record_progress()
