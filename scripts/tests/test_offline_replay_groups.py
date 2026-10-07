@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import verify_offline_replay as runner
 
 class ReplayGroupTests(unittest.TestCase):
-    def test_partition_is_disjoint_and_covers_exact_existing_25_and_four_help_tests(self):
+    def test_partition_is_disjoint_and_covers_exact_existing_30_tests(self):
         root = Path(__file__).resolve().parents[2] / "mobile-ios/UITests"
         expected = set()
         for suite in ("OfflineReplayUITests", "UIClarityUITests", "DashboardEditingUITests", "SmallViewportUIRegression", "SmallViewportStatusUIRegression", "LocalizationHelpUITests"):
@@ -19,9 +19,16 @@ class ReplayGroupTests(unittest.TestCase):
         self.assertEqual((len(replay), len(layout)), (11, 14))
         self.assertFalse(set(replay) & set(layout))
         help_tests=runner.TEST_GROUPS["help"]
-        self.assertEqual(len(help_tests),5)
-        self.assertFalse((set(replay)|set(layout)) & set(help_tests))
-        self.assertEqual(set(replay) | set(layout) | set(help_tests), expected)
+        self.assertEqual(len(help_tests),4)
+        self.assertIn('help-max', runner.TEST_GROUPS)
+        maximum = runner.TEST_GROUPS['help-max']
+        self.assertEqual(maximum, ['TelemetryUITests/LocalizationHelpUITests/testEveryGuideAtMaximumTextShowsWholeNumberedImageAndClosesZoomInBothLanguages'])
+        all_tests = [test for group in runner.TEST_GROUPS.values() for test in group]
+        self.assertEqual(len(all_tests), 30)
+        self.assertEqual(len(set(all_tests)), 30)
+        self.assertFalse(set(help_tests) & set(maximum))
+        self.assertFalse((set(replay)|set(layout)) & (set(help_tests)|set(maximum)))
+        self.assertEqual(set(all_tests), expected)
         self.assertEqual(len(expected), 30)
 
     def test_aggregate_requires_both_exact_groups_and_clean_counters(self):
@@ -45,5 +52,31 @@ class ReplayGroupTests(unittest.TestCase):
             with self.assertRaises(ValueError): runner.verify_group_results(root)
             target.unlink()
             with self.assertRaises((ValueError, FileNotFoundError)): runner.verify_group_results(root)
+
+    def test_workflow_includes_every_partition_and_downloads_the_new_group(self):
+        workflow = (Path(__file__).resolve().parents[2] / '.github/workflows/native-reliability.yml').read_text()
+        matrix = re.search(r'group:\s*\[([^\]]+)\]', workflow)
+        self.assertIsNotNone(matrix)
+        self.assertEqual([part.strip() for part in matrix.group(1).split(',')], ['replay', 'layout', 'help', 'help-max'])
+        for group in ['replay', 'layout', 'help', 'help-max']:
+            self.assertIn('name: offline-replay-' + group + '-${{ github.sha }}', workflow)
+            self.assertIn('path: ui-results/' + group, workflow)
+        self.assertIn('timeout-minutes: 40', workflow)
+        self.assertIn("if [ \"$UI_GROUP_RESULT\" != \"success\" ]", workflow)
+
+    def test_missing_or_skipped_maximum_text_group_cannot_pass_aggregate(self):
+        self.assertIn('help-max', runner.TEST_GROUPS)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for group, tests in runner.TEST_GROUPS.items():
+                (root / group).mkdir()
+                (root / group / 'selection.json').write_text(json.dumps({'group': group, 'tests': tests}))
+                if group != 'help-max':
+                    (root / group / 'summary.json').write_text(json.dumps({'totalTestCount': len(tests), 'passedTests': len(tests), 'failedTests': 0, 'skippedTests': 0}))
+            with self.assertRaises(FileNotFoundError):
+                runner.verify_group_results(root)
+            (root / 'help-max/summary.json').write_text(json.dumps({'totalTestCount': 1, 'passedTests': 0, 'failedTests': 0, 'skippedTests': 1}))
+            with self.assertRaises(ValueError):
+                runner.verify_group_results(root)
 
 if __name__ == "__main__": unittest.main()

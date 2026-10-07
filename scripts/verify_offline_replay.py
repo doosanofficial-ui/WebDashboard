@@ -18,7 +18,7 @@ from verify_ios_lifecycle import output, stage_sources, select_runtime_and_type,
 from verify_replay_seed import private_artifact, run_artifact, install_fixture, current_commit
 
 
-# Explicit, disjoint 11 + 14 + 4 selectors: source coverage is enforced by unit tests.
+# Explicit, disjoint 11 + 14 + 4 + 1 selectors; the slow maximum-text test has its own budget.
 TEST_GROUPS = {'replay': ['TelemetryUITests/OfflineReplayUITests/testSessionReplayShowsAnalysisAndSynchronizedRecordedTime',
             'TelemetryUITests/OfflineReplayUITests/testRecordedSignalHistoryContainsOnlySelectedTimePrefix',
             'TelemetryUITests/OfflineReplayUITests/testRecordedGPSRouteContainsOnlySelectedTimePrefix',
@@ -50,7 +50,8 @@ TEST_GROUPS["help"] = [
     "TelemetryUITests/LocalizationHelpUITests/testCaptureEnglishGuideScreens",
     "TelemetryUITests/LocalizationHelpUITests/testCaptureKoreanGuideScreens",
     "TelemetryUITests/LocalizationHelpUITests/testLanguageSwitchPersistsAndHelpPreservesReplay",
-    "TelemetryUITests/LocalizationHelpUITests/testKoreanHelpAtMaximumTextAndLandscape",
+    "TelemetryUITests/LocalizationHelpUITests/testKoreanHelpAtMaximumTextAndLandscape"]
+TEST_GROUPS["help-max"] = [
     "TelemetryUITests/LocalizationHelpUITests/testEveryGuideAtMaximumTextShowsWholeNumberedImageAndClosesZoomInBothLanguages"]
 
 
@@ -88,7 +89,7 @@ def verify_group_results(root):
         executed.extend(tests)
     if len(executed) != 30 or len(set(executed)) != 30:
         raise ValueError("Expected exactly 30 disjoint UI tests")
-    print("OFFLINE REPLAY FULL GATE PASS: 30 tests across three groups, zero failures/skips")
+    print(f"OFFLINE REPLAY FULL GATE PASS: 30 tests across {len(TEST_GROUPS)} groups, zero failures/skips")
 
 
 def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False):
@@ -265,8 +266,8 @@ def owned_posterboard_signatures(simulator):
     return evidence
 
 
-def capture_simulator_bootstrap_failure(simulator, results):
-    """Gather bounded read-only evidence before cleanup; do not retry the bootstrap."""
+def capture_simulator_bootstrap_failure(simulator, results, failure_phase="bootstrap"):
+    """Gather owned failure evidence; retain artifact names and never retry the failed phase."""
     simulator = str(uuid.UUID(simulator)).upper()
     screen = results / "simulator-bootstrap-screen.png"
     commands = [
@@ -274,8 +275,8 @@ def capture_simulator_bootstrap_failure(simulator, results):
         ("logs", ["/usr/bin/log", "show", "--style", "compact", "--last", "5m", "--info",
                   "--predicate", 'eventMessage CONTAINS[c] "' + simulator + '"']),
         ("screenshot", ["xcrun", "simctl", "io", simulator, "screenshot", "--type=png", str(screen)])]
-    evidence = {"simulator": simulator, "phases": [], "screenshotCaptured": False,
-                "scope": "Read-only diagnostics for created UUID after bootstrap failure; no boot retry"}
+    evidence = {"simulator": simulator, "failurePhase": failure_phase, "phases": [], "screenshotCaptured": False,
+                "scope": "Read-only diagnostics for created UUID after " + failure_phase + " failure; no retry"}
     for phase, command in commands:
         entry = {"phase": phase, "success": False}
         try:
@@ -371,6 +372,7 @@ def main():
         print("SEED ADMISSION AND FIXTURE PASS: trusted producer digest/private bytes; before Simulator", flush=True)
         staged = workspace / "source"
         stage_sources(root, staged)
+        failure_phase = "bootstrap"
         try:
             catalog = json.loads(output(["xcrun", "simctl", "list", "runtimes", "--json"]))
             runtime, device_type = select_ui_destination(catalog, args.se_viewport)
@@ -382,6 +384,7 @@ def main():
                 "simulator": simulator, "scope": "Simulator fixture only; no vehicle/GPS acquisition"}, indent=2))
             print((results / "environment.json").read_text(), flush=True)
             prepare_simulator(simulator, results)
+            failure_phase = "app-build"
             output(["xcodegen", "generate", "--spec", str(staged / "project.yml")], timeout=120)
             derived = workspace / "derived"
             base = ["xcodebuild", "-project", str(staged / "Telemetry.xcodeproj"), "-scheme", "Telemetry",
@@ -390,6 +393,7 @@ def main():
                     "-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never"]
             run_owned_phase(base + ["build"], results / "build.log",
                             results / "build-process.json", 600)
+            failure_phase = "app-install"
             output(["xcrun", "simctl", "install", simulator,
                     str(derived / "Build/Products/Debug-iphonesimulator/Telemetry.app")], timeout=120)
             container = Path(output(["xcrun", "simctl", "get_app_container", simulator,
@@ -425,7 +429,9 @@ def main():
                     "requiredDeviceType": SE_DEVICE_TYPE, "tests": SE_VIEWPORT_TESTS}, indent=2))
             command = base + ["-resultBundlePath", str(bundle)] + selected_tests + ["test"]
             (results / "command.json").write_text(json.dumps(command, indent=2))
+            failure_phase = "ui-test"
             run_owned_phase(command, results / "test.log", results / "test-process.json", 1200)
+            failure_phase = "result-read"
             summary = json.loads(output(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)]))
             (results / "summary.json").write_text(json.dumps(summary, indent=2))
             native = results / "native-exports"
@@ -437,6 +443,16 @@ def main():
             output(["xcrun", "xcresulttool", "export", "attachments", "--path", str(bundle),
                     "--output-path", str(results / "screenshots")], timeout=120)
             verify_summary(summary, expected_count)
+        except (OSError, subprocess.SubprocessError):
+            if simulator and failure_phase != "bootstrap":
+                try:
+                    capture_simulator_bootstrap_failure(simulator, results, failure_phase=failure_phase)
+                except Exception as error:
+                    try:
+                        print("Simulator diagnostics unavailable: " + str(error), file=sys.stderr)
+                    except Exception:
+                        pass
+            raise
         finally:
             if simulator:
                 primary_failure = sys.exc_info()[0] is not None

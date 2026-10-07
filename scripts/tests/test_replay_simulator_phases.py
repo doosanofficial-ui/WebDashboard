@@ -223,4 +223,67 @@ class BootstrapDiagnosticsTests(unittest.TestCase):
             self.assertEqual(evidence["reports"], [])
 
 
+class PostBootstrapDiagnosticsTests(unittest.TestCase):
+    def trial(self, failure_phase=None, diagnostic_error=None):
+        device = '11111111-1111-4111-8111-111111111111'
+        primary = subprocess.TimeoutExpired(['xcodebuild', 'test'] if failure_phase == 'ui-test' else ['xcrun', 'simctl', 'bootstatus', device, '-b'], 1200 if failure_phase == 'ui-test' else 180)
+        with tempfile.TemporaryDirectory() as directory:
+            results = (Path(directory) / 'results').resolve()
+            container = Path(directory) / 'Devices/owned/data/Containers/Data/Application/app'
+            def command_output(command, timeout=60):
+                if command[1:4] == ['simctl', 'list', 'runtimes']:
+                    return json.dumps({'runtimes': [{'identifier': 'ios27', 'version': '27.0'}]})
+                if command[1:3] == ['simctl', 'create']:
+                    return device
+                if command[1:3] == ['simctl', 'get_app_container']:
+                    return str(container)
+                if command[1:5] == ['xcresulttool', 'get', 'test-results', 'summary']:
+                    return json.dumps({'totalTestCount': 11, 'passedTests': 11, 'failedTests': 0, 'skippedTests': 0})
+                return ''
+            def phase(command, *args, **kwargs):
+                if (failure_phase == 'ui-test' and command[-1] == 'test') or (failure_phase == 'bootstrap' and 'bootstatus' in command):
+                    raise primary
+                return {}
+            arguments = ['verify_offline_replay.py', '--group', 'replay', '--seed-artifact', directory,
+                         '--seed-manifest-sha256', '0' * 64, '--result-directory', str(results)]
+            with ExitStack() as stack:
+                stack.enter_context(patch.object(sys, 'argv', arguments))
+                stack.enter_context(patch.object(runner, 'record_toolchain', return_value={}))
+                stack.enter_context(patch.object(runner, 'private_artifact', return_value={'manifest': {}}))
+                stack.enter_context(patch.object(runner, 'run_artifact'))
+                stack.enter_context(patch.object(runner, 'stage_sources'))
+                stack.enter_context(patch.object(runner, 'current_commit', return_value='fixture'))
+                stack.enter_context(patch.object(runner, 'install_fixture'))
+                stack.enter_context(patch.object(runner, 'select_ui_destination', return_value=('ios27', 'iphone')))
+                stack.enter_context(patch.object(runner, 'output', side_effect=command_output))
+                stack.enter_context(patch.object(runner, 'run_owned_phase', side_effect=phase))
+                capture = stack.enter_context(patch.object(runner, 'capture_simulator_bootstrap_failure', return_value={}, side_effect=diagnostic_error))
+                cleanup = stack.enter_context(patch.object(runner, 'cleanup_simulator', return_value=True))
+                if failure_phase:
+                    with self.assertRaises(Exception) as caught:
+                        runner.main()
+                    self.assertIs(caught.exception, primary, 'Optional UI diagnostics must preserve the original command failure')
+                else:
+                    runner.main()
+            cleanup.assert_called_once_with(device, results)
+            if failure_phase == 'ui-test':
+                capture.assert_called_once_with(device, results, failure_phase='ui-test')
+            elif failure_phase == 'bootstrap':
+                capture.assert_called_once_with(device, results)
+            else:
+                capture.assert_not_called()
+
+    def test_ui_timeout_captures_owned_screen_before_cleanup(self):
+        self.trial(failure_phase='ui-test')
+
+    def test_optional_ui_capture_error_cannot_mask_timeout_or_skip_cleanup(self):
+        self.trial(failure_phase='ui-test', diagnostic_error=RuntimeError('synthetic optional capture failure'))
+
+    def test_boot_failure_is_not_captured_twice_by_outer_boundary(self):
+        self.trial(failure_phase='bootstrap')
+
+    def test_successful_ui_does_not_add_failure_capture(self):
+        self.trial()
+
+
 if __name__ == "__main__": unittest.main()
