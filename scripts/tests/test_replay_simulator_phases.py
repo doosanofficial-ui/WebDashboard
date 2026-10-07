@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -113,6 +114,113 @@ class SimulatorPhaseTests(unittest.TestCase):
     def test_cleanup_phase_receipt_failure_still_executes_both_owned_commands(self):
         self.cleanup_recording_failure("receipt")
 
+
+
+class BootstrapDiagnosticsTests(unittest.TestCase):
+    def bootstrap_trial(self, diagnostic_failure=None, boot_fails=True, malformed_report=False):
+        device = "11111111-1111-4111-8111-111111111111"
+        commands = []
+        primary = subprocess.TimeoutExpired(["xcrun", "simctl", "bootstatus", device, "-b"], 180)
+        original_phase = runner.run_owned_phase
+        with tempfile.TemporaryDirectory() as directory:
+            results = Path(directory)
+            reports = results / "Library/Logs/DiagnosticReports"
+            reports.mkdir(parents=True)
+            for name, coalition in [("owned", device), ("other", "22222222-2222-4222-8222-222222222222")]:
+                report = {"procName": "PosterBoard", "coalitionName": "com.apple.CoreSimulator.SimDevice." + coalition,
+                          "captureTime": "2026-10-07 13:30:00 +0000", "faultingThread": 0,
+                          "exception": {"type": "EXC_BREAKPOINT", "signal": "SIGTRAP"},
+                          "termination": {"namespace": "SIGNAL", "code": 5},
+                          "threads": [{"frames": [{"imageIndex": 0, "symbol": "owned-poster-frame", "imageOffset": 16}]}],
+                          "usedImages": [{"name": "PosterFoundation"}]}
+                (reports / ("PosterBoard-" + name + ".ips")).write_text('{}\n' + json.dumps(report))
+            if malformed_report:
+                (reports / "PosterBoard-owned.ips").write_text('{}\n' + json.dumps([device]))
+            def phase(command, log, receipt, timeout, **kwargs):
+                commands.append(command)
+                if command[1:3] == ["simctl", "boot"]:
+                    return {}
+                if "bootstatus" in command:
+                    if boot_fails: raise primary
+                    return {}
+                if diagnostic_failure and command[2:4] == ["list", "devices"]:
+                    raise OSError("synthetic state-read failure")
+                if command[1:3] == ["simctl", "io"]:
+                    source = "from pathlib import Path; Path(" + repr(command[-1]) + ").write_bytes(b'\\x89PNG\\r\\n\\x1a\\n'); print('captured owned fixture')"
+                else:
+                    source = "print(" + repr("owned " + device) + ")"
+                return original_phase([sys.executable, "-c", source], log, receipt, timeout, **kwargs)
+            with patch.object(runner, "run_owned_phase", side_effect=phase), patch.object(Path, "home", return_value=results):
+                if boot_fails:
+                    with self.assertRaises(Exception) as caught:
+                        runner.prepare_simulator(device, results)
+                    self.assertIs(caught.exception, primary, "Diagnostic failure must preserve the original bootstrap error")
+                else:
+                    runner.prepare_simulator(device, results)
+            if not boot_fails:
+                self.assertEqual(len(commands), 2, "Successful bootstrap must not add diagnostic calls")
+                return
+            self.assertTrue((results / "simulator-bootstrap-diagnostics.json").is_file(),
+                            "A failed bootstrap needs a scoped diagnostic receipt before cleanup")
+            diagnostics = json.loads((results / "simulator-bootstrap-diagnostics.json").read_text())
+            self.assertEqual(diagnostics["simulator"], device)
+            self.assertEqual([item["phase"] for item in diagnostics["phases"]], ["state", "logs", "screenshot"])
+            self.assertEqual(commands[2], ["xcrun", "simctl", "list", "devices", device, "--json"])
+            self.assertIn('eventMessage CONTAINS[c] "' + device + '"', commands[3])
+            self.assertEqual(commands[4][:5], ["xcrun", "simctl", "io", device, "screenshot"])
+            self.assertTrue(diagnostics["screenshotCaptured"])
+            self.assertEqual(len(diagnostics["posterBoard"]["reports"]), 0 if malformed_report else 1,
+                             "Foreign or invalid Simulator crash records must be excluded")
+            if malformed_report:
+                self.assertTrue(diagnostics["posterBoard"]["observationErrors"])
+            else:
+                signature = diagnostics["posterBoard"]["reports"][0]
+                self.assertEqual(signature["exception"], {"type": "EXC_BREAKPOINT", "signal": "SIGTRAP"})
+                self.assertEqual(signature["firstFrames"], [{"image": "PosterFoundation", "symbol": "owned-poster-frame", "imageOffset": 16}])
+            self.assertEqual(diagnostics["phases"][0]["success"], not bool(diagnostic_failure))
+            for name in ["logs", "screenshot"]:
+                receipt = json.loads((results / ("simulator-diagnostic-" + name + ".json")).read_text())
+                self.assertEqual(receipt["timeoutSeconds"], 10)
+                self.assertEqual(receipt["exitCode"], 0)
+
+    def test_boot_failure_records_owned_state_logs_and_actual_capture(self):
+        self.bootstrap_trial()
+
+    def test_state_read_failure_still_captures_without_replacing_boot_error(self):
+        self.bootstrap_trial(diagnostic_failure=True)
+
+    def test_successful_boot_does_not_run_failure_diagnostics(self):
+        self.bootstrap_trial(boot_fails=False)
+
+    def test_invalid_crash_report_does_not_replace_boot_error(self):
+        self.bootstrap_trial(malformed_report=True)
+
+    def test_unexpected_diagnostic_and_stderr_errors_keep_primary_boot_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            primary = subprocess.TimeoutExpired(["xcrun", "simctl", "bootstatus", "owned", "-b"], 180)
+            for stderr_error in [OSError("diagnostic stderr failure"), ValueError("I/O operation on closed file")]:
+                with self.subTest(stderr_error=type(stderr_error).__name__), \
+                        patch.object(runner, "run_owned_phase", side_effect=[{}, primary]), \
+                        patch.object(runner, "capture_simulator_bootstrap_failure", side_effect=RuntimeError("diagnostic failure")), \
+                        patch.object(runner, "print", side_effect=stderr_error, create=True):
+                    with self.assertRaises(Exception) as caught:
+                        runner.prepare_simulator("11111111-1111-4111-8111-111111111111", Path(directory))
+                    self.assertIs(caught.exception, primary)
+
+    def test_crash_directory_scan_is_bounded_and_marked_incomplete(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            reports = home / "Library/Logs/DiagnosticReports"
+            reports.mkdir(parents=True)
+            for index in range(250):
+                path = reports / ("PosterBoard-old-" + str(index) + ".ips")
+                path.write_text('{}')
+                os.utime(path, (0, 0))
+            with patch.object(Path, "home", return_value=home):
+                evidence = runner.owned_posterboard_signatures("11111111-1111-4111-8111-111111111111")
+            self.assertTrue(evidence.get("metadataScanIncomplete", False), "A truncated directory scan cannot imply crash absence")
+            self.assertLessEqual(evidence["scannedDirectoryEntries"], 200)
+            self.assertEqual(evidence["reports"], [])
 
 
 if __name__ == "__main__": unittest.main()

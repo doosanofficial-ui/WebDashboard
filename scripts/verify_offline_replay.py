@@ -211,13 +211,106 @@ def run_seed_phase(command, log, receipt, timeout):
     return run_owned_phase(command, log, receipt, timeout)
 
 
+def owned_posterboard_signatures(simulator):
+    """Read recent reports only for this created UUID; never expose other reports."""
+    directory = Path.home() / "Library/Logs/DiagnosticReports"
+    evidence = {"reports": [], "directoryAvailable": directory.is_dir(), "observationErrors": [], "metadataScanIncomplete": False, "scannedDirectoryEntries": 0,
+                "scope": "PosterBoard .ips from last five minutes matching created Simulator UUID; scan at most1second/200 entries; at most20 files/2MiB each. Missing reports do not exclude a crash."}
+    began = time.monotonic()
+    recent = 0
+    try:
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                if evidence["scannedDirectoryEntries"] >= 200 or time.monotonic() - began >= 1:
+                    evidence["metadataScanIncomplete"] = True
+                    break
+                evidence["scannedDirectoryEntries"] += 1
+                if not entry.name.startswith("PosterBoard") or not entry.name.endswith(".ips"):
+                    continue
+                if entry.stat().st_mtime < time.time() - 300:
+                    continue
+                if recent >= 20:
+                    evidence["metadataScanIncomplete"] = True
+                    break
+                recent += 1
+                path = Path(entry.path)
+                try:
+                    with path.open("rb") as stream:
+                        raw = stream.read(2 * 1024 * 1024 + 1)
+                    if len(raw) > 2 * 1024 * 1024:
+                        evidence["observationErrors"].append("Oversized report skipped")
+                        continue
+                    text = raw.decode("utf-8")
+                    if simulator.lower() not in text.lower():
+                        continue
+                    header, end = json.JSONDecoder().raw_decode(text)
+                    body = json.loads(text[end:].strip()) if text[end:].strip() else header
+                    if not isinstance(header, dict) or not isinstance(body, dict):
+                        raise ValueError("Invalid report mapping")
+                    if body.get("procName") != "PosterBoard" or simulator.lower() not in body.get("coalitionName", "").lower():
+                        continue
+                    images, threads = body.get("usedImages", []), body.get("threads", [])
+                    index = body.get("faultingThread")
+                    frames = threads[index].get("frames", []) if isinstance(index, int) and 0 <= index < len(threads) else []
+                    evidence["reports"].append({"file": path.name, "procName": "PosterBoard",
+                        "captureTime": body.get("captureTime", header.get("timestamp")),
+                        "coalitionName": body["coalitionName"], "exception": body.get("exception"),
+                        "termination": body.get("termination"), "firstFrames": [
+                            {"image": images[f["imageIndex"]].get("name") if isinstance(f.get("imageIndex"), int) and 0 <= f["imageIndex"] < len(images) else None,
+                             "symbol": f.get("symbol"), "imageOffset": f.get("imageOffset")} for f in frames[:8]]})
+                except (OSError, ValueError, UnicodeError, TypeError, AttributeError, KeyError, IndexError, RecursionError) as error:
+                    evidence["observationErrors"].append(type(error).__name__)
+    except OSError as error:
+        evidence["observationErrors"].append(type(error).__name__)
+    return evidence
+
+
+def capture_simulator_bootstrap_failure(simulator, results):
+    """Gather bounded read-only evidence before cleanup; do not retry the bootstrap."""
+    simulator = str(uuid.UUID(simulator)).upper()
+    screen = results / "simulator-bootstrap-screen.png"
+    commands = [
+        ("state", ["xcrun", "simctl", "list", "devices", simulator, "--json"]),
+        ("logs", ["/usr/bin/log", "show", "--style", "compact", "--last", "5m", "--info",
+                  "--predicate", 'eventMessage CONTAINS[c] "' + simulator + '"']),
+        ("screenshot", ["xcrun", "simctl", "io", simulator, "screenshot", "--type=png", str(screen)])]
+    evidence = {"simulator": simulator, "phases": [], "screenshotCaptured": False,
+                "scope": "Read-only diagnostics for created UUID after bootstrap failure; no boot retry"}
+    for phase, command in commands:
+        entry = {"phase": phase, "success": False}
+        try:
+            run_owned_phase(command, results / ("simulator-diagnostic-" + phase + ".log"),
+                            results / ("simulator-diagnostic-" + phase + ".json"), 10)
+            entry["success"] = True
+            if phase == "screenshot" and screen.is_file():
+                with screen.open("rb") as stream:
+                    evidence["screenshotCaptured"] = stream.read(8) == b"\x89PNG\r\n\x1a\n"
+        except (OSError, subprocess.SubprocessError) as error:
+            entry.update(errorType=type(error).__name__, error=str(error))
+        evidence["phases"].append(entry)
+    evidence["posterBoard"] = owned_posterboard_signatures(simulator)
+    (results / "simulator-bootstrap-diagnostics.json").write_text(json.dumps(evidence, indent=2), encoding="utf-8")
+    return evidence
+
+
 def prepare_simulator(simulator, results):
-    for phase, timeout in (("boot", 60), ("bootstatus", 180)):
-        command = ["xcrun", "simctl", phase, simulator]
-        if phase == "bootstatus":
-            command.append("-b")
-        run_owned_phase(command, results / ("simulator-" + phase + ".log"),
-                        results / ("simulator-" + phase + ".json"), timeout)
+    try:
+        for phase, timeout in (("boot", 60), ("bootstatus", 180)):
+            command = ["xcrun", "simctl", phase, simulator]
+            if phase == "bootstatus":
+                command.append("-b")
+            run_owned_phase(command, results / ("simulator-" + phase + ".log"),
+                            results / ("simulator-" + phase + ".json"), timeout)
+    except (OSError, subprocess.SubprocessError):
+        try:
+            capture_simulator_bootstrap_failure(simulator, results)
+        except Exception as error:
+            # Optional evidence must not replace the bootstrap error, including a broken stderr.
+            try:
+                print("Bootstrap diagnostics unavailable: " + str(error), file=sys.stderr)
+            except Exception:
+                pass
+        raise
 
 
 def cleanup_simulator(simulator, results):
