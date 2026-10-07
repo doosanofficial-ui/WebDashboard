@@ -16,8 +16,11 @@ class ReplayGroupTests(unittest.TestCase):
             expected.update("TelemetryUITests/" + suite + "/" + name for name in re.findall(r"func (test\w+)\(", (root / (suite + ".swift")).read_text()))
         expected.update("TelemetryUITests/TelemetryUITests/" + name for name in ("testMeasurementExportControlIsVisible", "testMeasurementCSVExportControlIsVisible"))
         replay, layout = runner.TEST_GROUPS["replay"], runner.TEST_GROUPS["layout"]
-        self.assertEqual((len(replay), len(layout)), (11, 14))
+        self.assertEqual((len(replay), len(layout)), (10, 14))
         self.assertFalse(set(replay) & set(layout))
+        route = runner.TEST_GROUPS.get('replay-route')
+        self.assertEqual(route, ['TelemetryUITests/OfflineReplayUITests/testRecordedGPSRouteContainsOnlySelectedTimePrefix'])
+        self.assertFalse(set(route) & set(replay))
         help_tests=runner.TEST_GROUPS["help"]
         self.assertEqual(len(help_tests),4)
         maximum = []
@@ -60,12 +63,29 @@ class ReplayGroupTests(unittest.TestCase):
         workflow = (Path(__file__).resolve().parents[2] / '.github/workflows/native-reliability.yml').read_text()
         matrix = re.search(r'group:\s*\[([^\]]+)\]', workflow)
         self.assertIsNotNone(matrix)
-        self.assertEqual([part.strip() for part in matrix.group(1).split(',')], ['replay', 'layout', 'help', 'help-max-en', 'help-max-ko'])
-        for group in ['replay', 'layout', 'help', 'help-max-en', 'help-max-ko']:
+        self.assertEqual([part.strip() for part in matrix.group(1).split(',')], ['replay', 'replay-route', 'layout', 'help', 'help-max-en', 'help-max-ko'])
+        for group in ['replay', 'replay-route', 'layout', 'help', 'help-max-en', 'help-max-ko']:
             self.assertIn('name: offline-replay-' + group + '-${{ github.sha }}', workflow)
             self.assertIn('path: ui-results/' + group, workflow)
         self.assertIn('timeout-minutes: 40', workflow)
         self.assertIn("if [ \"$UI_GROUP_RESULT\" != \"success\" ]", workflow)
+
+    def test_missing_skipped_or_duplicated_route_cannot_pass_aggregate(self):
+        self.assertIn('replay-route', runner.TEST_GROUPS)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for group, tests in runner.TEST_GROUPS.items():
+                (root / group).mkdir()
+                (root / group / 'selection.json').write_text(json.dumps({'group': group, 'tests': tests}))
+                if group != 'replay-route':
+                    (root / group / 'summary.json').write_text(json.dumps({'totalTestCount': len(tests), 'passedTests': len(tests), 'failedTests': 0, 'skippedTests': 0}))
+            with self.assertRaises(FileNotFoundError): runner.verify_group_results(root)
+            summary = root / 'replay-route/summary.json'
+            summary.write_text(json.dumps({'totalTestCount': 1, 'passedTests': 0, 'failedTests': 0, 'skippedTests': 1}))
+            with self.assertRaises(ValueError): runner.verify_group_results(root)
+            summary.write_text(json.dumps({'totalTestCount': 1, 'passedTests': 1, 'failedTests': 0, 'skippedTests': 0}))
+            (root / 'replay-route/selection.json').write_text(json.dumps({'group': 'replay-route', 'tests': [runner.TEST_GROUPS['replay'][0]]}))
+            with self.assertRaises(ValueError): runner.verify_group_results(root)
 
     def test_missing_skipped_or_wrong_language_cannot_pass_aggregate(self):
         for missing in ('help-max-en', 'help-max-ko'):

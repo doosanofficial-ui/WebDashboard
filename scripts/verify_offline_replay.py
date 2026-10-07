@@ -18,10 +18,9 @@ from verify_ios_lifecycle import output, stage_sources, select_runtime_and_type,
 from verify_replay_seed import private_artifact, run_artifact, install_fixture, current_commit
 
 
-# Explicit, disjoint 11 + 14 + 4 + 1 + 1 selectors; each maximum-text language has its own budget.
+# Explicit, disjoint 10 + 1 + 14 + 4 + 1 + 1 selectors; route and each maximum-text language have their own budget.
 TEST_GROUPS = {'replay': ['TelemetryUITests/OfflineReplayUITests/testSessionReplayShowsAnalysisAndSynchronizedRecordedTime',
             'TelemetryUITests/OfflineReplayUITests/testRecordedSignalHistoryContainsOnlySelectedTimePrefix',
-            'TelemetryUITests/OfflineReplayUITests/testRecordedGPSRouteContainsOnlySelectedTimePrefix',
             'TelemetryUITests/OfflineReplayUITests/testPlayingLongSliderDragPreservesCapturedUserTarget',
             'TelemetryUITests/OfflineReplayUITests/testNativeExportBackgroundReturnCancelAndReentry',
             'TelemetryUITests/OfflineReplayUITests/testRecordedPlaybackPauseSpeedAndAutomaticEnd',
@@ -30,6 +29,7 @@ TEST_GROUPS = {'replay': ['TelemetryUITests/OfflineReplayUITests/testSessionRepl
             'TelemetryUITests/OfflineReplayUITests/testNativeJSONCSVSaveConfirmsCompletion',
             'TelemetryUITests/OfflineReplayUITests/testSetupPresentsLocalWorkflowWithoutServerOrCredential',
             'TelemetryUITests/OfflineReplayUITests/testSeededSessionPickerSnapshotAndReadOnlyControls'],
+ 'replay-route': ['TelemetryUITests/OfflineReplayUITests/testRecordedGPSRouteContainsOnlySelectedTimePrefix'],
  'layout': ['TelemetryUITests/DashboardEditingUITests/testSelectedCardKeepsConfigurationAvailableOnDemand',
             'TelemetryUITests/DashboardEditingUITests/testMoveReleaseUndoRedoAndReentryPreserveNeighbor',
             'TelemetryUITests/DashboardEditingUITests/testResizeReleaseUndoPreserveNeighbor',
