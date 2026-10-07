@@ -67,7 +67,8 @@ do {
     print("Recorded-time fixture seeded: 8 original rows, duration5s, SOC48.5→53, MARK2s, invented GPS0/0; no acquisition")
 }
 
-// Long synthetic timeline for an actual held slider gesture during playback.
+// Ten-minute synthetic timeline keeps the moving thumb hittable despite CI
+// snapshot-to-touch latency, while playback remains active before the held drag.
 do {
     let r = try MeasurementRecorder(path: root.appendingPathComponent("measurements.sqlite3"),
         sessionID: "offline-slider-fixture", startedAt: 600, mode: .demo)
@@ -81,8 +82,8 @@ do {
         .diagnosticResponse(first),.diagnosticSignal(try OBDSignalDecoder.decode(query.signals[0],response:first)),
         .system(name:"MARK",timestamp:602,monotonicNanos:2_000_000_000),
         .diagnosticResponse(last),.diagnosticSignal(try OBDSignalDecoder.decode(query.signals[0],response:last))])
-    try await r.finish(endedAt:630,terminalEvent:.system(name:"recording_stopped",timestamp:630,monotonicNanos:30_000_000_000))
-    print("Slider fixture seeded: 30s invented DEMO recording, SOC48.5→53; no acquisition")
+    try await r.finish(endedAt:1200,terminalEvent:.system(name:"recording_stopped",timestamp:1200,monotonicNanos:600_000_000_000))
+    print("Slider fixture seeded: 600s invented DEMO recording, SOC48.5→53; no acquisition")
 }
 
 // A real zero-duration timeline: every original row belongs to one instant.

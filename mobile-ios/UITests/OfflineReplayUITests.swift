@@ -259,21 +259,35 @@ final class OfflineReplayUITests: XCTestCase {
         let slider = app.sliders["replay-time-slider"]
         XCTAssertTrue(slider.isHittable, app.debugDescription)
         let position = app.staticTexts["replay-position"]
-        let seconds = Double(position.label.split(separator: " ").first.map(String.init) ?? "0") ?? 0
-        let thumb = slider.coordinate(withNormalizedOffset: CGVector(dx: 0.04 + 0.92 * seconds / 30, dy: 0.5))
+        let sampled = position.label.split(separator: " ")
+        XCTAssertEqual(sampled.count, 4, "Expected recorded position / duration in seconds")
+        let seconds = try XCTUnwrap(Double(String(sampled[0])))
+        let duration = try XCTUnwrap(Double(String(sampled[2])))
+        XCTAssertGreaterThan(duration, 0)
+        let thumb = slider.coordinate(withNormalizedOffset: CGVector(dx: 0.04 + 0.92 * seconds / duration, dy: 0.5))
         let target = slider.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.5))
+        // Reproduce CI snapshot-to-touch latency while playback keeps running.
+        // The sampled coordinate must still hit the thumb after 2.5 recorded seconds.
+        let delayedTouch = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let current = Double(position.label.split(separator: " ").first.map(String.init) ?? "") ?? -1
+            return current >= seconds + 2.5
+        }, object: position)
+        XCTAssertEqual(XCTWaiter.wait(for: [delayedTouch], timeout: 10), .completed,
+            "Latency regression requires advancing playback before the held drag")
         thumb.press(forDuration: 2, thenDragTo: target, withVelocity: .slow, thenHoldForDuration: 3)
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "DEMO-held-slider-target"; screenshot.lifetime = .keepAlways; add(screenshot)
+        XCTAssertTrue(app.buttons["replay-play"].exists,
+            "Held drag must capture editing and pause playback; a stale start may miss the moving thumb")
+        XCTAssertFalse(app.buttons["replay-pause"].exists)
         XCTAssertEqual(app.staticTexts["slider-editing-audit"].label, "Playback held during editing",
             "Actual editing must pause accepted playback ticks from touch-down through release")
         let wanted = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             let value = Double(position.label.split(separator: " ").first.map(String.init) ?? "") ?? -1
-            return abs(value - 22.5) <= 1.5
+            return abs(value / duration - 0.75) <= 0.05
         }, object: position)
         XCTAssertEqual(XCTWaiter.wait(for: [wanted], timeout: 5), .completed,
-            "Held75% thumb must seek near22.5s, not a timer-overwritten position: " + position.label + "\n" + app.debugDescription)
-        XCTAssertFalse(app.buttons["replay-pause"].exists)
+            "Captured held drag must preserve the 75% target within 5% of the recording: " + position.label + "\n" + app.debugDescription)
         app.tabBars.buttons["Signals"].tap()
         XCTAssertTrue(app.staticTexts["53.0"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Sessions"].tap()
