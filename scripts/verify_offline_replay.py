@@ -96,17 +96,33 @@ def verify_group_results(root):
     print(f"OFFLINE REPLAY FULL GATE PASS: 31 tests across {len(TEST_GROUPS)} groups, zero failures/skips")
 
 
+def phase_resource_snapshot():
+    """Kernel/environment metadata only; no external probe inside a command deadline."""
+    host = os.uname()
+    value = {"cpuCount": os.cpu_count(), "architecture": host.machine,
+             "operatingSystem": host.sysname + "-" + host.release + "-" + host.machine,
+             "kernelVersion": host.version, "runnerImage": os.environ.get("ImageOS"),
+             "runnerImageVersion": os.environ.get("ImageVersion"),
+             "physicalMemorySampled": False,
+             "scope": "In-process kernel/environment snapshot; no platform processor or sysctl probe"}
+    if hasattr(os, "getloadavg"):
+        value["loadAverage"] = list(os.getloadavg())
+    return value
+
+
 def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False):
     """Record one bounded phase and stop only its newly owned POSIX process group."""
     if os.name != "posix":
         raise ValueError("Owned phase requires POSIX process groups")
-    from verify_replay_seed import resource_snapshot, owned_progress
+    from verify_replay_seed import owned_progress
     began = time.monotonic()
     deadline = began + timeout
     evidence = {"command": command, "startedUTC": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "timeoutSeconds": timeout, "timedOut": False,
                 "groupTermSent": False, "groupKillSent": False, "launched": False,
-                "resources": resource_snapshot(), "progress": []}
+                "resources": phase_resource_snapshot(), "progress": [],
+                "phaseStartedMonotonic": began,
+                "resourceSnapshotElapsedSeconds": time.monotonic() - began}
     child = None
     completion = {}
     completion_ready = threading.Event()
@@ -115,6 +131,7 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False)
         # Optional process/log observations must not hide a timely child exit.
         # Accept only completion observed by the original phase deadline.
         try:
+            completion["waitStartedElapsedSeconds"] = time.monotonic() - began
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise subprocess.TimeoutExpired(command, timeout)
@@ -154,6 +171,7 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False)
     def stop_owned_group():
         if child is None:
             return
+        evidence["groupStopRequestedElapsedSeconds"] = time.monotonic() - began
         try:
             os.killpg(child.pid, signal.SIGTERM)
             evidence["groupTermSent"] = True
@@ -202,9 +220,11 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False)
     with stream:
         save()
         try:
+            evidence["launchRequestedElapsedSeconds"] = time.monotonic() - began
             child = subprocess.Popen(command, stdout=stream, stderr=subprocess.STDOUT,
                                      stdin=subprocess.DEVNULL, start_new_session=True)
-            evidence.update(pid=child.pid, processGroup=child.pid, launched=True)
+            evidence.update(pid=child.pid, processGroup=child.pid, launched=True,
+                            launchReturnedElapsedSeconds=time.monotonic() - began)
             waiter = threading.Thread(target=wait_for_completion, name="owned-phase-wait", daemon=True)
             waiter.start()
             save()
@@ -230,6 +250,8 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False)
             if waiter is not None and waiter.ident is not None:
                 waiter.join(timeout=1)
                 evidence['completionWaiterStopped'] = not waiter.is_alive()
+            if "waitStartedElapsedSeconds" in completion:
+                evidence["childWaitStartedElapsedSeconds"] = completion["waitStartedElapsedSeconds"]
             if 'observedElapsedSeconds' in completion:
                 evidence['processCompletionObservedElapsedSeconds'] = completion['observedElapsedSeconds']
             if child is not None:
