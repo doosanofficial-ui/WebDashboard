@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 /// New, pre-seeded Simulator only. No vehicle acquisition or recording control is tapped.
 final class LocalizationHelpUITests: XCTestCase {
@@ -17,7 +18,22 @@ final class LocalizationHelpUITests: XCTestCase {
     private func capture(_ app:XCUIApplication,_ guide:String,_ language:String,_ number:Int,_ element:XCUIElement) {
         reveal(element,in:app)
         let window=app.windows.firstMatch
+        // A partially hittable target can still be covered by the floating Tab bar.
+        for _ in 0..<12 {
+            let frame = element.frame
+            let navigationTarget = app.navigationBars.buttons.matching(identifier: element.identifier).count > 0
+            let top = navigationTarget ? window.frame.minY : (app.navigationBars.allElementsBoundByIndex.map { $0.frame.maxY }.max() ?? window.frame.minY)
+            let bottom = app.tabBars.firstMatch.exists ? app.tabBars.firstMatch.frame.minY : window.frame.maxY
+            if frame.minY > top + 8 && frame.maxY < bottom - 8 { break }
+            if frame.maxY >= bottom - 8 { app.swipeUp() } else { app.swipeDown() }
+        }
+        XCTAssertTrue(element.exists && element.isHittable, "Numbered target must remain accessible after scrolling")
         let frame=element.frame
+        let navigationTarget = app.navigationBars.buttons.matching(identifier: element.identifier).count > 0
+        let top = navigationTarget ? window.frame.minY : (app.navigationBars.allElementsBoundByIndex.map { $0.frame.maxY }.max() ?? window.frame.minY)
+        let bottom = app.tabBars.firstMatch.exists ? app.tabBars.firstMatch.frame.minY : window.frame.maxY
+        XCTAssertGreaterThan(frame.minY, top + 8, "Numbered target must clear navigation chrome")
+        XCTAssertLessThan(frame.maxY, bottom - 8, "Numbered target must clear the visible Tab bar")
         XCTAssertTrue(window.frame.contains(frame),"Numbered target must be wholly inside the actual screenshot: \(frame)")
         let name="Help-\(guide)-\(language)-\(number)"
         let screenshot=XCTAttachment(screenshot:window.screenshot());screenshot.name=name;screenshot.lifetime = .keepAlways;add(screenshot)
@@ -152,6 +168,13 @@ final class LocalizationHelpUITests: XCTestCase {
                 let progress=app.staticTexts["help-step-progress"]
                 XCTAssertTrue(progress.waitForExistence(timeout:5))
                 XCTAssertEqual(progress.label,language=="ko" ? "\(count)단계 중 \(step)단계":"Step \(step) of \(count)")
+                let previous = app.buttons["help-previous"], next = app.buttons["help-next"]
+                XCTAssertEqual(previous.frame.height, next.frame.height, accuracy: 1,
+                    "Maximum-text navigation labels must retain equal single-line heights")
+                let bodyFont = UIFont.preferredFont(forTextStyle: .body,
+                    compatibleWith: UITraitCollection(preferredContentSizeCategory: .accessibilityExtraExtraExtraLarge))
+                XCTAssertLessThan(previous.frame.height, bodyFont.lineHeight * 2,
+                    "The button must not become a two-line label")
                 let image=app.descendants(matching:.any).matching(identifier:"help-image-"+guide).firstMatch
                 let enlarge=app.buttons["help-enlarge-screenshot"]
                 for _ in 0..<32 {

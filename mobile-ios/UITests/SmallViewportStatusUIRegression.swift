@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 final class SmallViewportStatusUIRegression: XCTestCase {
     func testStatusAndEditingHelpRemainAccessibleAtMaximumText() throws {
@@ -17,19 +18,36 @@ final class SmallViewportStatusUIRegression: XCTestCase {
         XCTAssertTrue(status.waitForExistence(timeout: 5))
         XCTAssertEqual(status.value as? String, "Recording off · GPS off")
         status.tap()
-        XCTAssertGreaterThan(app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Recording off")).count, 0)
-        XCTAssertGreaterThan(app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "GPS off")).count, 0)
+        for label in ["Recording off", "GPS off", "No mark"] {
+            let information = app.staticTexts[label]
+            XCTAssertTrue(information.waitForExistence(timeout: 5))
+            XCTAssertTrue(information.isEnabled, "Status information must not be rendered as a disabled action")
+        }
         let statusImage = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
         statusImage.name = "SYNTHETIC-SE-AX5-status-details-after"
         statusImage.lifetime = .keepAlways; add(statusImage)
-        // The AX5 popup covers most of the screen; tap beyond its right edge.
-        app.windows.firstMatch.coordinate(withNormalizedOffset: .init(dx: 0.99, dy: 0.10)).tap()
+        let closeStatus = app.buttons["session-status-details-done"]
+        XCTAssertTrue(closeStatus.waitForExistence(timeout: 5))
+        closeStatus.tap()
         let editReady = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             app.buttons["edit-dashboard"].isHittable
         }, object: app)
         XCTAssertEqual(XCTWaiter.wait(for: [editReady], timeout: 5), .completed, app.debugDescription)
         app.buttons["edit-dashboard"].tap()
         XCTAssertTrue(app.buttons["undo-dashboard-layout"].waitForExistence(timeout: 5))
+        let picker = app.buttons["dashboard-page-picker"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 5))
+        let bodyFont = UIFont.preferredFont(forTextStyle: .body,
+            compatibleWith: UITraitCollection(preferredContentSizeCategory: .accessibilityExtraExtraExtraLarge))
+        let title = "Fixture · Portrait" as NSString
+        let textHeight = title.boundingRect(with: CGSize(width: picker.frame.width - 40, height: 1000),
+            options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: [.font: bodyFont], context: nil).height
+        // UIFont's integral estimate can exceed native fractional geometry by less than a point.
+        XCTAssertGreaterThanOrEqual(picker.frame.height + 1, ceil(textHeight),
+            "Selected page label must have room for unscaled maximum-size body text")
+        let pickerImage = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        pickerImage.name = "SYNTHETIC-SE-AX5-page-picker-label-after"
+        pickerImage.lifetime = .keepAlways; add(pickerImage)
         let help = app.buttons["dashboard-edit-help"]
         XCTAssertTrue(help.waitForExistence(timeout: 5))
         for _ in 0..<8 where !help.isHittable { app.scrollViews["dashboard-editor-scroll"].swipeUp() }

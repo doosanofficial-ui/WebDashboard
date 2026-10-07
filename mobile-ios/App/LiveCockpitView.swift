@@ -810,16 +810,12 @@ private extension String {
 private struct RecordingSessionBar: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var model: TelemetryModel
+    @State private var showingStatus = false
 
     var body: some View {
         VStack(spacing: TelemetryTheme.Spacing.xSmall) {
             if dynamicTypeSize.isAccessibilitySize {
-                Menu {
-                    Text(AppLocalization.text(model.runMode == .demo ? "DEMO · synthetic data" : "LIVE · vehicle data"))
-                    Text(AppLocalization.text(model.localRecordingEnabled ? "Recording on" : "Recording off"))
-                    Text(AppLocalization.text(model.collecting ? "GPS collecting" : "GPS off"))
-                    Text(AppLocalization.text(model.lastMarkAt.map { "Last mark " + $0.formatted(date: .omitted, time: .shortened) } ?? "No mark"))
-                } label: {
+                Button { showingStatus = true } label: {
                     Label(AppLocalization.text(model.runMode == .demo ? "DEMO" : "LIVE"), systemImage: "info.circle")
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(TelemetryTheme.accent)
@@ -828,6 +824,7 @@ private struct RecordingSessionBar: View {
                 .accessibilityLabel(AppLocalization.text("Recording and GPS status"))
                 .accessibilityValue(AppLocalization.text((model.localRecordingEnabled ? "Recording on" : "Recording off") + " · " + (model.collecting ? "GPS collecting" : "GPS off")))
                 .accessibilityIdentifier("session-status-details")
+                .sheet(isPresented: $showingStatus) { RecordingStatusDetailsView(model: model) }
             } else {
                 HStack(spacing: TelemetryTheme.Spacing.small) {
                     Text(AppLocalization.text(model.runMode == .demo ? "DEMO" : "LIVE"))
@@ -902,6 +899,39 @@ private struct RecordingSessionBar: View {
             .accessibilityLabel(AppLocalization.text(model.collecting ? "Stop GPS" : "Start GPS"))
             .accessibilityValue(AppLocalization.text(model.collecting ? "GPS collecting" : "GPS off"))
             .accessibilityIdentifier("toggle-gps")
+        }
+    }
+}
+
+/// Read-only status text avoids the disabled-action styling of native Menu entries.
+private struct RecordingStatusDetailsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var model: TelemetryModel
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.medium) {
+                    Text(AppLocalization.text(model.runMode == .demo ? "DEMO · synthetic data" : "LIVE · vehicle data"))
+                    Text(AppLocalization.text(model.localRecordingEnabled ? "Recording on" : "Recording off"))
+                    Text(AppLocalization.text(model.collecting ? "GPS collecting" : "GPS off"))
+                    Text(AppLocalization.text(model.lastMarkAt.map { "Last mark " + $0.formatted(date: .omitted, time: .shortened) } ?? "No mark"))
+                }
+                .font(.body)
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+            }
+            .accessibilityIdentifier("session-status-details-scroll")
+            .navigationTitle(AppLocalization.text("Recording and GPS status"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(AppLocalization.text("Done")) { dismiss() }
+                        .accessibilityIdentifier("session-status-details-done")
+                }
+            }
         }
     }
 }

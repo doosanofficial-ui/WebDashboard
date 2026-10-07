@@ -93,6 +93,18 @@ struct HelpGuideView: View {
     let guide: HelpGuide
     @State private var showingFullScreen = false
     @State private var stepIndex = 0
+    private var previousButton: some View {
+        Button { stepIndex -= 1 } label: {
+            Text(HelpCopy(en: "Previous", ko: "이전").text).fixedSize()
+        }
+        .disabled(stepIndex == 0).accessibilityIdentifier("help-previous")
+    }
+    private var nextButton: some View {
+        Button { stepIndex += 1 } label: {
+            Text(HelpCopy(en: "Next", ko: "다음").text).fixedSize()
+        }
+        .disabled(stepIndex == guide.steps.count - 1).accessibilityIdentifier("help-next")
+    }
     private var imageName: String { "Help-" + guide.id + "-" + AppLanguageStore.shared.language.rawValue + "-" + String(stepIndex+1) }
     var body: some View {
         ScrollViewReader { proxy in
@@ -121,13 +133,17 @@ struct HelpGuideView: View {
         }.background(TelemetryTheme.background.ignoresSafeArea())
             .navigationTitle(guide.title.text).navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge:.bottom) {
-                HStack {
-                    Button(HelpCopy(en:"Previous",ko:"이전").text) {stepIndex-=1}
-                        .disabled(stepIndex==0).accessibilityIdentifier("help-previous")
-                    Spacer()
-                    Button(HelpCopy(en:"Next",ko:"다음").text) {stepIndex+=1}
-                        .disabled(stepIndex==guide.steps.count-1).accessibilityIdentifier("help-next")
-                }.buttonStyle(.bordered).frame(minHeight:44)
+                ViewThatFits(in: .horizontal) {
+                    HStack {
+                        previousButton
+                        Spacer()
+                        nextButton
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        previousButton
+                        nextButton
+                    }
+                }.buttonStyle(.bordered).frame(maxWidth: .infinity, minHeight: 44)
                 .padding().background(TelemetryTheme.surfaceRaised)
             }
             .onChange(of:stepIndex) { _,_ in proxy.scrollTo("help-guide-top",anchor:.top) }

@@ -17,6 +17,7 @@ import uuid
 
 from verify_ios_lifecycle import output, stage_sources, select_runtime_and_type, verify_summary, record_toolchain
 from verify_replay_seed import private_artifact, run_artifact, install_fixture, current_commit
+from owned_simulator_boot_log import OwnedSimulatorBootLog
 
 
 # Explicit, disjoint 10 + 1 + 14 + 4 + 1 + 1 selectors; route and each maximum-text language have their own budget.
@@ -336,14 +337,21 @@ def capture_simulator_bootstrap_failure(simulator, results, failure_phase="boots
     return evidence
 
 
-def prepare_simulator(simulator, results):
+def prepare_simulator(simulator, results, boot_log=None):
     try:
-        for phase, timeout in (("boot", 60), ("bootstatus", 180)):
-            command = ["xcrun", "simctl", phase, simulator]
-            if phase == "bootstatus":
-                command.append("-b")
-            run_owned_phase(command, results / ("simulator-" + phase + ".log"),
-                            results / ("simulator-" + phase + ".json"), timeout)
+        try:
+            for phase, timeout in (("boot", 60), ("bootstatus", 180)):
+                command = ["xcrun", "simctl", phase, simulator]
+                if phase == "bootstatus":
+                    command.append("-b")
+                run_owned_phase(command, results / ("simulator-" + phase + ".log"),
+                                 results / ("simulator-" + phase + ".json"), timeout)
+        finally:
+            if boot_log is not None:
+                try:
+                    boot_log.request_stop()
+                except Exception:
+                    pass  # Optional observation must preserve the boot outcome.
     except (OSError, subprocess.SubprocessError):
         try:
             capture_simulator_bootstrap_failure(simulator, results)
@@ -402,6 +410,7 @@ def main():
     root = Path(__file__).resolve().parents[1]
     toolchain = record_toolchain(results)
     simulator = None
+    boot_log = None
     with tempfile.TemporaryDirectory(prefix="telemetry-offline-ui-") as directory:
         workspace = Path(directory)
         seed_artifact = private_artifact(root, args.seed_artifact.resolve(), workspace / "seed-artifact",
@@ -425,7 +434,16 @@ def main():
                 "runtime_build": selected.get("buildversion"), "device_type": device_type,
                 "simulator": simulator, "scope": "Simulator fixture only; no vehicle/GPS acquisition"}, indent=2))
             print((results / "environment.json").read_text(), flush=True)
-            prepare_simulator(simulator, results)
+            try:
+                boot_log = OwnedSimulatorBootLog(simulator, results)
+                boot_log.mark_boot_started()
+            except Exception as error:
+                try:
+                    (results / "simulator-boot-stream-start-error.json").write_text(json.dumps({
+                        "errorType": type(error).__name__, "scope": "Optional early event collection unavailable"}))
+                except OSError:
+                    pass
+            prepare_simulator(simulator, results, boot_log=boot_log)
             failure_phase = "app-build"
             output(["xcodegen", "generate", "--spec", str(staged / "project.yml")], timeout=120)
             derived = workspace / "derived"
@@ -498,7 +516,31 @@ def main():
         finally:
             if simulator:
                 primary_failure = sys.exc_info()[0] is not None
-                cleaned = cleanup_simulator(simulator, results)
+                cleanup_error = None
+                try:
+                    cleaned = cleanup_simulator(simulator, results)
+                except Exception as error:
+                    cleaned = False
+                    cleanup_error = error
+                    try:
+                        (results / "simulator-cleanup-error.json").write_text(json.dumps({
+                            "errorType": type(error).__name__, "primaryFailurePreserved": primary_failure}))
+                    except OSError:
+                        pass
+                finally:
+                    if boot_log is not None:
+                        try:
+                            stream_evidence = boot_log.finalize()
+                        except Exception as error:
+                            stream_evidence = {"collectorCleaned": False, "errorType": type(error).__name__}
+                            try:
+                                (results / "simulator-boot-stream-finalize-error.json").write_text(json.dumps(stream_evidence))
+                            except OSError:
+                                pass
+                if cleanup_error is not None and not primary_failure:
+                    raise cleanup_error
+                if boot_log is not None and not stream_evidence["collectorCleaned"] and not primary_failure:
+                    raise RuntimeError("Owned boot event collector cleanup unresolved; see simulator-boot-stream.json")
                 if not cleaned and not primary_failure:
                     raise RuntimeError("Owned Simulator cleanup failed; see simulator-cleanup.json")
         gate = "SE VIEWPORT RE-EXECUTION" if args.se_viewport else "OFFLINE REPLAY UI"

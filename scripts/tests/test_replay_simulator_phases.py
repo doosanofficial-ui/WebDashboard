@@ -48,6 +48,8 @@ class SimulatorPhaseTests(unittest.TestCase):
             with ExitStack() as stack:
                 stack.enter_context(patch.object(Path, "write_text", write))
                 stack.enter_context(patch.object(sys, "argv", arguments))
+                observer = stack.enter_context(patch.object(runner, "OwnedSimulatorBootLog"))
+                observer.return_value.finalize.return_value = {"collectorCleaned": True}
                 stack.enter_context(patch.object(runner, "record_toolchain", return_value={}))
                 stack.enter_context(patch.object(runner, "private_artifact", return_value={"manifest": {}}))
                 stack.enter_context(patch.object(runner, "run_artifact"))
@@ -257,6 +259,8 @@ class PostBootstrapDiagnosticsTests(unittest.TestCase):
                          '--seed-manifest-sha256', '0' * 64, '--result-directory', str(results)]
             with ExitStack() as stack:
                 stack.enter_context(patch.object(sys, 'argv', arguments))
+                observer = stack.enter_context(patch.object(runner, "OwnedSimulatorBootLog"))
+                observer.return_value.finalize.return_value = {"collectorCleaned": True}
                 stack.enter_context(patch.object(runner, 'record_toolchain', return_value={}))
                 stack.enter_context(patch.object(runner, 'private_artifact', return_value={'manifest': {}}))
                 stack.enter_context(patch.object(runner, 'run_artifact'))

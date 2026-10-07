@@ -123,15 +123,26 @@ struct DashboardEditorView: View {
 
     private func pageControls(profile: DashboardProfile, page: DashboardPage) -> some View {
         VStack(spacing: 8) {
-            Picker(AppLocalization.text("Page"), selection: Binding(
-                get: { selectedPageID ?? profile.pages.first?.id ?? page.id },
-                set: { selectedPageID = $0 }
-            )) {
-                ForEach(profile.pages) { page in
-                    Text(verbatim: page.name + " · " + AppLocalization.text(page.orientation.rawValue.capitalized)).tag(page.id)
+            let selectedTitle = page.name + " · " + AppLocalization.text(page.orientation.rawValue.capitalized)
+            Menu {
+                Picker(AppLocalization.text("Page"), selection: Binding(
+                    get: { selectedPageID ?? profile.pages.first?.id ?? page.id },
+                    set: { selectedPageID = $0 }
+                )) {
+                    ForEach(profile.pages) { page in
+                        Text(verbatim: page.name + " · " + AppLocalization.text(page.orientation.rawValue.capitalized)).tag(page.id)
+                    }
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Text(verbatim: selectedTitle)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: "chevron.up.chevron.down").imageScale(.small)
+                        .accessibilityHidden(true)
                 }
             }
-            .pickerStyle(.menu)
+            .accessibilityLabel(AppLocalization.text("Page") + ", " + selectedTitle)
             .accessibilityIdentifier("dashboard-page-picker")
 
             ScrollView(.horizontal, showsIndicators: false) {
