@@ -14,7 +14,7 @@ import subprocess
 import tempfile
 import uuid
 
-from verify_ios_lifecycle import output, stage_sources, select_runtime_and_type, verify_summary, record_toolchain, run_test_command
+from verify_ios_lifecycle import output, stage_sources, select_runtime_and_type, verify_summary, record_toolchain
 from verify_replay_seed import private_artifact, run_artifact, install_fixture, current_commit
 
 
@@ -91,32 +91,79 @@ def verify_group_results(root):
     print("OFFLINE REPLAY FULL GATE PASS: 30 tests across three groups, zero failures/skips")
 
 
-def run_seed_phase(command, log, receipt, timeout):
-    """Record one Seed phase and bound only its newly owned POSIX process group."""
+def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False):
+    """Record one bounded phase and stop only its newly owned POSIX process group."""
     if os.name != "posix":
-        raise ValueError("Seed phase requires POSIX process groups")
+        raise ValueError("Owned phase requires POSIX process groups")
     from verify_replay_seed import resource_snapshot, owned_progress
     began = time.monotonic()
     evidence = {"command": command, "startedUTC": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "timeoutSeconds": timeout, "timedOut": False,
                 "groupTermSent": False, "groupKillSent": False, "launched": False,
                 "resources": resource_snapshot(), "progress": []}
+    child = None
+    def recording_error(error):
+        evidence.setdefault("recordingErrors", []).append(str(error))
+        print("Phase evidence could not be recorded: " + str(error), file=sys.stderr)
     def save():
-        receipt.write_text(json.dumps(evidence, indent=2), encoding="utf-8")
+        try:
+            receipt.write_text(json.dumps(evidence, indent=2), encoding="utf-8")
+        except OSError as error:
+            if not best_effort_recording:
+                raise
+            recording_error(error)
+    def record_progress():
+        try:
+            evidence["progress"].append(owned_progress(child.pid, log, began))
+        except OSError as error:
+            if not best_effort_recording:
+                raise
+            recording_error(error)
+    def stop_owned_group():
+        if child is None:
+            return
+        try:
+            os.killpg(child.pid, signal.SIGTERM)
+            evidence["groupTermSent"] = True
+        except ProcessLookupError:
+            pass
+        try:
+            child.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            pass
+        # Leader exit does not imply that its descendants exited.
+        try:
+            os.killpg(child.pid, 0)
+        except ProcessLookupError:
+            evidence["groupStillExistsAfterLeaderWait"] = False
+        else:
+            evidence["groupStillExistsAfterLeaderWait"] = True
+            try:
+                os.killpg(child.pid, signal.SIGKILL)
+                evidence["groupKillSent"] = True
+            except ProcessLookupError:
+                pass
+        child.wait(timeout=10)
     if timeout <= 0:
         evidence.update(timedOut=True, elapsedSeconds=0, exitCode=None,
                         finishedUTC=datetime.datetime.now(datetime.timezone.utc).isoformat())
         save()
         raise subprocess.TimeoutExpired(command, 0)
-    with log.open("w", encoding="utf-8") as stream:
-        child = None
+    try:
+        stream = log.open("w", encoding="utf-8")
+    except OSError as error:
+        if not best_effort_recording:
+            raise
+        recording_error(error)
+        stream = open(os.devnull, "w", encoding="utf-8")
+    with stream:
         save()
         try:
             child = subprocess.Popen(command, stdout=stream, stderr=subprocess.STDOUT,
                                      stdin=subprocess.DEVNULL, start_new_session=True)
             evidence.update(pid=child.pid, processGroup=child.pid, launched=True)
             save()
-            evidence["progress"].append(owned_progress(child.pid, log, began))
+            record_progress()
             while True:
                 remaining = began + timeout - time.monotonic()
                 if remaining <= 0:
@@ -125,49 +172,79 @@ def run_seed_phase(command, log, receipt, timeout):
                     code = child.wait(timeout=min(15, remaining))
                     break
                 except subprocess.TimeoutExpired:
-                    evidence["progress"].append(owned_progress(child.pid, log, began))
+                    record_progress()
                     save()
                     if time.monotonic() >= began + timeout:
                         raise subprocess.TimeoutExpired(command, timeout)
-        except OSError as error:
-            if child is None:
+            if code:
+                raise subprocess.CalledProcessError(code, command)
+        except BaseException as error:
+            evidence["timedOut"] = isinstance(error, subprocess.TimeoutExpired)
+            if child is None and isinstance(error, OSError):
                 evidence["launchError"] = {"type": type(error).__name__, "errno": error.errno,
                                            "message": str(error)}
-            raise
-        except subprocess.TimeoutExpired:
-            evidence["timedOut"] = True
-            try:
-                os.killpg(child.pid, signal.SIGTERM)
-                evidence["groupTermSent"] = True
-            except ProcessLookupError:
-                pass
-            try:
-                child.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                pass
-            # Leader exit does not imply that its compiler descendants exited.
-            try:
-                os.killpg(child.pid, 0)  # Probe only the group created above.
-            except ProcessLookupError:
-                evidence["groupStillExistsAfterLeaderWait"] = False
-            else:
-                evidence["groupStillExistsAfterLeaderWait"] = True
-                try:
-                    os.killpg(child.pid, signal.SIGKILL)
-                    evidence["groupKillSent"] = True
-                except ProcessLookupError:
-                    pass
-            child.wait(timeout=10)
+            elif child is not None:
+                stop_owned_group()
             raise
         finally:
+            primary_failure = sys.exc_info()[0] is not None
             if child is not None:
-                evidence["progress"].append(owned_progress(child.pid, log, began))
+                try:
+                    record_progress()
+                except OSError as error:
+                    evidence["progressRecordingError"] = str(error)
             evidence.update(exitCode=child.returncode if child is not None else None,
                             elapsedSeconds=time.monotonic()-began,
                             finishedUTC=datetime.datetime.now(datetime.timezone.utc).isoformat())
-            save()
-        if code:
-            raise subprocess.CalledProcessError(code, command)
+            try:
+                save()
+            except OSError as error:
+                print("Phase receipt could not be recorded: " + str(error), file=sys.stderr)
+                if not primary_failure:
+                    stop_owned_group()
+                    raise
+
+    return evidence
+
+def run_seed_phase(command, log, receipt, timeout):
+    """Keep the Seed producer's existing bounded phase interface."""
+    return run_owned_phase(command, log, receipt, timeout)
+
+
+def prepare_simulator(simulator, results):
+    for phase, timeout in (("boot", 60), ("bootstatus", 180)):
+        command = ["xcrun", "simctl", phase, simulator]
+        if phase == "bootstatus":
+            command.append("-b")
+        run_owned_phase(command, results / ("simulator-" + phase + ".log"),
+                        results / ("simulator-" + phase + ".json"), timeout)
+
+
+def cleanup_simulator(simulator, results):
+    """Attempt both operations on our created UUID; keep the primary failure intact."""
+    evidence = {"simulator": simulator, "success": True, "phases": []}
+    receipt = results / "simulator-cleanup.json"
+    for phase in ("shutdown", "delete"):
+        entry = {"phase": phase}
+        try:
+            recorded = run_owned_phase(["xcrun", "simctl", phase, simulator],
+                                       results / ("simulator-" + phase + ".log"),
+                                       results / ("simulator-" + phase + ".json"), 60,
+                                       best_effort_recording=True)
+            entry["success"] = True
+            if recorded and recorded.get("recordingErrors"):
+                entry["recordingErrors"] = recorded["recordingErrors"]
+                evidence["success"] = False
+        except (OSError, subprocess.SubprocessError) as error:
+            entry.update(success=False, errorType=type(error).__name__, error=str(error))
+            evidence["success"] = False
+        evidence["phases"].append(entry)
+        try:
+            receipt.write_text(json.dumps(evidence, indent=2), encoding="utf-8")
+        except OSError as error:
+            evidence["success"] = False
+            print("Cleanup receipt could not be recorded: " + str(error), file=sys.stderr)
+    return evidence["success"]
 
 
 def main():
@@ -211,16 +288,15 @@ def main():
                 "runtime_build": selected.get("buildversion"), "device_type": device_type,
                 "simulator": simulator, "scope": "Simulator fixture only; no vehicle/GPS acquisition"}, indent=2))
             print((results / "environment.json").read_text(), flush=True)
-            output(["xcrun", "simctl", "boot", simulator])
-            output(["xcrun", "simctl", "bootstatus", simulator, "-b"], timeout=180)
+            prepare_simulator(simulator, results)
             output(["xcodegen", "generate", "--spec", str(staged / "project.yml")], timeout=120)
             derived = workspace / "derived"
             base = ["xcodebuild", "-project", str(staged / "Telemetry.xcodeproj"), "-scheme", "Telemetry",
                     "-destination", "platform=iOS Simulator,id=" + simulator,
                     "-derivedDataPath", str(derived), "CODE_SIGNING_ALLOWED=NO",
                     "-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never"]
-            with (results / "build.log").open("w") as log:
-                subprocess.run(base + ["build"], stdout=log, stderr=subprocess.STDOUT, check=True, timeout=600)
+            run_owned_phase(base + ["build"], results / "build.log",
+                            results / "build-process.json", 600)
             output(["xcrun", "simctl", "install", simulator,
                     str(derived / "Build/Products/Debug-iphonesimulator/Telemetry.app")], timeout=120)
             container = Path(output(["xcrun", "simctl", "get_app_container", simulator,
@@ -256,7 +332,7 @@ def main():
                     "requiredDeviceType": SE_DEVICE_TYPE, "tests": SE_VIEWPORT_TESTS}, indent=2))
             command = base + ["-resultBundlePath", str(bundle)] + selected_tests + ["test"]
             (results / "command.json").write_text(json.dumps(command, indent=2))
-            run_test_command(command, results / "test.log", timeout=1200)
+            run_owned_phase(command, results / "test.log", results / "test-process.json", 1200)
             summary = json.loads(output(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)]))
             (results / "summary.json").write_text(json.dumps(summary, indent=2))
             native = results / "native-exports"
@@ -268,12 +344,14 @@ def main():
             output(["xcrun", "xcresulttool", "export", "attachments", "--path", str(bundle),
                     "--output-path", str(results / "screenshots")], timeout=120)
             verify_summary(summary, expected_count)
-            gate = "SE VIEWPORT RE-EXECUTION" if args.se_viewport else "OFFLINE REPLAY UI"
-            print(f"{gate} PASS: {expected_count} executed tests, zero failures/skips; Simulator fixture, not hardware evidence")
         finally:
             if simulator:
-                subprocess.run(["xcrun", "simctl", "shutdown", simulator], capture_output=True, timeout=60)
-                subprocess.run(["xcrun", "simctl", "delete", simulator], check=True, capture_output=True, timeout=60)
+                primary_failure = sys.exc_info()[0] is not None
+                cleaned = cleanup_simulator(simulator, results)
+                if not cleaned and not primary_failure:
+                    raise RuntimeError("Owned Simulator cleanup failed; see simulator-cleanup.json")
+        gate = "SE VIEWPORT RE-EXECUTION" if args.se_viewport else "OFFLINE REPLAY UI"
+        print(f"{gate} PASS: {expected_count} executed tests, zero failures/skips; Simulator fixture, not hardware evidence")
 
 
 if __name__ == "__main__":

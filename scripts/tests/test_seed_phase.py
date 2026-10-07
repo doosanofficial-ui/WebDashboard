@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import verify_offline_replay as runner
@@ -124,5 +125,40 @@ time.sleep(30)
         self.assertFalse(receipt["groupKillSent"])
         self.assertEqual(receipt["exitCode"],0)
         self.assertIn("owned child reaped",(root/"seed.log").read_text())
+
+    def interrupted_phase(self, error):
+        root = Path(self.directory.name)
+        receipt = root / "receipt.json"
+        original = __import__("verify_replay_seed").owned_progress
+        calls = 0
+        def progress(*args):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise error
+            return original(*args)
+        try:
+            with patch("verify_replay_seed.owned_progress", side_effect=progress):
+                with self.assertRaises(type(error)):
+                    self.run_phase("import time; time.sleep(30)")
+            value = json.loads(receipt.read_text())
+            self.assertTrue(value["groupTermSent"], "Interrupted recorder must stop its owned group")
+            self.assertIsNotNone(value["exitCode"], "Interrupted child must be reaped")
+            self.assertFalse(value["timedOut"])
+            with self.assertRaises(ProcessLookupError):
+                os.kill(value["pid"], 0)
+        finally:
+            if receipt.exists():
+                value = json.loads(receipt.read_text())
+                if value.get("processGroup"):
+                    try: os.killpg(value["processGroup"], 9)
+                    except ProcessLookupError: pass
+
+    def test_keyboard_interrupt_reaps_the_new_owned_process(self):
+        self.interrupted_phase(KeyboardInterrupt())
+
+    def test_post_launch_observation_error_reaps_the_new_owned_process(self):
+        self.interrupted_phase(OSError("synthetic observation failure"))
+
 
 if __name__ == "__main__": unittest.main()

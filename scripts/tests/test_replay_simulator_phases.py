@@ -1,0 +1,118 @@
+import json
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import unittest
+from unittest.mock import patch
+from contextlib import ExitStack
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import verify_offline_replay as runner
+
+
+class SimulatorPhaseTests(unittest.TestCase):
+    def boot_failure(self, shutdown_fails, receipt_fails=False):
+        with tempfile.TemporaryDirectory() as directory:
+            results = Path(directory) / "results"
+            device = "11111111-1111-4111-8111-111111111111"
+            calls = []
+            def command_output(command, timeout=60):
+                calls.append(command)
+                if command[1:4] == ["simctl", "list", "runtimes"]:
+                    return json.dumps({"runtimes": [{"identifier": "ios27", "version": "27.0"}]})
+                if command[1:3] == ["simctl", "create"]: return device
+                if "bootstatus" in command:
+                    raise subprocess.TimeoutExpired(command, 180, output=b"Waiting on SpringBoard\n")
+                return ""
+            def phase(command, log, receipt, timeout, **kwargs):
+                calls.append(command)
+                status = command[2]
+                log.write_text("Waiting on SpringBoard\n" if status == "bootstatus" else status + "\n")
+                failed = status == "bootstatus" or (shutdown_fails and status == "shutdown")
+                receipt.write_text(json.dumps({"command": command, "timeoutSeconds": timeout,
+                                               "timedOut": failed, "exitCode": None if failed else 0}))
+                if failed: raise subprocess.TimeoutExpired(command, timeout)
+            def old_cleanup(command, **kwargs):
+                calls.append(command)
+                if shutdown_fails and "shutdown" in command: raise subprocess.TimeoutExpired(command, 60)
+                return subprocess.CompletedProcess(command, 0)
+            arguments = ["verify_offline_replay.py", "--group", "replay", "--seed-artifact", directory,
+                         "--seed-manifest-sha256", "0" * 64, "--result-directory", str(results)]
+            original_write = Path.write_text
+            def write(path, *args, **kwargs):
+                if receipt_fails and path.name == "simulator-cleanup.json":
+                    raise OSError("synthetic aggregate receipt failure")
+                return original_write(path, *args, **kwargs)
+            with ExitStack() as stack:
+                stack.enter_context(patch.object(Path, "write_text", write))
+                stack.enter_context(patch.object(sys, "argv", arguments))
+                stack.enter_context(patch.object(runner, "record_toolchain", return_value={}))
+                stack.enter_context(patch.object(runner, "private_artifact", return_value={"manifest": {}}))
+                stack.enter_context(patch.object(runner, "run_artifact"))
+                stack.enter_context(patch.object(runner, "stage_sources"))
+                stack.enter_context(patch.object(runner, "current_commit", return_value="fixture"))
+                stack.enter_context(patch.object(runner, "select_ui_destination", return_value=("ios27", "iphone")))
+                stack.enter_context(patch.object(runner, "output", side_effect=command_output))
+                stack.enter_context(patch.object(runner, "run_owned_phase", side_effect=phase, create=True))
+                stack.enter_context(patch.object(runner.subprocess, "run", side_effect=old_cleanup))
+                with self.assertRaises(subprocess.TimeoutExpired) as raised:
+                    runner.main()
+            self.assertIn("bootstatus", raised.exception.cmd, "Cleanup must preserve the primary boot failure")
+            self.assertTrue(any("delete" in command and device in command for command in calls),
+                            "Owned delete must still be attempted after shutdown times out")
+            self.assertIn("Waiting on SpringBoard", (results / "simulator-bootstatus.log").read_text(),
+                          "Bootstrap progress must survive a timeout")
+            boot = json.loads((results / "simulator-bootstatus.json").read_text())
+            self.assertEqual(boot["timeoutSeconds"], 180)
+            if receipt_fails:
+                return
+            cleanup = json.loads((results / "simulator-cleanup.json").read_text())
+            self.assertEqual(cleanup["simulator"], device)
+            self.assertEqual(cleanup["success"], not shutdown_fails)
+            self.assertEqual([entry["phase"] for entry in cleanup["phases"]], ["shutdown", "delete"])
+
+    def test_boot_timeout_retains_progress_and_primary_error(self):
+        self.boot_failure(False)
+
+    def test_shutdown_timeout_still_attempts_owned_delete_without_masking_boot(self):
+        self.boot_failure(True)
+
+    def test_cleanup_receipt_error_cannot_mask_boot_or_skip_owned_delete(self):
+        self.boot_failure(False, receipt_fails=True)
+
+    def cleanup_recording_failure(self, failure):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            device = "11111111-1111-4111-8111-111111111111"
+            launched = []
+            original_open, original_write = Path.open, Path.write_text
+            original_popen = subprocess.Popen
+            def open_path(path, *args, **kwargs):
+                if failure == "log" and path.name in ("simulator-shutdown.log", "simulator-delete.log"):
+                    raise OSError("synthetic cleanup log failure")
+                return original_open(path, *args, **kwargs)
+            def write(path, *args, **kwargs):
+                if failure == "receipt" and path.name in ("simulator-shutdown.json", "simulator-delete.json"):
+                    raise OSError("synthetic cleanup phase receipt failure")
+                return original_write(path, *args, **kwargs)
+            def launch(command, **kwargs):
+                if command[:2] != ["xcrun", "simctl"]:
+                    return original_popen(command, **kwargs)
+                launched.append(command)
+                return original_popen([sys.executable, "-c", "print('synthetic owned cleanup')"], **kwargs)
+            with patch.object(Path, "open", open_path), patch.object(Path, "write_text", write), \
+                    patch.object(runner.subprocess, "Popen", side_effect=launch):
+                self.assertFalse(runner.cleanup_simulator(device, root), "Incomplete evidence cannot produce a clean gate")
+            self.assertEqual(launched, [["xcrun", "simctl", phase, device] for phase in ("shutdown", "delete")],
+                             "Both bounded UUID-specific commands must launch despite recording failure")
+
+    def test_cleanup_log_failure_still_executes_both_owned_commands(self):
+        self.cleanup_recording_failure("log")
+
+    def test_cleanup_phase_receipt_failure_still_executes_both_owned_commands(self):
+        self.cleanup_recording_failure("receipt")
+
+
+
+if __name__ == "__main__": unittest.main()
