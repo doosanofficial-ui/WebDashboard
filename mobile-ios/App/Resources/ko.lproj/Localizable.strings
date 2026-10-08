@@ -61,6 +61,7 @@
 "Speed" = "속도";
 "Adjust recorded time; seeking pauses playback." = "기록 시간을 조절합니다. 시간을 탐색하면 재생이 일시정지됩니다.";
 "Start" = "시작";
+"End" = "끝";
 "Seconds" = "초";
 "Seek to recorded seconds" = "기록 시간의 초로 이동";
 "End reached · Start to replay" = "끝에 도달함 · 시작으로 돌아가 재생하세요";

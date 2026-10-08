@@ -64,6 +64,9 @@ final class LocalizationHelpUITests: XCTestCase {
         reveal(developer,in:app);developer.tap()
         capture(app,"setup",language,2,app.buttons["start-live-adapter"])
         tab(app,"Sessions","기록",language)
+        let gpsStatus=app.staticTexts["sessions-stat-value-GPS"]
+        reveal(gpsStatus,in:app)
+        XCTAssertEqual(gpsStatus.label,language=="ko" ? "수집 안 함":"NOT COLLECTING")
         let picker=app.buttons["saved-session-picker"];reveal(picker,in:app);picker.tap()
         let fixture=app.buttons["saved-session-offline-seek-fixture"]
         XCTAssertTrue(fixture.waitForExistence(timeout:5));fixture.tap()
@@ -76,7 +79,8 @@ final class LocalizationHelpUITests: XCTestCase {
         let start=app.buttons["replay-seek-start"];reveal(start,in:app);start.tap()
         top(app);capture(app,"replay",language,1,app.buttons["session-replay-play"])
         capture(app,"replay",language,2,app.sliders["replay-time-slider"])
-        let end=app.buttons["replay-seek-end"];reveal(end,in:app);end.tap()
+        let end=app.buttons["replay-seek-end"];reveal(end,in:app)
+        XCTAssertEqual(end.label,language=="ko" ? "끝":"End");end.tap()
         tab(app,"Signals","신호",language)
         capture(app,"signals",language,2,app.buttons["signals-stale-filter"])
         capture(app,"signals",language,1,app.staticTexts["raw-can-content"])
@@ -177,17 +181,29 @@ final class LocalizationHelpUITests: XCTestCase {
                     "The button must not become a two-line label")
                 let image=app.descendants(matching:.any).matching(identifier:"help-image-"+guide).firstMatch
                 let enlarge=app.buttons["help-enlarge-screenshot"]
+                let footer=app.otherElements["help-navigation-footer"]
+                XCTAssertTrue(footer.waitForExistence(timeout:5),"Measure the complete padded navigation footer")
                 for _ in 0..<32 {
-                    if image.exists {
-                        let imageFrame=image.frame
-                        if imageFrame.minY>app.navigationBars.firstMatch.frame.maxY && imageFrame.maxY<app.buttons["help-next"].frame.minY {break}
-                    }
-                    app.swipeUp()
+                    guard image.exists else {app.swipeUp();continue}
+                    let imageFrame=image.frame
+                    let top=app.navigationBars.firstMatch.frame.maxY
+                    let bottom=footer.frame.minY
+                    if imageFrame.minY>top && imageFrame.maxY<bottom {break}
+                    let window=app.windows.firstMatch.frame
+                    let height=bottom-top
+                    XCTAssertGreaterThan(height,0,"Help content viewport must remain available")
+                    let up=imageFrame.maxY>=bottom
+                    let startY=up ? bottom-height*0.25:top+height*0.25
+                    let endY=startY+(up ? -1:1)*min(120,height*0.25)
+                    let origin=app.windows.firstMatch.coordinate(withNormalizedOffset:.zero)
+                    let start=origin.withOffset(CGVector(dx:window.width*0.5,dy:startY-window.minY))
+                    let end=origin.withOffset(CGVector(dx:window.width*0.5,dy:endY-window.minY))
+                    start.press(forDuration:0.01,thenDragTo:end)
                 }
                 XCTAssertTrue(image.exists,"Actual screenshot must be bundled for every step")
                 let imageFrame=image.frame
                 XCTAssertGreaterThan(imageFrame.minY,app.navigationBars.firstMatch.frame.maxY)
-                XCTAssertLessThan(imageFrame.maxY,app.buttons["help-next"].frame.minY,"Full numbered image must be above the fixed navigation controls")
+                XCTAssertLessThan(imageFrame.maxY,footer.frame.minY,"Full numbered image must clear the entire padded footer")
                 XCTAssertTrue(app.windows.firstMatch.frame.contains(imageFrame))
                 let shot=XCTAttachment(screenshot:app.windows.firstMatch.screenshot())
                 shot.name="App-help-\(language)-\(guide)-step\(step)-AX5-numbered";shot.lifetime = .keepAlways;add(shot)

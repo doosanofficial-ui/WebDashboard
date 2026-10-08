@@ -34,6 +34,11 @@ final class AppLanguageTests: XCTestCase {
         XCTAssertEqual(AppLocalization.text("VALID RECORDED", language: .korean), "기록 당시 유효")
         XCTAssertEqual(AppLocalization.text("FRESHNESS UNKNOWN", language: .korean), "신선도 미상")
         XCTAssertEqual(original, "Recorded time: 17 original rows; acquisition and recording off")
+        XCTAssertEqual(AppLocalization.text("End", language: .korean), "끝")
+        XCTAssertEqual(AppLocalization.text("End", language: .english), "End")
+        XCTAssertEqual(AppLocalization.text("2.5 / 5.0 recorded seconds", language: .korean), "기록 시간 2.5 / 5.0초")
+        XCTAssertEqual(AppLocalization.text("2.5 / 5.0 seconds", language: .korean), "2.5 / 5.0초")
+        XCTAssertEqual(AppLocalization.text("0.0–2.5 recorded seconds · °C", language: .korean), "기록 시간 0.0–2.5초 · °C")
         XCTAssertEqual(AppLocalization.text("SANTAFEHYB_HVBAT_SOC", language: .korean), "SANTAFEHYB_HVBAT_SOC")
     }
     func testLanguageCannotChangeMissingZeroFreshnessOrDiagnosticSemantics() {

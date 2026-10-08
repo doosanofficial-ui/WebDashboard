@@ -8,12 +8,12 @@
     "ko": "전체 {1}초 중 {0}초"
   },
   {
-    "en": "{value} / {value} seconds",
-    "ko": "{0} / {1}초"
-  },
-  {
     "en": "{value} / {value} recorded seconds",
     "ko": "기록 시간 {0} / {1}초"
+  },
+  {
+    "en": "{value} / {value} seconds",
+    "ko": "{0} / {1}초"
   },
   {
     "en": "Recorded range: 0–{value} seconds. Values outside this range seek to the nearest end.",

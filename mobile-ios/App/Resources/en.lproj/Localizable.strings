@@ -61,6 +61,7 @@
 "Speed" = "Speed";
 "Adjust recorded time; seeking pauses playback." = "Adjust recorded time; seeking pauses playback.";
 "Start" = "Start";
+"End" = "End";
 "Seconds" = "Seconds";
 "Seek to recorded seconds" = "Seek to recorded seconds";
 "End reached · Start to replay" = "End reached · Start to replay";

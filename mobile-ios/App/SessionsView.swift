@@ -444,7 +444,7 @@ struct SessionsView: View {
             sessionStat("DURATION", model.recordingElapsedSeconds.map(formatDuration) ?? "--:--", "timer")
             sessionStat("MODE", model.runMode.rawValue, "switch.2")
             if TelemetryProductScope.allowsRemoteDelivery { sessionStat("PENDING", String(model.queueDepth), "arrow.up.circle") }
-            sessionStat("GPS", model.runMode == .replay ? (model.lastLocation == nil ? "NO SAMPLE" : "RECORDED") : model.locationStatus.uppercased(), "location.fill")
+            sessionStat("GPS", model.runMode == .replay ? (model.lastLocation == nil ? "NO SAMPLE" : "RECORDED") : AppLocalization.text(model.locationStatus).uppercased(), "location.fill")
             sessionStat("LAST MARK", model.lastMarkAt?.formatted(date: .omitted, time: .shortened) ?? "NONE", "flag.fill")
         }
         .accessibilityIdentifier("sessions-stats")
@@ -457,6 +457,7 @@ struct SessionsView: View {
                 .tracking(0.7)
                 .foregroundStyle(TelemetryTheme.mutedText)
             Text(AppLocalization.text(value))
+                .accessibilityIdentifier("sessions-stat-value-" + label)
                 .font(.title3.weight(.semibold))
                 .monospacedDigit()
                 .foregroundStyle(.white)

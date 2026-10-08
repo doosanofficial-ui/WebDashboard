@@ -31,7 +31,7 @@ struct RecordedSignalHistoryView: View {
                     Text(AppLocalization.text("Recorded samples: \(history?.samples.count ?? 0)")).font(.caption)
                     if let history {
                         Text(AppLocalization.text(String(format: "%.1f–%.1f recorded seconds · %@", history.startSeconds,
-                            history.endSeconds, units.count > 1 ? "multiple units" : (units.first ?? "no unit"))))
+                            history.endSeconds, units.count > 1 ? AppLocalization.text("multiple units") : (units.first ?? AppLocalization.text("no unit")))))
                             .font(.caption2).foregroundStyle(TelemetryTheme.mutedText)
                     }
                 }

@@ -145,6 +145,8 @@ struct HelpGuideView: View {
                     }
                 }.buttonStyle(.bordered).frame(maxWidth: .infinity, minHeight: 44)
                 .padding().background(TelemetryTheme.surfaceRaised)
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("help-navigation-footer")
             }
             .onChange(of:stepIndex) { _,_ in proxy.scrollTo("help-guide-top",anchor:.top) }
             .sheet(isPresented:$showingFullScreen) {
