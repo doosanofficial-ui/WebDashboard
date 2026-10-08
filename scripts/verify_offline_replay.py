@@ -14,6 +14,9 @@ import shutil
 import subprocess
 import tempfile
 import uuid
+import export_dismissal_fixture as export_fixture
+from contextlib import nullcontext
+import export_dismissal_observation as export_audit
 
 from verify_ios_lifecycle import output, stage_sources, select_runtime_and_type, verify_summary, record_toolchain
 from verify_replay_seed import private_artifact, run_artifact, install_fixture, current_commit
@@ -487,7 +490,7 @@ def main():
     selection.add_argument("--se-viewport", action="store_true",
                            help="Re-execute the two viewport tests on iPhone SE (3rd generation), iOS 27.x only")
     selection.add_argument("--group", choices=TEST_GROUPS, help="Disjoint portion of the full 31-test CI gate")
-    selection.add_argument("--only-test", choices=["background-export-lifecycle", "active-slider-drag", "ui-clarity", "single-instant", "large-text", "recorded-history", "recorded-route", "native-save-reentry", "help-capture"],
+    selection.add_argument("--only-test", choices=["background-export-lifecycle", "active-slider-drag", "ui-clarity", "single-instant", "large-text", "recorded-history", "recorded-route", "native-save-reentry", "native-export-dismissal", "help-capture"],
                         help="Run one new native lifecycle test; default executes all twenty-five UI regressions")
     args = parser.parse_args()
     results = args.result_directory.resolve()
@@ -496,6 +499,8 @@ def main():
     toolchain = record_toolchain(results)
     simulator = None
     boot_log = None
+    container = None
+    export_audit_enabled = not args.se_viewport and args.group in [None, "replay"] and args.only_test in [None, "native-export-dismissal"]
     with tempfile.TemporaryDirectory(prefix="telemetry-offline-ui-") as directory:
         workspace = Path(directory)
         seed_artifact = private_artifact(root, args.seed_artifact.resolve(), workspace / "seed-artifact",
@@ -508,6 +513,8 @@ def main():
         print("SEED ADMISSION AND FIXTURE PASS: trusted producer digest/private bytes; before Simulator", flush=True)
         staged = workspace / "source"
         stage_sources(root, staged)
+        if export_audit_enabled:
+            (results / "export-audit-source.json").write_text(json.dumps(export_fixture.instrument_export_sources(root, staged), indent=2))
         failure_phase = "bootstrap"
         try:
             catalog = json.loads(output(["xcrun", "simctl", "list", "runtimes", "--json"]))
@@ -536,6 +543,8 @@ def main():
                     "-destination", "platform=iOS Simulator,id=" + simulator,
                     "-derivedDataPath", str(derived), "CODE_SIGNING_ALLOWED=NO",
                     "-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never"]
+            if export_audit_enabled:
+                base.append(export_fixture.SWIFT_CONDITION)
             run_owned_phase(base + ["build"], results / "build.log",
                             results / "build-process.json", 600)
             failure_phase = "app-install"
@@ -547,8 +556,10 @@ def main():
                                      "local.webdashboard.Telemetry", "data"], results, failure_phase, timeout=60).strip())
             failure_phase = "fixture-install"
             install_fixture(fixture, container / "Library/Application Support/Telemetry")
+            if export_audit_enabled:
+                export_audit.install_marker(container, current_commit(root))
             bundle = results / "ReplayUI.xcresult"
-            focused_methods = {"background-export-lifecycle": "testNativeExportBackgroundReturnCancelAndReentry",
+            focused_methods = {"native-export-dismissal": "testNativeExportCancelReentryAndReplayAcrossTabs", "background-export-lifecycle": "testNativeExportBackgroundReturnCancelAndReentry",
                                "active-slider-drag": "testPlayingLongSliderDragPreservesCapturedUserTarget",
                                "recorded-history": "testRecordedSignalHistoryContainsOnlySelectedTimePrefix",
                                "recorded-route": "testRecordedGPSRouteContainsOnlySelectedTimePrefix"}
@@ -578,7 +589,8 @@ def main():
             command = base + ["-resultBundlePath", str(bundle)] + selected_tests + ["test"]
             (results / "command.json").write_text(json.dumps(command, indent=2))
             failure_phase = "ui-test"
-            run_owned_phase(command, results / "test.log", results / "test-process.json", 1200)
+            with export_audit.RunnerHeartbeat(results / "runner-heartbeat.json") if export_audit_enabled else nullcontext():
+                run_owned_phase(command, results / "test.log", results / "test-process.json", 1200)
             failure_phase = "result-read"
             summary = json.loads(output(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)]))
             (results / "summary.json").write_text(json.dumps(summary, indent=2))
@@ -609,6 +621,14 @@ def main():
             if simulator:
                 primary_failure = sys.exc_info()[0] is not None
                 cleanup_error = None
+                if export_audit_enabled and container is not None:
+                    try:
+                        # After the original verdict/failure latch; fixed file only, bounded owned worker.
+                        run_owned_phase([sys.executable, str(root / "scripts/export_dismissal_observation.py"), simulator, str(results)],
+                            results / "export-audit-worker.log", results / "export-audit-worker.json", 5,
+                            best_effort_recording=True, ensure_group_cleanup=True)
+                    except Exception:
+                        pass
                 try:
                     cleaned = cleanup_simulator(simulator, results)
                 except Exception as error:

@@ -33,6 +33,7 @@ class BootstrapStreamIntegrationTests(unittest.TestCase):
                 stack.enter_context(patch.object(runner, name, return_value=value))
             for name in ['run_artifact', 'stage_sources', 'capture_simulator_bootstrap_failure']:
                 stack.enter_context(patch.object(runner, name))
+            stack.enter_context(patch.object(runner.export_fixture, 'instrument_export_sources', return_value={}))
             def output(command, **kwargs):
                 if command[1:4] == ['simctl', 'list', 'runtimes']:
                     return json.dumps({'runtimes': [{'identifier': 'ios27', 'version': '27.0'}]})
@@ -105,6 +106,7 @@ class BootstrapStreamIntegrationTests(unittest.TestCase):
                     stack.enter_context(patch.object(runner, name, return_value=value))
                 for name in ['run_artifact', 'stage_sources']:
                     stack.enter_context(patch.object(runner, name))
+                stack.enter_context(patch.object(runner.export_fixture, 'instrument_export_sources', return_value={}))
                 stack.enter_context(patch.object(sys, 'argv', argv))
                 stack.enter_context(patch.object(runner, 'output', side_effect=output))
                 stack.enter_context(patch.object(runner, 'run_owned_phase', side_effect=phase))

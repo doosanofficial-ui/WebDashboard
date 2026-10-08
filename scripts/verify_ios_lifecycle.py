@@ -13,13 +13,14 @@ import sys
 from pathlib import Path
 import subprocess
 import uuid
+import export_dismissal_fixture as export_fixture
 import shutil
 import tempfile
 
 import failure_observation
 from failure_observation import observe_first_failure
 
-EXPECTED_TEST_COUNT = 89
+EXPECTED_TEST_COUNT = 92
 
 
 def stage_sources(root, destination):
@@ -111,6 +112,7 @@ def main():
     try:
         staged = Path(workspace.name) / "source"
         stage_sources(root, staged)
+        (results / "export-audit-source.json").write_text(json.dumps(export_fixture.instrument_export_sources(root, staged), indent=2))
         toolchain = record_toolchain(results)
         catalog = json.loads(output(["xcrun", "simctl", "list", "runtimes", "--json"]))
         runtime, device_type = select_runtime_and_type(catalog)
@@ -137,7 +139,7 @@ def main():
                    "-destination", "platform=iOS Simulator,id=" + simulator,
                    "-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never", "-resultBundlePath", str(bundle),
                    "-derivedDataPath", str(Path(workspace.name) / "derived"),
-                   "CODE_SIGNING_ALLOWED=NO", "test"]
+                   "CODE_SIGNING_ALLOWED=NO", export_fixture.SWIFT_CONDITION, "test"]
         (results / "command.json").write_text(json.dumps(command, indent=2), encoding="utf-8")
         log = results / "xcodebuild.log"
         failure_phase = "hosted-xcode"

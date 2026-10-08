@@ -102,27 +102,27 @@ class LifecycleRunnerTests(unittest.TestCase):
         for path in sorted((root / "mobile-ios/LifecycleTests").glob("*.swift")):
             declarations.extend(re.findall(r"^\s+func (test\w+)\(", path.read_text(), re.MULTILINE))
         self.assertIn("sources: [LifecycleTests]", (root / "mobile-ios/lifecycle-tests.yml").read_text())
-        self.assertEqual(len(declarations), 89)
+        self.assertEqual(len(declarations), 92)
         self.assertEqual(runner.EXPECTED_TEST_COUNT, len(declarations))
         self.assertIn("testCancelledComputedManySignalSeekCannotPublish", declarations)
         self.assertIn("testStopAfterComputedManySignalSeekDiscardsResultAndAllOwnedState", declarations)
 
     def test_expanded_gate_rejects_old_green_or_partial_counts(self):
         expected = runner.EXPECTED_TEST_COUNT
-        runner.verify_summary({"totalTestCount": 89, "passedTests": 89, "failedTests": 0,
+        runner.verify_summary({"totalTestCount": runner.EXPECTED_TEST_COUNT, "passedTests": runner.EXPECTED_TEST_COUNT, "failedTests": 0,
                                "skippedTests": 0, "expectedFailures": 0}, expected)
-        for count in [0, 81, 82, 83, 84, 85, 86, 87, 88, 90]:
+        for count in [0, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 93]:
             with self.subTest(count=count), self.assertRaises(ValueError):
                 runner.verify_summary({"totalTestCount": count, "passedTests": count,
                                        "failedTests": 0, "skippedTests": 0}, expected)
 
     def test_expanded_gate_never_accepts_skips_or_expected_failures(self):
         for field in ["failedTests", "skippedTests", "expectedFailures"]:
-            summary = {"totalTestCount": 89, "passedTests": 89, "failedTests": 0,
+            summary = {"totalTestCount": runner.EXPECTED_TEST_COUNT, "passedTests": runner.EXPECTED_TEST_COUNT, "failedTests": 0,
                        "skippedTests": 0, "expectedFailures": 0}
             summary[field] = 1
             with self.subTest(field=field), self.assertRaises(ValueError):
-                runner.verify_summary(summary, 89)
+                runner.verify_summary(summary, runner.EXPECTED_TEST_COUNT)
 
 
 
@@ -187,7 +187,7 @@ class HostedCleanupControlFlowTests(unittest.TestCase):
                     self.assertEqual(timeout, 60)
                     if body == "reader":
                         raise reader_error
-                    return json.dumps({"totalTestCount": 89, "passedTests": 89, "failedTests": 0, "skippedTests": 0})
+                    return json.dumps({"totalTestCount": runner.EXPECTED_TEST_COUNT, "passedTests": runner.EXPECTED_TEST_COUNT, "failedTests": 0, "skippedTests": 0})
                 raise AssertionError("Unexpected external command: " + repr(command))
             def run(command, **kwargs):
                 if command[0] == "xcodebuild":
@@ -231,6 +231,7 @@ class HostedCleanupControlFlowTests(unittest.TestCase):
                 stack.enter_context(patch.object(runner.platform, "system", return_value="Darwin"))
                 stack.enter_context(patch.object(runner.tempfile, "TemporaryDirectory", return_value=Workspace()))
                 stack.enter_context(patch.object(runner, "stage_sources", side_effect=stage))
+                stack.enter_context(patch.object(runner.export_fixture, "instrument_export_sources", return_value={}))
                 stack.enter_context(patch.object(runner, "record_toolchain", return_value={"xcode_version": "27.0"}))
                 stack.enter_context(patch.object(runner, "output", side_effect=output))
                 stack.enter_context(patch.object(runner.subprocess, "run", side_effect=run))

@@ -114,6 +114,43 @@ final class OfflineReplayUITests: XCTestCase {
         return save
     }
 
+    private struct ExportBoundary: Codable {
+        let iteration: Int
+        let format: String
+        let event: String
+        let uptime: Double
+        let epoch: Double
+        let result: Bool?
+    }
+    private var exportBoundaries: [ExportBoundary] = []
+    private func exportBoundary(_ event: String, iteration: Int, format: String, result: Bool? = nil) {
+        guard exportBoundaries.count < 256 else { return }
+        exportBoundaries.append(.init(iteration: iteration, format: format, event: event,
+            uptime: ProcessInfo.processInfo.systemUptime, epoch: Date().timeIntervalSince1970, result: result))
+    }
+    private func observedExporterClosed(_ app: XCUIApplication, iteration: Int, format: String) -> XCTNSPredicateExpectation {
+        XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            self.exportBoundary("predicate.start", iteration: iteration, format: format)
+            self.exportBoundary("filesBar.exists.start", iteration: iteration, format: format)
+            let bar = app.navigationBars["FullDocumentManagerViewControllerNavigationBar"].exists
+            self.exportBoundary("filesBar.exists.return", iteration: iteration, format: format, result: bar)
+            var visible = bar
+            if !bar { // Preserve the original OR short-circuit and AX query count.
+                self.exportBoundary("save.exists.start", iteration: iteration, format: format)
+                visible = app.buttons["DOCPicker.actionButton"].exists
+                self.exportBoundary("save.exists.return", iteration: iteration, format: format, result: visible)
+            }
+            self.exportBoundary("predicate.return", iteration: iteration, format: format, result: !visible)
+            return !visible
+        }, object: app)
+    }
+    private func attachExportBoundaries() {
+        guard let data = try? JSONEncoder().encode(exportBoundaries) else { return }
+        let attachment = XCTAttachment(data: data, uniformTypeIdentifier: "public.json")
+        attachment.name = "SYNTHETIC-export-input-boundaries"
+        attachment.lifetime = .keepAlways; add(attachment)
+    }
+
     private func nativeExporterClosed(_ app: XCUIApplication) -> XCTNSPredicateExpectation {
         // Flat root queries avoid walking children of an already removed Files bar.
         XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
@@ -477,18 +514,28 @@ final class OfflineReplayUITests: XCTestCase {
         #else
         continueAfterFailure = false
         let app = XCUIApplication()
+        app.launchArguments.append("--audit-export-dismissal")
+        exportBoundaries = []
         openFixtureSession(app)
-        for format in ["json", "csv", "json"] {
+        for (iteration, format) in ["json", "csv", "json"].enumerated() {
             revealExport(app, format: format).tap()
             let save = readyNativeSaveButton(app)
             let attachment = XCTAttachment(screenshot: app.screenshot())
             attachment.name = "native-" + format + "-export"; attachment.lifetime = .keepAlways; add(attachment)
             // Dismiss the native sheet with the same drag a user performs.
             // A Files accessibility element labelled Cancel can overlap its menu.
+            exportBoundary("input.call.start", iteration: iteration, format: format)
+            print("SYNTHETIC export input start iteration=\(iteration) format=\(format) uptime=\(ProcessInfo.processInfo.systemUptime) epoch=\(Date().timeIntervalSince1970)")
             app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.085))
                 .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)))
-            let closed = nativeExporterClosed(app)
-            XCTAssertEqual(XCTWaiter.wait(for: [closed], timeout: 5), .completed, app.debugDescription)
+            exportBoundary("input.call.return", iteration: iteration, format: format)
+            print("SYNTHETIC export input return iteration=\(iteration) format=\(format) uptime=\(ProcessInfo.processInfo.systemUptime) epoch=\(Date().timeIntervalSince1970)")
+            let closed = observedExporterClosed(app, iteration: iteration, format: format)
+            exportBoundary("wait.start", iteration: iteration, format: format)
+            let result = XCTWaiter.wait(for: [closed], timeout: 5)
+            exportBoundary("wait.return", iteration: iteration, format: format, result: result == .completed)
+            attachExportBoundaries() // Encoding/attachment occurs after the unchanged wait.
+            XCTAssertEqual(result, .completed, app.debugDescription)
             XCTAssertTrue(app.tabBars.buttons["Sessions"].waitForExistence(timeout: 5))
         }
         let replay = app.buttons["replay-saved-session"]
