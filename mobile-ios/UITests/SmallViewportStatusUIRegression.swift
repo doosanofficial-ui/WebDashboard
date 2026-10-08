@@ -36,12 +36,19 @@ final class SmallViewportStatusUIRegression: XCTestCase {
             timeout: remaining(until: dismissalDeadline)))
         _ = try captureStatusEvidence(app, name: "after-done-before-hit-query")
         XCTAssertGreaterThan(remaining(until: dismissalDeadline), 0, "Dismissal capture exceeded the original 5-second deadline")
-        let editReady = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            app.buttons["edit-dashboard"].isHittable
-        }, object: app)
-        XCTAssertEqual(XCTWaiter.wait(for: [editReady], timeout: remaining(until: dismissalDeadline)), .completed, app.debugDescription)
+        let edit = app.buttons["edit-dashboard"]
+        // Edit may already be ready; query before scheduling the first polling callback.
+        let initiallyHittable = edit.isHittable
+        XCTAssertGreaterThan(remaining(until: dismissalDeadline), 0,
+            "Initial hittability query returned after the original 5-second deadline")
+        if !initiallyHittable {
+            let editReady = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                edit.isHittable
+            }, object: edit)
+            XCTAssertEqual(XCTWaiter.wait(for: [editReady], timeout: remaining(until: dismissalDeadline)), .completed, app.debugDescription)
+        }
         XCTAssertGreaterThan(remaining(until: dismissalDeadline), 0, "Hittability returned after the original 5-second deadline")
-        app.buttons["edit-dashboard"].tap()
+        edit.tap()
         XCTAssertTrue(app.buttons["undo-dashboard-layout"].waitForExistence(timeout: 5))
         let picker = app.buttons["dashboard-page-picker"]
         XCTAssertTrue(picker.waitForExistence(timeout: 5))
