@@ -409,7 +409,10 @@ def cleanup_simulator(simulator, results):
             receipt.write_text(json.dumps(evidence, indent=2), encoding="utf-8")
         except OSError as error:
             evidence["success"] = False
-            print("Cleanup receipt could not be recorded: " + str(error), file=sys.stderr)
+            try:
+                print("Cleanup receipt could not be recorded: " + str(error), file=sys.stderr)
+            except Exception:
+                pass  # Optional diagnostics must not skip the next owned cleanup phase.
     return evidence["success"]
 
 

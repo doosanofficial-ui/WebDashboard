@@ -13,11 +13,12 @@ import verify_offline_replay as runner
 
 
 class SimulatorPhaseTests(unittest.TestCase):
-    def boot_failure(self, shutdown_fails, receipt_fails=False):
+    def boot_failure(self, shutdown_fails, receipt_fails=False, stderr_error=None):
         with tempfile.TemporaryDirectory() as directory:
             results = Path(directory) / "results"
             device = "11111111-1111-4111-8111-111111111111"
             calls = []
+            primary = subprocess.TimeoutExpired(["xcrun", "simctl", "bootstatus", device, "-b"], 180)
             def command_output(command, timeout=60):
                 calls.append(command)
                 if command[1:4] == ["simctl", "list", "runtimes"]:
@@ -33,7 +34,7 @@ class SimulatorPhaseTests(unittest.TestCase):
                 failed = status == "bootstatus" or (shutdown_fails and status == "shutdown")
                 receipt.write_text(json.dumps({"command": command, "timeoutSeconds": timeout,
                                                "timedOut": failed, "exitCode": None if failed else 0}))
-                if failed: raise subprocess.TimeoutExpired(command, timeout)
+                if failed: raise primary if status == "bootstatus" else subprocess.TimeoutExpired(command, timeout)
             def old_cleanup(command, **kwargs):
                 calls.append(command)
                 if shutdown_fails and "shutdown" in command: raise subprocess.TimeoutExpired(command, 60)
@@ -45,8 +46,15 @@ class SimulatorPhaseTests(unittest.TestCase):
                 if receipt_fails and path.name == "simulator-cleanup.json":
                     raise OSError("synthetic aggregate receipt failure")
                 return original_write(path, *args, **kwargs)
+            def diagnostic_print(*args, **kwargs):
+                if stderr_error is not None and args and str(args[0]).startswith("Cleanup receipt could not be recorded:"):
+                    raise stderr_error
+                print(*args, **kwargs)
             with ExitStack() as stack:
                 stack.enter_context(patch.object(Path, "write_text", write))
+                if stderr_error is not None:
+                    stack.enter_context(patch.object(runner, "print", side_effect=diagnostic_print, create=True))
+                stack.enter_context(patch.object(runner, "capture_simulator_bootstrap_failure", return_value={}))
                 stack.enter_context(patch.object(sys, "argv", arguments))
                 observer = stack.enter_context(patch.object(runner, "OwnedSimulatorBootLog"))
                 observer.return_value.finalize.return_value = {"collectorCleaned": True}
@@ -61,7 +69,8 @@ class SimulatorPhaseTests(unittest.TestCase):
                 stack.enter_context(patch.object(runner.subprocess, "run", side_effect=old_cleanup))
                 with self.assertRaises(subprocess.TimeoutExpired) as raised:
                     runner.main()
-            self.assertIn("bootstatus", raised.exception.cmd, "Cleanup must preserve the primary boot failure")
+            self.assertIs(raised.exception, primary, "Cleanup must preserve the original boot failure object")
+            observer.return_value.finalize.assert_called_once()
             self.assertTrue(any("delete" in command and device in command for command in calls),
                             "Owned delete must still be attempted after shutdown times out")
             self.assertIn("Waiting on SpringBoard", (results / "simulator-bootstatus.log").read_text(),
@@ -83,6 +92,12 @@ class SimulatorPhaseTests(unittest.TestCase):
 
     def test_cleanup_receipt_error_cannot_mask_boot_or_skip_owned_delete(self):
         self.boot_failure(False, receipt_fails=True)
+
+    def test_broken_stderr_after_cleanup_receipt_error_still_deletes_owned_device(self):
+        self.boot_failure(True, receipt_fails=True, stderr_error=BrokenPipeError("synthetic closed stderr pipe"))
+
+    def test_closed_stderr_after_cleanup_receipt_error_still_deletes_owned_device(self):
+        self.boot_failure(True, receipt_fails=True, stderr_error=ValueError("I/O operation on closed file"))
 
     def cleanup_recording_failure(self, failure):
         with tempfile.TemporaryDirectory() as directory:
