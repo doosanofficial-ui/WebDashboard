@@ -150,15 +150,231 @@ class BootLogBoundaryTests(unittest.TestCase):
             return native_open(path, *args, **kwargs)
         with tempfile.TemporaryDirectory() as directory, patch.object(subprocess, 'Popen', side_effect=launch), \
                 patch.object(os, 'killpg', side_effect=signal_owned), patch.object(Path, 'open', open_path):
+            if callable(source):
+                source = source(directory)
             collector = OwnedSimulatorBootLog(self.device, Path(directory), window=window, byte_limit=byte_limit)
             collector.worker.join(timeout=3)
             receipt = collector.finalize()
             path = Path(directory) / 'simulator-boot-stream.ndjson'
             data = path.read_bytes() if path.exists() else b''
+            tail = Path(directory) / 'simulator-boot-stream-tail.ndjson'
+            self.tail_data = tail.read_bytes() if tail.exists() else b''
             self.assertTrue(receipt['workerStopped'])
             self.assertTrue(receipt['pipeClosed'])
             self.assertTrue(receipt['leaderReaped'])
             return receipt, data
+
+    def test_late_owned_marker_survives_after_input_exceeds_retention_limit(self):
+        early = [json.dumps({'eventMessage': 'early-' + str(i) + ' ' + self.device, 'padding': 'x' * 30}) for i in range(30)]
+        late = json.dumps({'eventMessage': 'late-owned ' + self.device})
+        source = 'import sys;sys.stdout.write(' + repr('\n'.join(early + [late]) + '\n') + ');sys.stdout.flush()'
+        receipt, head = self.trial(source, byte_limit=1024)
+        self.assertIn(b'early-0', head)
+        self.assertIn(b'late-owned', self.tail_data, 'A capped early prefix must not hide the late failure marker')
+        self.assertGreater(receipt['inputBytes'], 1024)
+        self.assertLessEqual(len(head), 512)
+        self.assertLessEqual(len(self.tail_data), 256)
+        self.assertLessEqual(len(head) + len(self.tail_data), 768)
+        self.assertEqual(receipt['terminationReason'], 'eof')
+        self.assertGreater(receipt['tailEvictedEvents'], 0)
+        head_rows = [json.loads(line) for line in head.splitlines()]
+        tail_rows = [json.loads(line) for line in self.tail_data.splitlines()]
+        self.assertTrue(all(self.device in row['eventMessage'] for row in head_rows + tail_rows))
+        self.assertEqual(len(head_rows), receipt['events'])
+        self.assertEqual(len(tail_rows), receipt['tailSavedEvents'])
+        self.assertEqual(receipt['savedBytes'], len(head))
+        self.assertEqual(receipt['tailSavedBytes'], len(self.tail_data))
+        self.assertTrue(receipt['collectorCleaned'])
+
+    def test_invalid_foreign_and_oversized_output_cannot_consume_late_owned_retention(self):
+        owned = json.dumps({'eventMessage': 'late-owned ' + self.device})
+        foreign = json.dumps({'eventMessage': 'foreign 22222222-2222-4222-8222-222222222222'})
+        source = 'import sys;sys.stdout.write(' + repr('x' * 100000 + owned + '\n' + '\n'.join([foreign] * 30) + '\nnot JSON\n' + owned + '\n') + ');sys.stdout.flush()'
+        receipt, head = self.trial(source, byte_limit=1024)
+        self.assertIn(b'late-owned', head)
+        self.assertEqual(receipt['oversizedLines'], 1)
+        self.assertEqual(receipt['discardedLines'], 31)
+        self.assertEqual(receipt['events'], 1)
+        self.assertNotIn(b'foreign', head + self.tail_data)
+        self.assertLessEqual(receipt['partialBytes'], receipt['lineLimit'])
+        self.assertTrue(receipt['collectorCleaned'])
+
+    def test_tail_replace_failure_preserves_prior_snapshot_and_owned_cleanup(self):
+        native_replace = os.replace
+        replaced = []
+        previous = []
+        peaks = []
+        def replace(source, destination):
+            if Path(destination).name == 'simulator-boot-stream-tail.ndjson':
+                destination = Path(destination)
+                head = destination.parent / 'simulator-boot-stream.ndjson'
+                peaks.append(head.stat().st_size + Path(source).stat().st_size +
+                             (destination.stat().st_size if destination.exists() else 0))
+                if replaced:
+                    previous.append(Path(destination).read_bytes())
+                    raise OSError('synthetic tail replace unavailable')
+                replaced.append(True)
+            return native_replace(source, destination)
+        def producer(directory):
+            tail = str(Path(directory) / 'simulator-boot-stream-tail.ndjson')
+            early = [json.dumps({'eventMessage': 'early-' + str(i) + ' ' + self.device}) for i in range(20)]
+            stable = json.dumps({'eventMessage': 'stable-tail ' + self.device})
+            late = json.dumps({'eventMessage': 'new-tail ' + self.device})
+            return ('import pathlib,sys,time;sys.stdout.write(' + repr('\n'.join(early + [stable]) + '\n') + ');sys.stdout.flush();'
+                    'p=pathlib.Path(' + repr(tail) + ');deadline=time.monotonic()+1.5\n'
+                    'while not p.exists() and time.monotonic()<deadline:time.sleep(0.005)\n'
+                    'sys.stdout.write(' + repr(late + '\n') + ');sys.stdout.flush()')
+        with patch.object(os, 'replace', side_effect=replace):
+            receipt, head = self.trial(producer, byte_limit=1024)
+        self.assertEqual(len(previous), 1)
+        self.assertEqual(len(peaks), 2)
+        self.assertTrue(all(size <= 1024 for size in peaks), 'Head + previous tail + atomic staging must stay within the configured payload cap')
+        self.assertEqual(self.tail_data, previous[0])
+        self.assertIn(b'stable-tail', self.tail_data)
+        self.assertNotIn(b'new-tail', self.tail_data)
+        self.assertTrue(any(row['operation'] == 'tail-publish' for row in receipt['errors']))
+        self.assertTrue(receipt['collectorCleaned'])
+        self.assertTrue(receipt['groupGoneFinal'])
+
+    def test_owned_record_larger_than_tail_budget_is_skipped_as_a_complete_record(self):
+        early = [json.dumps({'eventMessage': 'early-' + str(i) + ' ' + self.device}) for i in range(20)]
+        oversized = json.dumps({'eventMessage': 'large-owned ' + self.device, 'padding': 'x' * 400})
+        late = json.dumps({'eventMessage': 'late-owned ' + self.device})
+        source = 'import sys;sys.stdout.write(' + repr('\n'.join(early + [oversized, late]) + '\n') + ');sys.stdout.flush()'
+        receipt, head = self.trial(source, byte_limit=1024)
+        self.assertEqual(receipt['tailOversizedEvents'], 1)
+        self.assertIn(b'late-owned', self.tail_data)
+        self.assertNotIn(b'large-owned', head + self.tail_data)
+        self.assertTrue(all(self.device in json.loads(line)['eventMessage'] for line in self.tail_data.splitlines()))
+        self.assertLessEqual(len(self.tail_data), 256)
+        self.assertTrue(receipt['collectorCleaned'])
+
+    def test_blocked_tail_writer_cannot_hold_snapshot_lock_or_report_cleanup_complete(self):
+        from owned_simulator_boot_log import OwnedSimulatorBootLog
+        native_popen, native_open = subprocess.Popen, Path.open
+        entered, release, returned = threading.Event(), threading.Event(), threading.Event()
+        snapshots = []
+        rows = [json.dumps({'eventMessage': 'owned-' + str(i) + ' ' + self.device}) for i in range(30)]
+        source = 'import sys;sys.stdout.write(' + repr('\n'.join(rows) + '\n') + ');sys.stdout.flush()'
+        def launch(command, **kwargs):
+            return native_popen([sys.executable, '-c', source], **kwargs)
+        def open_path(path, *args, **kwargs):
+            if path.name.startswith('simulator-boot-stream-tail.') and path.suffix == '.tmp':
+                entered.set()
+                if not release.wait(3):
+                    raise RuntimeError('test tail writer not released')
+            return native_open(path, *args, **kwargs)
+        with tempfile.TemporaryDirectory() as directory, patch.object(subprocess, 'Popen', side_effect=launch), \
+                patch.object(Path, 'open', open_path):
+            collector = OwnedSimulatorBootLog(self.device, Path(directory), window=2, byte_limit=1024)
+            reader = None
+            try:
+                self.assertTrue(entered.wait(1), 'A real tail publication must enter the controlled I/O boundary')
+                def snapshot():
+                    snapshots.append(collector.finalize(join_timeout=0))
+                    returned.set()
+                reader = threading.Thread(target=snapshot)
+                reader.start()
+                self.assertTrue(returned.wait(1), 'Snapshot must not wait for the blocked tail write')
+                self.assertFalse(snapshots[0]['workerStopped'])
+                self.assertFalse(snapshots[0]['collectorCleaned'])
+                self.assertEqual(snapshots[0]['tailSavedBytes'], 0)
+            finally:
+                release.set()
+                if reader is not None:
+                    reader.join(timeout=2)
+                collector.worker.join(timeout=3)
+            final = collector.finalize()
+            self.assertTrue(final['collectorCleaned'])
+            self.assertTrue(final['groupGoneFinal'])
+            self.assertGreater(final['tailSavedBytes'], 0)
+            self.assertFalse(snapshots[0]['workerStopped'], 'Completing the writer must not mutate the earlier snapshot')
+
+    def test_quiet_stream_publishes_the_last_dirty_marker_before_stop_or_eof(self):
+        from owned_simulator_boot_log import OwnedSimulatorBootLog
+        native_popen = subprocess.Popen
+        with tempfile.TemporaryDirectory() as directory:
+            tail = Path(directory) / 'simulator-boot-stream-tail.ndjson'
+            marker_sent = Path(directory) / 'producer-marker-sent'
+            rows = [json.dumps({'eventMessage': 'early-' + str(i) + ' ' + self.device}) for i in range(20)]
+            stable = json.dumps({'eventMessage': 'stable-tail ' + self.device})
+            late = json.dumps({'eventMessage': 'quiet-late-tail ' + self.device})
+            source = ('import pathlib,sys,time;sys.stdout.write(' + repr('\n'.join(rows + [stable]) + '\n') + ');sys.stdout.flush();'
+                      'p=pathlib.Path(' + repr(str(tail)) + ');deadline=time.monotonic()+1\n'
+                      'while not p.exists() and time.monotonic()<deadline:time.sleep(0.005)\n'
+                      'sys.stdout.write(' + repr(late + '\n') + ');sys.stdout.flush();'
+                      'pathlib.Path(' + repr(str(marker_sent)) + ').write_text("sent");time.sleep(20)')
+            def launch(command, **kwargs):
+                return native_popen([sys.executable, '-c', source], **kwargs)
+            with patch.object(subprocess, 'Popen', side_effect=launch):
+                collector = OwnedSimulatorBootLog(self.device, Path(directory), window=3, byte_limit=1024)
+                try:
+                    deadline = time.monotonic() + 1
+                    while not marker_sent.exists() and time.monotonic() < deadline:
+                        threading.Event().wait(0.005)
+                    self.assertTrue(marker_sent.exists(), 'Producer must wait for the real first snapshot then emit its late marker')
+                    deadline = time.monotonic() + 1.5
+                    while time.monotonic() < deadline and collector.worker.is_alive():
+                        if tail.exists() and b'quiet-late-tail' in tail.read_bytes():
+                            break
+                        threading.Event().wait(0.005)
+                    self.assertIn(b'quiet-late-tail', tail.read_bytes(), 'Quiet output must not defer a dirty checkpoint until stop/EOF')
+                    self.assertTrue(collector.worker.is_alive(), 'The marker must be published during the unchanged live read window')
+                    self.assertFalse(collector.stop.is_set())
+                finally:
+                    receipt = collector.finalize(join_timeout=2)
+                self.assertTrue(receipt['collectorCleaned'])
+
+    def test_publication_return_after_stop_or_deadline_cannot_begin_a_new_pipe_read(self):
+        from owned_simulator_boot_log import OwnedSimulatorBootLog
+        native_popen, native_open, native_read = subprocess.Popen, Path.open, os.read
+        for boundary in ['stop', 'deadline']:
+            with self.subTest(boundary=boundary), tempfile.TemporaryDirectory() as directory:
+                entered, release, closed = threading.Event(), threading.Event(), threading.Event()
+                entered_marker = Path(directory) / 'writer-entered'
+                producer_ready = Path(directory) / 'producer-ready'
+                late_reads = []
+                rows = [json.dumps({'eventMessage': 'early-' + str(i) + ' ' + self.device}) for i in range(20)]
+                late = json.dumps({'eventMessage': 'after-publication ' + self.device})
+                source = ('import pathlib,sys,time;sys.stdout.write(' + repr('\n'.join(rows) + '\n') + ');sys.stdout.flush();'
+                          'p=pathlib.Path(' + repr(str(entered_marker)) + ');deadline=time.monotonic()+1\n'
+                          'while not p.exists() and time.monotonic()<deadline:time.sleep(0.005)\n'
+                          'sys.stdout.write(' + repr(late + '\n') + ');sys.stdout.flush();'
+                          'pathlib.Path(' + repr(str(producer_ready)) + ').write_text("ready");time.sleep(20)')
+                def launch(command, **kwargs):
+                    return native_popen([sys.executable, '-c', source], **kwargs)
+                def open_path(path, *args, **kwargs):
+                    if path.name.startswith('simulator-boot-stream-tail.') and path.suffix == '.tmp':
+                        entered_marker.write_text('entered')
+                        entered.set()
+                        if not release.wait(3):
+                            raise RuntimeError('test writer not released')
+                    return native_open(path, *args, **kwargs)
+                def read(fd, size):
+                    if closed.is_set():
+                        late_reads.append(size)
+                    return native_read(fd, size)
+                with patch.object(subprocess, 'Popen', side_effect=launch), \
+                        patch.object(Path, 'open', open_path), patch.object(os, 'read', side_effect=read):
+                    collector = OwnedSimulatorBootLog(self.device, Path(directory), window=3, byte_limit=1024)
+                    try:
+                        self.assertTrue(entered.wait(1))
+                        deadline = time.monotonic() + 1
+                        while not producer_ready.exists() and time.monotonic() < deadline:
+                            threading.Event().wait(0.005)
+                        self.assertTrue(producer_ready.exists(), 'Additional real pipe bytes must be queued before closing the read boundary')
+                        if boundary == 'stop':
+                            collector.request_stop()
+                        else:
+                            collector.deadline = time.monotonic() - 1
+                        closed.set()
+                        release.set()
+                        collector.worker.join(timeout=2)
+                    finally:
+                        release.set()
+                        receipt = collector.finalize(join_timeout=2)
+                    self.assertEqual(late_reads, [], 'A completed publication cannot authorize a new read after stop/deadline')
+                    self.assertTrue(receipt['collectorCleaned'])
 
     def test_foreign_invalid_and_nonstring_events_are_not_saved(self):
         lines = [json.dumps({'eventMessage': 'foreign 22222222-2222-4222-8222-222222222222'}),
@@ -170,10 +386,10 @@ class BootLogBoundaryTests(unittest.TestCase):
         self.assertEqual(json.loads(data)['eventMessage'], 'owned ' + self.device.lower())
         self.assertTrue(receipt['collectorCleaned'])
 
-    def test_newlineless_output_cannot_exceed_total_input_or_saved_byte_cap(self):
+    def test_newlineless_output_keeps_partial_and_retained_payload_bounded(self):
         receipt, data = self.trial('import os; os.write(1, b"x" * (3 * 1024 * 1024))')
-        self.assertEqual(receipt['inputBytes'], 2 * 1024 * 1024)
-        self.assertEqual(receipt['terminationReason'], 'input-limit')
+        self.assertEqual(receipt['inputBytes'], 3 * 1024 * 1024)
+        self.assertEqual(receipt['terminationReason'], 'eof')
         self.assertEqual(receipt['events'], 0)
         self.assertEqual(data, b'')
         self.assertLessEqual(receipt['partialBytes'], receipt['lineLimit'])
