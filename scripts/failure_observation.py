@@ -370,6 +370,9 @@ def run_probe(name, command, timeout, simulator):
              'childExitCode': None, 'childReaped': False, 'kernelExitTimestamp': None}
     child = None
     try:
+        if timeout <= 0:
+            value['notRunReason'] = 'deadlineReached'
+            raise subprocess.TimeoutExpired(command, timeout)
         value['launchRequestedMonotonic'] = time.monotonic()
         child = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         value['launchReturnedMonotonic'] = time.monotonic()
@@ -419,6 +422,27 @@ def run_probe(name, command, timeout, simulator):
     return value
 
 
+
+def replace_worker_journal(path, value):
+    """Publish a complete worker snapshot without truncating the previous one."""
+    temporary = None
+    try:
+        temporary = path.with_name(f'.{path.name}.{uuid.uuid4().hex}.tmp')
+        with temporary.open('x', encoding='utf-8') as stream:
+            json.dump(value, stream, indent=2)
+            stream.write('\n')
+        temporary.replace(path)
+        return True
+    except Exception:
+        return False
+    finally:
+        if temporary is not None:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
 def worker(results, simulator, deadline):
     probes = [('neutral-process', [sys.executable, '-c', 'pass'])]
     if simulator:
@@ -429,26 +453,63 @@ def worker(results, simulator, deadline):
         ('selected-xcresulttool', ['xcrun', '--find', 'xcresulttool']),
         ('disk-io', ['/usr/sbin/iostat', '-d', '-c', '1'])])
     value = {'diagnosisStartedMonotonic': time.monotonic(), 'deadlineMonotonic': deadline,
-             'budgetSeconds': DIAGNOSTIC_BUDGET_SECONDS, 'resources': resources(), 'probes': [],
+             'budgetSeconds': DIAGNOSTIC_BUDGET_SECONDS, 'resources': None, 'probes': [], 'stages': [],
              'scope': 'CI-only, owned UUID and numeric allowlist; no raw system dump'}
     destination = results / 'failure-diagnostic-probes.json'
-    if time.monotonic() < deadline:
-        try:
-            value['simctlIdentity'] = simctl_identity(results)
-        except Exception as error:
-            value['simctlIdentityErrorType'] = type(error).__name__
+    # Persist worker entry before optional imports, system file reads or subprocess observations.
     if not safe_write(destination, value):
         return 2
-    for name, command in probes:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            value['deadlineReached'] = True
-            break
-        value['probes'].append(run_probe(name, command, min(PROBE_BUDGET_SECONDS, remaining), simulator))
-        safe_write(destination, value, exclusive=False)
-    value['finishedMonotonic'] = time.monotonic()
-    safe_write(destination, value, exclusive=False)
-    return 0 if all(p.get('childReaped') or p.get('errorType') == 'FileNotFoundError' for p in value['probes']) else 1
+
+    class JournalWriteError(Exception):
+        pass
+
+    def publish():
+        if not replace_worker_journal(destination, value):
+            raise JournalWriteError('Optional diagnostic journal could not be published')
+
+    def observe_stage(name, operation):
+        stage = {'name': name, 'startedMonotonic': time.monotonic()}
+        value['stages'].append(stage)
+        publish()
+        try:
+            if time.monotonic() >= deadline:
+                value['deadlineReached'] = True
+                stage['notRunReason'] = 'deadlineReached'
+                return None
+            return operation()
+        except Exception as error:
+            stage['errorType'] = type(error).__name__
+            raise
+        finally:
+            stage['finishedMonotonic'] = time.monotonic()
+            publish()
+
+    try:
+        if time.monotonic() < deadline:
+            value['resources'] = observe_stage('resources', resources)
+        if time.monotonic() < deadline:
+            try:
+                value['simctlIdentity'] = observe_stage('simctl-identity', lambda: simctl_identity(results))
+            except JournalWriteError:
+                raise
+            except Exception as error:
+                value['simctlIdentityErrorType'] = type(error).__name__
+        for name, command in probes:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                value['deadlineReached'] = True
+                break
+            probe = observe_stage(name,
+                lambda: run_probe(name, command, min(PROBE_BUDGET_SECONDS, deadline - time.monotonic()), simulator))
+            if probe is None:
+                break
+            value['probes'].append(probe)
+            publish()
+        value['finishedMonotonic'] = time.monotonic()
+        publish()
+        return 0 if all(p.get('childReaped') or p.get('errorType') == 'FileNotFoundError' for p in value['probes']) else 1
+    except JournalWriteError:
+        return 2
 
 
 def observe_first_failure(error, results, simulator, phase, run_phase=None, snapshot=None):

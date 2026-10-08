@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from unittest.mock import Mock, patch
@@ -299,6 +300,133 @@ class FirstFailureObservationTests(unittest.TestCase):
         self.assertNotIn('/Library', json.dumps(value))
         self.assertNotIn('PRIVATE_TOKEN', json.dumps(value))
 
+
+    def test_inflight_observation_preserves_started_stage_on_disk(self):
+        m = self.observation_module()
+        for blocked_stage in ['resources', 'simctl-identity', 'neutral-process']:
+            with self.subTest(blocked_stage=blocked_stage), tempfile.TemporaryDirectory() as directory:
+                folder = Path(directory)
+                entered = threading.Event()
+                release = threading.Event()
+                failures = []
+                returned = []
+
+                def observe(name, result):
+                    if name == blocked_stage:
+                        entered.set()
+                        if not release.wait(2):
+                            raise RuntimeError('Fixture observation was not released')
+                    return result
+
+                def invoke():
+                    try:
+                        returned.append(m.worker(folder, None, time.monotonic() + 20))
+                    except BaseException as error:
+                        failures.append(error)
+
+                # Replace only external observation seams; exercise the real worker and file writes.
+                with patch.object(m, 'resources', side_effect=lambda: observe('resources', {'cpuCount': 1})), \
+                     patch.object(m, 'simctl_identity', side_effect=lambda _: observe('simctl-identity', {'files': []})), \
+                     patch.object(m, 'run_probe', side_effect=lambda name, *args: observe(name, {'childReaped': True})):
+                    thread = threading.Thread(target=invoke)
+                    thread.start()
+                    try:
+                        self.assertTrue(entered.wait(1), 'Worker did not enter the fixture observation')
+                        receipt = folder / 'failure-diagnostic-probes.json'
+                        self.assertTrue(receipt.is_file(), 'A blocked observation must leave a worker receipt')
+                        value = json.loads(receipt.read_text())
+                        self.assertTrue(value.get('stages'), 'The in-flight stage must be recorded before its call')
+                        stage = value['stages'][-1]
+                        self.assertEqual(stage['name'], blocked_stage)
+                        self.assertIsInstance(stage['startedMonotonic'], (int, float))
+                        self.assertNotIn('finishedMonotonic', stage, 'A blocked observation has not completed')
+                        self.assertEqual(value['budgetSeconds'], 20)
+                    finally:
+                        release.set()
+                        thread.join(2)
+                    self.assertFalse(thread.is_alive(), 'Fixture worker must be joined')
+                    self.assertEqual(failures, [])
+                    self.assertEqual(returned, [0])
+
+
+
+    def test_journal_write_deadline_does_not_start_a_late_probe(self):
+        m = self.observation_module()
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            clock = {'now': 0.0}
+            original_dump = m.json.dump
+
+            def dump(value, stream, *args, **kwargs):
+                result = original_dump(value, stream, *args, **kwargs)
+                stages = value.get('stages', [])
+                if stages and stages[-1]['name'] == 'neutral-process':
+                    clock['now'] = 21.0
+                return result
+
+            with patch.object(m.time, 'monotonic', side_effect=lambda: clock['now']), \
+                 patch.object(m.json, 'dump', side_effect=dump), \
+                 patch.object(m, 'resources', return_value={'cpuCount': 1}), \
+                 patch.object(m, 'simctl_identity', return_value={'files': []}), \
+                 patch.object(m, 'run_probe', return_value={'childReaped': True}):
+                self.assertEqual(m.worker(folder, None, 20.0), 0)
+            value = json.loads((folder / 'failure-diagnostic-probes.json').read_text())
+            self.assertTrue(value['deadlineReached'])
+            self.assertEqual(value['probes'], [], 'Journal latency must not admit a probe after the budget')
+            self.assertEqual(value['budgetSeconds'], 20)
+
+
+
+
+    def test_failed_journal_update_preserves_last_snapshot_and_stops_observations(self):
+        m = self.observation_module()
+        for boundary in ('start', 'finish'):
+            with self.subTest(boundary=boundary), tempfile.TemporaryDirectory() as directory:
+                folder = Path(directory)
+                receipt = folder / 'failure-diagnostic-probes.json'
+                original_dump = m.json.dump
+                at_fault = []
+
+                def dump(value, stream, *args, **kwargs):
+                    stages = value.get('stages', [])
+                    if stages and stages[-1]['name'] == 'resources' and (
+                            ('finishedMonotonic' in stages[-1]) == (boundary == 'finish')):
+                        stream.write('{"partial":')
+                        stream.flush()
+                        at_fault.append(receipt.read_bytes())
+                        raise OSError('Synthetic journal write interruption')
+                    return original_dump(value, stream, *args, **kwargs)
+
+                with patch.object(m.json, 'dump', side_effect=dump), \
+                     patch.object(m, 'resources', return_value={'cpuCount': 1}) as resources, \
+                     patch.object(m, 'simctl_identity') as identity, \
+                     patch.object(m, 'run_probe') as probe:
+                    result = m.worker(folder, None, time.monotonic() + 20)
+                self.assertEqual(result, 2, 'A journal failure must stop this optional worker')
+                self.assertEqual(len(at_fault), 1)
+                value = json.loads(at_fault[0])
+                self.assertEqual(receipt.read_bytes(), at_fault[0], 'Retain the last complete published snapshot')
+                self.assertEqual(value['probes'], [])
+                self.assertNotIn('finishedMonotonic', value)
+                identity.assert_not_called()
+                probe.assert_not_called()
+                if boundary == 'start':
+                    resources.assert_not_called()
+                    self.assertEqual(value['stages'], [])
+                else:
+                    resources.assert_called_once_with()
+                    self.assertEqual(value['stages'][-1]['name'], 'resources')
+                    self.assertNotIn('finishedMonotonic', value['stages'][-1])
+
+    def test_nonpositive_probe_budget_never_launches_a_child(self):
+        m = self.observation_module()
+        for timeout in (0, -.1):
+            with self.subTest(timeout=timeout), patch.object(m.subprocess, 'Popen') as launch:
+                value = m.run_probe('fixture-only', ['fixture-not-launched'], timeout, None)
+                launch.assert_not_called()
+                self.assertEqual(value['notRunReason'], 'deadlineReached')
+                self.assertIsNone(value['childExitCode'])
+                self.assertFalse(value['childReaped'])
 
 if __name__ == '__main__':
     unittest.main()
