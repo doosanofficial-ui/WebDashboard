@@ -152,11 +152,14 @@ def parse_probe(name, raw, simulator):
                 'isAvailable': device.get('isAvailable') if device and type(device.get('isAvailable')) is bool else None}
     if name == 'service-processes':
         counts = {}
+        names = {'CoreSimulatorService': 'CoreSimulatorService',
+                 'com.apple.CoreSimulator.CoreSimulatorService': 'CoreSimulatorService',
+                 'simdiskimaged': 'simdiskimaged', 'SimulatorTrampoline': 'SimulatorTrampoline'}
         for line in raw.splitlines():
             fields = line.split(None, 3)
             if len(fields) == 4:
-                service = Path(fields[3]).name
-                if service in ('CoreSimulatorService', 'simdiskimaged', 'SimulatorTrampoline'):
+                service = names.get(Path(fields[3]).name)
+                if service:
                     counts[service] = counts.get(service, 0) + 1
         return {'counts': counts, 'scope': 'Allowlisted process presence counts; does not prove service health or measurement activity'}
     if name == 'memory-pages':
@@ -243,7 +246,7 @@ def worker(results, simulator, deadline):
     if simulator:
         probes.append(('owned-simulator-state', ['xcrun', 'simctl', 'list', 'devices', simulator, '--json']))
     probes.extend([('memory-pages', ['/usr/bin/vm_stat']),
-        ('service-processes', ['/bin/ps', '-A', '-o', 'pid=,stat=,time=,comm=']),
+        ('service-processes', ['/bin/ps', '-A', '-ww', '-o', 'pid=,stat=,time=,comm=']),
         ('selected-xcresulttool', ['xcrun', '--find', 'xcresulttool']),
         ('disk-io', ['/usr/sbin/iostat', '-d', '-c', '1'])])
     value = {'diagnosisStartedMonotonic': time.monotonic(), 'deadlineMonotonic': deadline,

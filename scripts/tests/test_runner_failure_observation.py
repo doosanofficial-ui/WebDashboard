@@ -291,5 +291,14 @@ class FirstFailureObservationTests(unittest.TestCase):
                         pass
 
 
+    def test_actual_xcode_service_executable_is_counted_without_private_paths(self):
+        m = self.observation_module()
+        raw = ' 23 S 0:00.1 /Library/Developer/PrivateFrameworks/CoreSimulator.framework/com.apple.CoreSimulator.CoreSimulatorService\n 24 S 0:00.1 PRIVATE_TOKEN\n'
+        value = m.parse_probe('service-processes', raw, None)
+        self.assertEqual(value['counts'], {'CoreSimulatorService': 1})
+        self.assertNotIn('/Library', json.dumps(value))
+        self.assertNotIn('PRIVATE_TOKEN', json.dumps(value))
+
+
 if __name__ == '__main__':
     unittest.main()

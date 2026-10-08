@@ -31,3 +31,17 @@ The existing2MiB initial boot stream and its artifacts are unchanged. Failure-ti
 - Read-only independent review found the normal diagnostic leader-exit descendant gap; its RED regression and diagnostic-only cleanup option resolve that finding.
 
 Prior raw evidence remains preserved. This report is pre-push validation; the new commit's first CI attempt must be recorded separately. No previous failed workflow is rerun, no system/security setting is changed, and no physical installation is performed.
+
+## Service executable allowlist follow-up
+
+The selected local Xcode's CoreSimulator framework XPC Info.plist identifies the executable as `com.apple.CoreSimulator.CoreSimulatorService`. The initial bare-name allowlist omitted this real basename. A genuine RED fixture now reproduces that omission; the observer maps this one exact executable name to the existing CoreSimulatorService count, still retaining no path/arguments or unrelated process data. The comm-only ps probe requests full width so long executable paths do not truncate the basename; it does not request arguments. Full CI-environment runner contracts after this bounded correction: **128/128PASS**. The first pushed commit's127-test CI remains separate evidence; it is allowed to finish before the correction is pushed.
+
+## First observed remote failure (ae338e0, attempt1)
+
+[Layout job113152205579](https://github.com/doosanofficial-ui/WebDashboard/actions/runs/37728485087/job/113152205579) failed before UI execution: the original bootstatus180-second timeout remains the job failure. The waiter observed failure at phase180.259s; resource sample was6.435s later and main received it11.019s later. The resource sample reports guest3CPU and load432.23/210.46/93.45, not CPU utilization or physical-host identity. These intervals include observation/scheduling and cannot isolate pure function time or a root cause.
+
+Pre-phase Xcode was27.0/27A266a. Child status before stop and kernel exit time are unknown; after the original stop the child returned-15. One optional diagnostic worker also timed out with its original20-second phase budget, actual phase25.266s including stop/recording costs. Its direct child returned-15 and the final owned-group probe confirmed absence. No probe record was produced: service and additional memory/disk observations remain unknown, not absent. The original shutdown60-second failure still led to a successful delete45.796s; the first boot failure was not overwritten or converted to success. Original initial boot stream and all downloaded logs/ZIPs were retained with hashes.
+
+On the same SHA, Hosted89 passed; its separately observed summary reader took3.635s under the unchanged60-second budget. This distinguishes the successful reader from the failing bootstrap without establishing why the runner slowed. Final workflow/shard counts and the corrected commit's first CI are recorded in the task evidence separately.
+
+The initial SE and maximum-English-text shard failures likewise retained bootstatus180 timeout. Their diagnostic worker elapsed times were24.808s and20.833s respectively, with final owned-group absence confirmed. SE and maximum-English-text Simulator shutdown/delete succeeded. For English, the worker-entry observation was15.130s after diagnosis was requested; the neutral child completed in1.912s and the owned UUID read timed out in2.984s using the remaining2.947s probe budget. Missing service/memory/disk probes remain unknown. No physical-host identity or kernel exit timestamp was inferred.
