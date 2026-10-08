@@ -309,7 +309,7 @@ final class OfflineReplayUITests: XCTestCase {
         // Home can leave an offline app running or suspended in background.
         let background = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             app.state == .runningBackground || app.state == .runningBackgroundSuspended
-        }, object: app)
+        }, object: nil)
         let backgroundResult = XCTWaiter.wait(for: [background], timeout: 5)
         let backgroundState = XCTAttachment(string: "state after Home: \(app.state.rawValue)")
         backgroundState.name = "DEMO-native-export-background-state"
