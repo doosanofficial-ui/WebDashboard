@@ -153,14 +153,33 @@ final class SmallViewportStatusUIRegression: XCTestCase {
 
     private func captureStableStatusEvidence(_ app: XCUIApplication, name: String,
                                             until deadline: TimeInterval) throws -> (snapshot: XCUIElementSnapshot, stable: Bool) {
+        let entered = ProcessInfo.processInfo.systemUptime
         var attempt = 0
+        var changedBrackets = 0
+        var lateReturnObservations = 0
         while remaining(until: deadline) > 0 {
             attempt += 1
             let evidence = try captureStatusEvidence(app, name: "\(name)-attempt-\(attempt)")
             // snapshot() has no timeout argument. Reject late returned evidence.
             if evidence.stable && remaining(until: deadline) > 0 { return evidence }
+            if !evidence.stable { changedBrackets += 1 }
+            if ProcessInfo.processInfo.systemUptime >= deadline { lateReturnObservations += 1 }
         }
-        XCTFail("No unchanged screenshot bracket returned inside the original 5-second deadline")
+        // A late AX precondition can consume the budget before any image comparison.
+        // PNG changes and late returns are separate facts and can both occur.
+        let stage = attempt == 0 ? "deadline-before-first-bracket" : "bracket-deadline"
+        let receipt: [String: Any] = ["name": name, "stage": stage,
+            "captureEntrySystemUptime": entered, "sharedDeadlineSystemUptime": deadline,
+            "failureObservedSystemUptime": ProcessInfo.processInfo.systemUptime,
+            "bracketAttempts": attempt, "changedBrackets": changedBrackets,
+            "lateReturnObservations": lateReturnObservations,
+            "scope": "Observed test calls; original shared 5-second deadline and failure are unchanged"]
+        if let json = try? JSONSerialization.data(withJSONObject: receipt, options: [.prettyPrinted, .sortedKeys]) {
+            let attachment = XCTAttachment(data: json, uniformTypeIdentifier: "public.json")
+            attachment.name = "SYNTHETIC-coherent-\(name)-deadline-failure"
+            attachment.lifetime = .keepAlways; add(attachment)
+        }
+        XCTFail("Status evidence failed at \(stage), with \(attempt) bracket attempts inside the original 5-second deadline")
         throw NSError(domain: "StatusEvidence", code: 1)
     }
 }
