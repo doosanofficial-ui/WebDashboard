@@ -140,13 +140,51 @@ def main():
         summary = json.loads(output(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)]))
         (results / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
         verify_summary(summary, EXPECTED_TEST_COUNT)
-        print(f"HOSTED XCTEST PASS: {EXPECTED_TEST_COUNT} tests, zero failures/skips; real App/SQLite, Simulator only", flush=True)
     finally:
-        if simulator is not None:
-            # Only the UUID returned by this run's create command is touched.
-            subprocess.run(["xcrun", "simctl", "shutdown", simulator], capture_output=True, timeout=60)
-            subprocess.run(["xcrun", "simctl", "delete", simulator], check=True, capture_output=True, timeout=60)
-        workspace.cleanup()
+        primary_failure = sys.exc_info()[0] is not None
+        cleanup_error = None
+        cleanup = {"simulator": simulator, "success": True, "phases": []}
+        try:
+            if simulator is not None:
+                # Only this run's created UUID; retain the existing return-code policy.
+                for phase in ("shutdown", "delete"):
+                    command = ["xcrun", "simctl", phase, simulator]
+                    entry = {"phase": phase, "command": command, "timeoutSeconds": 60,
+                             "checkReturnCode": phase == "delete", "timedOut": False}
+                    try:
+                        result = subprocess.run(command, check=phase == "delete", capture_output=True, timeout=60)
+                        entry.update(accepted=True, commandSucceeded=result.returncode == 0, exitCode=result.returncode)
+                    except Exception as error:
+                        entry.update(accepted=False, commandSucceeded=False,
+                                     exitCode=getattr(error, "returncode", None),
+                                     timedOut=isinstance(error, subprocess.TimeoutExpired),
+                                     errorType=type(error).__name__, error=str(error))
+                        cleanup["success"] = False
+                        if cleanup_error is None:
+                            cleanup_error = error
+                    cleanup["phases"].append(entry)
+        finally:
+            try:
+                workspace.cleanup()
+                cleanup["workspace"] = {"success": True}
+            except Exception as error:
+                cleanup["workspace"] = {"success": False, "errorType": type(error).__name__, "error": str(error)}
+                cleanup["success"] = False
+                if cleanup_error is None:
+                    cleanup_error = error
+            try:
+                (results / "simulator-cleanup.json").write_text(json.dumps(cleanup, indent=2), encoding="utf-8")
+            except OSError as error:
+                if cleanup_error is None:
+                    cleanup_error = error
+                try:
+                    print("Cleanup receipt could not be recorded: " + str(error), file=sys.stderr)
+                except Exception:
+                    pass  # Optional diagnostics cannot replace the original failure.
+            if cleanup_error is not None and not primary_failure:
+                raise cleanup_error
+        # A pending body exception propagates unchanged after all cleanup attempts.
+    print(f"HOSTED XCTEST PASS: {EXPECTED_TEST_COUNT} tests, zero failures/skips; real App/SQLite, Simulator only", flush=True)
 
 
 if __name__ == "__main__":
