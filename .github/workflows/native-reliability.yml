@@ -92,6 +92,7 @@ jobs:
     needs: native-seed
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         group: [replay, replay-route, layout, help, help-max-en, help-max-ko]
     # Official Xcode 27 preview image; no runtime downloads or older fallback.
@@ -130,7 +131,8 @@ jobs:
 
   # Separate repeats of two layout tests; the unique full-suite aggregate is 31.
   native-se-viewport:
-    needs: native-seed
+    if: ${{ always() && !cancelled() && needs.native-seed.result == 'success' }}
+    needs: [native-seed, native-replay-ui]
     runs-on: xcode-27
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
