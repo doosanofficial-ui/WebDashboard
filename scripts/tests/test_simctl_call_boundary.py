@@ -219,24 +219,56 @@ class SimctlCallBoundaryTests(unittest.TestCase):
         self.assertNotIn('PRIVATE', json.dumps(value))
 
     def test_slow_native_sampler_cannot_hide_timely_bootstatus_completion(self):
+        import select
         self.assertTrue(callable(getattr(observation, 'owned_boundary', None)))
+        # Cold Python spawn/initialization is not the behavior this test measures.
+        # This is a Python fixture budget, not the real simctl bootstatus180 budget.
+        fixture_timeout = 2
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            real_popen = subprocess.Popen
-            def launch(argv, **kwargs):
-                return real_popen([sys.executable, '-c', 'import time;time.sleep(.01)'], **kwargs)
-            def slow_sample(*args):
-                time.sleep(.25)
-                return {'simulator': DEVICE}
-            with patch.object(replay.subprocess, 'Popen', side_effect=launch), \
-                 patch('verify_replay_seed.owned_progress', return_value={}), \
-                 patch.object(observation, 'owned_boundary', side_effect=slow_sample) as sample:
-                value = replay.run_owned_phase(['xcrun', 'simctl', 'bootstatus', DEVICE, '-b'],
-                                              root/'boot.log', root/'boot.json', .12)
-            self.assertEqual(value['exitCode'], 0)
-            self.assertFalse(value['timedOut'])
-            self.assertLessEqual(value['processCompletionObservedElapsedSeconds'], .12)
-            sample.assert_not_called()
+            child = subprocess.Popen([sys.executable, '-c',
+                "import sys,time;print('ready',flush=True);sys.stdin.readline();time.sleep(.01)"],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, start_new_session=True)
+            try:
+                self.assertTrue(select.select([child.stdout], [], [], 10)[0], 'Fixture readiness timeout')
+                self.assertEqual(child.stdout.readline(), 'ready\n')
+                returned = []
+                def launch(argv, **kwargs):
+                    self.assertEqual(argv, ['xcrun', 'simctl', 'bootstatus', DEVICE, '-b'])
+                    self.assertTrue(kwargs['start_new_session'])
+                    self.assertEqual(kwargs['stdin'], subprocess.DEVNULL)
+                    self.assertIs(kwargs['stderr'], subprocess.STDOUT)
+                    returned.append(child.pid)
+                    child.stdin.write('release\n')
+                    child.stdin.flush()
+                    return child
+                def slow_sample(*args):
+                    time.sleep(fixture_timeout + .25)
+                    return {'simulator': DEVICE}
+                with patch.object(replay.subprocess, 'Popen', side_effect=launch), \
+                     patch('verify_replay_seed.owned_progress', return_value={}), \
+                     patch.object(observation, 'owned_boundary', side_effect=slow_sample) as sample:
+                    value = replay.run_owned_phase(['xcrun', 'simctl', 'bootstatus', DEVICE, '-b'],
+                                                  root/'boot.log', root/'boot.json', fixture_timeout)
+                self.assertEqual(returned, [child.pid])
+                self.assertEqual(value['exitCode'], 0)
+                self.assertFalse(value['timedOut'])
+                self.assertLessEqual(value['processCompletionObservedElapsedSeconds'], fixture_timeout)
+                sample.assert_not_called()
+            finally:
+                # No descendants: never signal a known-exit/reusable PID or PGID.
+                try:
+                    if child.returncode is None:
+                        child.kill()
+                finally:
+                    try:
+                        child.wait(timeout=10)
+                    finally:
+                        try:
+                            child.stdin.close()
+                        finally:
+                            child.stdout.close()
 
 
 if __name__ == '__main__':
