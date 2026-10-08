@@ -126,6 +126,7 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False,
                 "phaseStartedMonotonic": began,
                 "resourceSnapshotElapsedSeconds": time.monotonic() - began}
     child = None
+    boundary_simulator = failure_observation.simctl_device(command)
     completion = {}
     completion_ready = threading.Event()
     waiter = None
@@ -133,6 +134,8 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False,
         try:
             destination['firstFailure'] = failure_observation.failure_snapshot(
                 error, child.returncode if child is not None else None, source, observed)
+            if boundary_simulator and child is not None:
+                destination['firstFailure']['ownedBoundary'] = failure_observation.child_boundary(child, boundary_simulator)
         except Exception:
             pass  # Optional in-process metadata cannot change the phase verdict.
     def wait_for_completion():
@@ -171,7 +174,8 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False,
             recording_error(error)
     def record_progress():
         try:
-            evidence["progress"].append(owned_progress(child.pid, log, began))
+            progress = owned_progress(child.pid, log, began)
+            evidence["progress"].append(progress)
         except OSError as error:
             if not best_effort_recording:
                 raise
@@ -535,10 +539,13 @@ def main():
             run_owned_phase(base + ["build"], results / "build.log",
                             results / "build-process.json", 600)
             failure_phase = "app-install"
-            output(["xcrun", "simctl", "install", simulator,
-                    str(derived / "Build/Products/Debug-iphonesimulator/Telemetry.app")], timeout=120)
-            container = Path(output(["xcrun", "simctl", "get_app_container", simulator,
-                                     "local.webdashboard.Telemetry", "data"]).strip())
+            failure_observation.observe_call(lambda: output(["xcrun", "simctl", "install", simulator,
+                    str(derived / "Build/Products/Debug-iphonesimulator/Telemetry.app")], timeout=120),
+                    results, "app-install", 120)
+            failure_phase = "app-container"
+            container = Path(failure_observation.simctl_output(["xcrun", "simctl", "get_app_container", simulator,
+                                     "local.webdashboard.Telemetry", "data"], results, failure_phase, timeout=60).strip())
+            failure_phase = "fixture-install"
             install_fixture(fixture, container / "Library/Application Support/Telemetry")
             bundle = results / "ReplayUI.xcresult"
             focused_methods = {"background-export-lifecycle": "testNativeExportBackgroundReturnCancelAndReentry",

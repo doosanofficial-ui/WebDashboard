@@ -103,6 +103,176 @@ def observe_call(operation, results, phase, timeout):
             pass
 
 
+def simctl_device(command):
+    """Only the two call boundaries belonging to the runner's created UUID."""
+    if (len(command) >= 4 and command[:2] == ['xcrun', 'simctl']
+            and command[2] in ('bootstatus', 'get_app_container')):
+        try:
+            return str(uuid.UUID(command[3])).upper()
+        except (ValueError, TypeError):
+            pass
+    return None
+
+
+def owned_boundary(pid, simulator):
+    """CI-only native PID path; no subprocess, filesystem read or app data."""
+    value = {'pid': pid, 'simulator': simulator, 'observedMonotonic': time.monotonic(),
+             'observedUTC': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+             'kernelExecTimestamp': None,
+             'scope': 'Leader executable sample, not service health or kernel exec time'}
+    if os.environ.get('GITHUB_ACTIONS') != 'true' or sys.platform != 'darwin':
+        value['skipped'] = 'Native owned boundary restricted to macOS hosted CI'
+        return value
+    try:
+        import ctypes
+        library = ctypes.CDLL('/usr/lib/libproc.dylib', use_errno=True)
+        function = library.proc_pidpath
+        function.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32]
+        function.restype = ctypes.c_int
+        buffer = ctypes.create_string_buffer(4096)
+        length = function(pid, buffer, len(buffer))
+        path = buffer.value.decode('utf-8', errors='replace') if length > 0 else None
+        allowed = path in ('/usr/bin/xcrun', '/bin/bash', '/bin/sh') or bool(path and (
+            re.fullmatch(r'/Applications/[A-Za-z0-9_.-]+\.app/Contents/Developer/usr/bin/simctl', path)
+            or re.fullmatch(r'/Library/Developer/PrivateFrameworks/CoreSimulator\.framework/(?:Versions/[A-Za-z0-9_.-]+/)?Resources/bin/simctl', path)))
+        value['executable'] = path if allowed else None
+        value['executableObserved'] = bool(allowed)
+        if length <= 0:
+            value['pidPathErrno'] = ctypes.get_errno()
+    except Exception as error:
+        value['pidPathErrorType'] = type(error).__name__
+    value['returnedMonotonic'] = time.monotonic()
+    return value
+
+
+def optional_boundary(pid, simulator):
+    try:
+        return owned_boundary(pid, simulator)
+    except Exception as error:
+        return {'errorType': type(error).__name__}
+
+
+def child_boundary(child, simulator):
+    """Never query a reaped/reusable PID; skip a busy completion-wait lock.
+
+    The POSIX Popen reap lock prevents concurrent waitpid/PID reuse during the
+    native sample. If that implementation lock is absent or busy, stay unknown.
+    """
+    value = {'pid': child.pid, 'simulator': simulator,
+             'observedMonotonic': time.monotonic(), 'kernelExecTimestamp': None}
+    try:
+        lock = getattr(child, '_waitpid_lock', None)
+        if lock is None or not lock.acquire(blocking=False):
+            value['skipped'] = 'Reap lock unavailable or busy; executable unknown'
+            return value
+        try:
+            if child.returncode is not None:
+                value['skipped'] = 'Leader exit known; reusable PID not resampled'
+                return value
+            return optional_boundary(child.pid, simulator)
+        finally:
+            lock.release()
+    except Exception as error:
+        value['errorType'] = type(error).__name__
+        return value
+
+
+
+def simctl_output(command, results, phase, timeout=60):
+    """check_output semantics, with this call's pre-kill metadata only.
+
+    Popen time remains outside communicate's original timeout, like check_output.
+    Return stdout unchanged; never publish stdout/container paths in the receipt.
+    """
+    simulator = simctl_device(command)
+    if simulator is None or command[2:] != ['get_app_container', simulator, 'local.webdashboard.Telemetry', 'data']:
+        raise ValueError('Expected owned Telemetry data-container call')
+    began = time.monotonic()
+    value = {'simulator': simulator, 'operation': 'get_app_container',
+             'bundleID': 'local.webdashboard.Telemetry', 'containerType': 'data',
+             'callStartedMonotonic': began, 'timeoutSeconds': timeout,
+             'startedUTC': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+             'kernelExitTimestamp': None, 'childExitCode': None,
+             'scope': 'Dedicated subprocess call; timestamps are observations, no kernel exit/exec inference'}
+    child = None
+    def note(error, source):
+        try:
+            value['firstFailure'] = failure_snapshot(error, child.returncode, source)
+            value['firstFailure']['ownedBoundary'] = child_boundary(child, simulator)
+        except Exception:
+            pass  # Original exception and cleanup always take priority.
+    try:
+        value['launchRequestedMonotonic'] = time.monotonic()
+        with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True) as child:
+            value.update(pid=child.pid, launchReturnedMonotonic=time.monotonic())
+            value['communicateStartedMonotonic'] = time.monotonic()
+            try:
+                stdout, _ = child.communicate(timeout=timeout)
+                value['communicateReturnedMonotonic'] = time.monotonic()
+            except subprocess.TimeoutExpired as error:
+                value['communicateReturnedMonotonic'] = time.monotonic()
+                note(error, 'communicate-before-kill')
+                value['killRequestedMonotonic'] = time.monotonic()
+                child.kill()
+                # Match stdlib POSIX check_output: retain TimeoutExpired.output bytes.
+                child.wait()
+                raise
+            except BaseException:
+                child.kill()
+                raise
+            code = child.poll()
+            value['childExitCode'] = code
+            if code:
+                error = subprocess.CalledProcessError(code, command, output=stdout)
+                note(error, 'communicate-return')
+                raise error
+            value['returnedNormally'] = True
+            return stdout
+    except BaseException as error:
+        value['errorType'] = type(error).__name__
+        raise
+    finally:
+        if child is not None:
+            value['childExitCode'] = child.returncode
+        value.update(callReturnedMonotonic=time.monotonic(),
+                     finishedUTC=datetime.datetime.now(datetime.timezone.utc).isoformat())
+        safe_write(results / (phase + '-observation.json'), value, exclusive=False)
+
+
+def simctl_identity(results):
+    """Fixed system files only; this runs inside the existing diagnostic worker budget."""
+    import hashlib
+    import plistlib
+    framework = Path('/Library/Developer/PrivateFrameworks/CoreSimulator.framework')
+    paths = [('framework', framework / 'Versions/A/Resources/bin/simctl')]
+    developer = selected_xcode(results).get('effectiveDeveloperDirectory')
+    if developer:
+        paths.append(('launcher', Path(developer) / 'usr/bin/simctl'))
+    value = {'scope': 'Post-failure file identity, not proof of the executed launcher branch', 'files': []}
+    for name, path in paths:
+        entry = {'name': name, 'path': str(path)}
+        try:
+            with path.open('rb') as stream:
+                raw = stream.read(4 * 1024 * 1024 + 1)
+            if len(raw) > 4 * 1024 * 1024:
+                raise ValueError('SystemFileLimit')
+            entry.update(sizeBytes=len(raw), sha256=hashlib.sha256(raw).hexdigest(),
+                         magicHex=raw[:4].hex(), shellLauncher=raw.startswith(b'#!'))
+        except Exception as error:
+            entry['errorType'] = type(error).__name__
+        value['files'].append(entry)
+    try:
+        with (framework / 'Resources/Info.plist').open('rb') as stream:
+            raw = stream.read(65537)
+        if len(raw) > 65536:
+            raise ValueError('SystemMetadataLimit')
+        version = plistlib.loads(raw).get('CFBundleVersion')
+        value['frameworkVersion'] = version if isinstance(version, str) and re.fullmatch(r'[0-9.]+', version) else None
+    except Exception as error:
+        value['frameworkVersionErrorType'] = type(error).__name__
+    return value
+
+
 def recorded_failure(results, phase, error=None):
     mapping = {'ui-test': 'test-process.json', 'app-build': 'build-process.json'}
     for name in (mapping.get(phase, phase + '.json'), phase + '-observation.json'):
@@ -150,6 +320,14 @@ def parse_probe(name, raw, simulator):
         return {'simulator': simulator, 'found': device is not None,
                 'state': state if state in ('Booted', 'Shutdown', 'Booting', 'Shutting Down') else None,
                 'isAvailable': device.get('isAvailable') if device and type(device.get('isAvailable')) is bool else None}
+    if name == 'owned-app-registration':
+        import plistlib
+        apps = plistlib.loads(raw.encode('utf-8'))
+        if not isinstance(apps, dict):
+            raise ValueError('MalformedAppRegistry')
+        return {'simulator': simulator, 'bundleID': 'local.webdashboard.Telemetry',
+                'registered': 'local.webdashboard.Telemetry' in apps,
+                'scope': 'Post-failure listapps response only; not container readiness at original deadline'}
     if name == 'service-processes':
         counts = {}
         names = {'CoreSimulatorService': 'CoreSimulatorService',
@@ -245,6 +423,7 @@ def worker(results, simulator, deadline):
     probes = [('neutral-process', [sys.executable, '-c', 'pass'])]
     if simulator:
         probes.append(('owned-simulator-state', ['xcrun', 'simctl', 'list', 'devices', simulator, '--json']))
+        probes.append(('owned-app-registration', ['xcrun', 'simctl', 'listapps', simulator]))
     probes.extend([('memory-pages', ['/usr/bin/vm_stat']),
         ('service-processes', ['/bin/ps', '-A', '-ww', '-o', 'pid=,stat=,time=,comm=']),
         ('selected-xcresulttool', ['xcrun', '--find', 'xcresulttool']),
@@ -253,6 +432,11 @@ def worker(results, simulator, deadline):
              'budgetSeconds': DIAGNOSTIC_BUDGET_SECONDS, 'resources': resources(), 'probes': [],
              'scope': 'CI-only, owned UUID and numeric allowlist; no raw system dump'}
     destination = results / 'failure-diagnostic-probes.json'
+    if time.monotonic() < deadline:
+        try:
+            value['simctlIdentity'] = simctl_identity(results)
+        except Exception as error:
+            value['simctlIdentityErrorType'] = type(error).__name__
     if not safe_write(destination, value):
         return 2
     for name, command in probes:

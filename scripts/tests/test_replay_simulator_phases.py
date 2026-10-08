@@ -244,7 +244,9 @@ class BootstrapDiagnosticsTests(unittest.TestCase):
 class PostBootstrapDiagnosticsTests(unittest.TestCase):
     def trial(self, failure_phase=None, diagnostic_error=None):
         device = '11111111-1111-4111-8111-111111111111'
-        primary = subprocess.TimeoutExpired(['xcodebuild', 'test'] if failure_phase == 'ui-test' else ['xcrun', 'simctl', 'bootstatus', device, '-b'], 1200 if failure_phase == 'ui-test' else 180)
+        primary = subprocess.TimeoutExpired(['xcodebuild', 'test'] if failure_phase == 'ui-test' else ['xcrun', 'simctl', 'get_app_container', device, 'local.webdashboard.Telemetry', 'data'] if failure_phase == 'app-container' else ['xcrun', 'simctl', 'bootstatus', device, '-b'], 1200 if failure_phase == 'ui-test' else 60 if failure_phase == 'app-container' else 180)
+        if failure_phase == 'fixture-install':
+            primary = OSError('synthetic fixture failure')
         with tempfile.TemporaryDirectory() as directory:
             results = (Path(directory) / 'results').resolve()
             container = Path(directory) / 'Devices/owned/data/Containers/Data/Application/app'
@@ -263,6 +265,8 @@ class PostBootstrapDiagnosticsTests(unittest.TestCase):
                 if command[1:3] == ['simctl', 'create']:
                     return device
                 if command[1:3] == ['simctl', 'get_app_container']:
+                    if failure_phase == 'app-container':
+                        raise primary
                     return str(container)
                 if command[1:5] == ['xcresulttool', 'get', 'test-results', 'summary']:
                     return json.dumps({'totalTestCount': 10, 'passedTests': 10, 'failedTests': 0, 'skippedTests': 0})
@@ -283,9 +287,11 @@ class PostBootstrapDiagnosticsTests(unittest.TestCase):
                 stack.enter_context(patch.object(runner, 'run_artifact'))
                 stack.enter_context(patch.object(runner, 'stage_sources'))
                 stack.enter_context(patch.object(runner, 'current_commit', return_value='fixture'))
-                stack.enter_context(patch.object(runner, 'install_fixture'))
+                stack.enter_context(patch.object(runner, 'install_fixture', side_effect=primary if failure_phase == 'fixture-install' else None))
                 stack.enter_context(patch.object(runner, 'select_ui_destination', return_value=('ios27', 'iphone')))
                 stack.enter_context(patch.object(runner, 'output', side_effect=command_output))
+                stack.enter_context(patch.object(runner.failure_observation, 'simctl_output',
+                    side_effect=lambda command, *args, **kwargs: command_output(command)))
                 stack.enter_context(patch.object(runner, 'run_owned_phase', side_effect=phase))
                 capture = stack.enter_context(patch.object(runner, 'capture_simulator_bootstrap_failure', side_effect=capture_failure))
                 cleanup = stack.enter_context(patch.object(runner, 'cleanup_simulator', side_effect=cleanup_owned))
@@ -300,6 +306,10 @@ class PostBootstrapDiagnosticsTests(unittest.TestCase):
                              'Owned failure evidence must be attempted before cleanup, including capture errors')
             if failure_phase == 'ui-test':
                 capture.assert_called_once_with(device, results, failure_phase='ui-test')
+            elif failure_phase == 'fixture-install':
+                capture.assert_called_once_with(device, results, failure_phase='fixture-install')
+            elif failure_phase == 'app-container':
+                capture.assert_called_once_with(device, results, failure_phase='app-container')
             elif failure_phase == 'bootstrap':
                 capture.assert_called_once_with(device, results)
             else:
@@ -313,6 +323,12 @@ class PostBootstrapDiagnosticsTests(unittest.TestCase):
 
     def test_boot_failure_is_not_captured_twice_by_outer_boundary(self):
         self.trial(failure_phase='bootstrap')
+
+    def test_container_timeout_preserves_original_sixty_second_failure_and_cleanup(self):
+        self.trial(failure_phase='app-container', diagnostic_error=RuntimeError('synthetic observer failure'))
+
+    def test_fixture_failure_is_distinct_from_completed_container_call(self):
+        self.trial(failure_phase='fixture-install')
 
     def test_successful_ui_does_not_add_failure_capture(self):
         self.trial()
