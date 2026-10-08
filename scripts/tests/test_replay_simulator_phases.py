@@ -51,6 +51,7 @@ class SimulatorPhaseTests(unittest.TestCase):
                     raise stderr_error
                 print(*args, **kwargs)
             with ExitStack() as stack:
+                stack.enter_context(patch.dict(os.environ, {"GITHUB_ACTIONS": "false"}))
                 stack.enter_context(patch.object(Path, "write_text", write))
                 if stderr_error is not None:
                     stack.enter_context(patch.object(runner, "print", side_effect=diagnostic_print, create=True))
@@ -167,7 +168,7 @@ class BootstrapDiagnosticsTests(unittest.TestCase):
                 else:
                     source = "print(" + repr("owned " + device) + ")"
                 return original_phase([sys.executable, "-c", source], log, receipt, timeout, **kwargs)
-            with patch.object(runner, "run_owned_phase", side_effect=phase), patch.object(Path, "home", return_value=results):
+            with patch.dict(os.environ, {"GITHUB_ACTIONS": "false"}), patch.object(runner, "run_owned_phase", side_effect=phase), patch.object(Path, "home", return_value=results):
                 if boot_fails:
                     with self.assertRaises(Exception) as caught:
                         runner.prepare_simulator(device, results)
@@ -216,7 +217,7 @@ class BootstrapDiagnosticsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             primary = subprocess.TimeoutExpired(["xcrun", "simctl", "bootstatus", "owned", "-b"], 180)
             for stderr_error in [OSError("diagnostic stderr failure"), ValueError("I/O operation on closed file")]:
-                with self.subTest(stderr_error=type(stderr_error).__name__), \
+                with self.subTest(stderr_error=type(stderr_error).__name__), patch.dict(os.environ, {"GITHUB_ACTIONS": "false"}), \
                         patch.object(runner, "run_owned_phase", side_effect=[{}, primary]), \
                         patch.object(runner, "capture_simulator_bootstrap_failure", side_effect=RuntimeError("diagnostic failure")), \
                         patch.object(runner, "print", side_effect=stderr_error, create=True):
@@ -273,6 +274,7 @@ class PostBootstrapDiagnosticsTests(unittest.TestCase):
             arguments = ['verify_offline_replay.py', '--group', 'replay', '--seed-artifact', directory,
                          '--seed-manifest-sha256', '0' * 64, '--result-directory', str(results)]
             with ExitStack() as stack:
+                stack.enter_context(patch.dict(os.environ, {"GITHUB_ACTIONS": "false"}))
                 stack.enter_context(patch.object(sys, 'argv', arguments))
                 observer = stack.enter_context(patch.object(runner, "OwnedSimulatorBootLog"))
                 observer.return_value.finalize.return_value = {"collectorCleaned": True}

@@ -1,3 +1,4 @@
+import os
 import importlib.util
 from pathlib import Path
 import unittest
@@ -8,6 +9,7 @@ import re
 
 SPEC = importlib.util.spec_from_file_location("ios_lifecycle_runner", Path(__file__).resolve().parents[1] / "verify_ios_lifecycle.py")
 runner = importlib.util.module_from_spec(SPEC)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 SPEC.loader.exec_module(runner)
 
 class LifecycleRunnerTests(unittest.TestCase):
@@ -149,6 +151,7 @@ class HostedCleanupControlFlowTests(unittest.TestCase):
             events, calls = [], []
             boot_error = subprocess.TimeoutExpired(["xcrun", "simctl", "bootstatus", device, "-b"], 180)
             shutdown_error = subprocess.TimeoutExpired(["xcrun", "simctl", "shutdown", device], 60)
+            reader_error = subprocess.TimeoutExpired(["fixture-reader"], 60)
             original_write = Path.write_text
             class Workspace:
                 name = str(private)
@@ -181,10 +184,17 @@ class HostedCleanupControlFlowTests(unittest.TestCase):
                 if command[0] == "xcodegen":
                     return ""
                 if command[1:5] == ["xcresulttool", "get", "test-results", "summary"]:
+                    self.assertEqual(timeout, 60)
+                    if body == "reader":
+                        raise reader_error
                     return json.dumps({"totalTestCount": 89, "passedTests": 89, "failedTests": 0, "skippedTests": 0})
                 raise AssertionError("Unexpected external command: " + repr(command))
             def run(command, **kwargs):
                 if command[0] == "xcodebuild":
+                    self.assertEqual(kwargs['timeout'], 900)
+                    self.assertIs(kwargs['text'], True)
+                    self.assertEqual(kwargs['stderr'], subprocess.STDOUT)
+                    self.assertNotIn('start_new_session', kwargs)
                     kwargs["stdout"].write("Synthetic runner control-flow fixture; not XCTest execution\n")
                     return subprocess.CompletedProcess(command, 65 if body == "xcode" else 0)
                 self.assertIn(command[2], ("shutdown", "delete"))
@@ -216,6 +226,7 @@ class HostedCleanupControlFlowTests(unittest.TestCase):
             stderr = BrokenStderr() if stderr_error else io.StringIO()
             caught = None
             with ExitStack() as stack:
+                stack.enter_context(patch.dict(os.environ, {"GITHUB_ACTIONS": "false"}))
                 stack.enter_context(patch.object(sys, "argv", ["verify_ios_lifecycle.py", "--result-directory", str(results)]))
                 stack.enter_context(patch.object(runner.platform, "system", return_value="Darwin"))
                 stack.enter_context(patch.object(runner.tempfile, "TemporaryDirectory", return_value=Workspace()))
@@ -232,7 +243,9 @@ class HostedCleanupControlFlowTests(unittest.TestCase):
                     caught = error
             receipt = results / "simulator-cleanup.json"
             self.assertEqual(other.read_text(), "preserve unrelated fixture")
+            first = results / 'first-failure-observation.json'
             return {"error": caught, "bootError": boot_error, "shutdownError": shutdown_error,
+                    "readerError": reader_error, "firstFailure": json.loads(first.read_text()) if first.is_file() else None,
                     "events": events, "calls": calls, "ownedRemoved": not owned.exists(),
                     "workspaceRemoved": not private.exists(), "stdout": stdout.getvalue(), "stderr": stderr.getvalue(),
                     "receipt": json.loads(receipt.read_text()) if receipt.is_file() else None}

@@ -18,6 +18,8 @@ import uuid
 from verify_ios_lifecycle import output, stage_sources, select_runtime_and_type, verify_summary, record_toolchain
 from verify_replay_seed import private_artifact, run_artifact, install_fixture, current_commit
 from owned_simulator_boot_log import OwnedSimulatorBootLog
+import failure_observation
+from failure_observation import observe_first_failure
 
 
 # Explicit, disjoint 10 + 1 + 14 + 4 + 1 + 1 selectors; route and each maximum-text language have their own budget.
@@ -110,7 +112,7 @@ def phase_resource_snapshot():
     return value
 
 
-def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False):
+def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False, ensure_group_cleanup=False):
     """Record one bounded phase and stop only its newly owned POSIX process group."""
     if os.name != "posix":
         raise ValueError("Owned phase requires POSIX process groups")
@@ -127,6 +129,12 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False)
     completion = {}
     completion_ready = threading.Event()
     waiter = None
+    def note_failure(error, destination, source, observed=None):
+        try:
+            destination['firstFailure'] = failure_observation.failure_snapshot(
+                error, child.returncode if child is not None else None, source, observed)
+        except Exception:
+            pass  # Optional in-process metadata cannot change the phase verdict.
     def wait_for_completion():
         # Optional process/log observations must not hide a timely child exit.
         # Accept only completion observed by the original phase deadline.
@@ -141,10 +149,14 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False)
             if observed > deadline:
                 raise subprocess.TimeoutExpired(command, timeout)
             completion['exitCode'] = code
+            if code:
+                note_failure(subprocess.CalledProcessError(code, command), completion, 'completion-waiter', observed)
         except subprocess.TimeoutExpired:
             completion['error'] = subprocess.TimeoutExpired(command, timeout)
+            note_failure(completion['error'], completion, 'completion-waiter')
         except BaseException as error:
             completion['error'] = error
+            note_failure(error, completion, 'completion-waiter')
         finally:
             completion_ready.set()
     def recording_error(error):
@@ -237,7 +249,17 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False)
             code = completion['exitCode']
             if code:
                 raise subprocess.CalledProcessError(code, command)
+            if ensure_group_cleanup:
+                stop_owned_group()  # Optional diagnostic worker owns all inherited probe descendants.
         except BaseException as error:
+            try:
+                evidence['callerReceivedFailureMonotonic'] = time.monotonic()
+                if 'firstFailure' in completion:
+                    evidence['firstFailure'] = completion['firstFailure']
+                else:
+                    note_failure(error, evidence, 'phase-caller')
+            except Exception:
+                pass
             evidence["timedOut"] = isinstance(error, subprocess.TimeoutExpired)
             if child is None and isinstance(error, OSError):
                 evidence["launchError"] = {"type": type(error).__name__, "errno": error.errno,
@@ -259,6 +281,16 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False)
                     record_progress()
                 except OSError as error:
                     evidence["progressRecordingError"] = str(error)
+            if ensure_group_cleanup and child is not None:
+                try:
+                    os.killpg(child.pid, 0)
+                except ProcessLookupError:
+                    evidence['groupExistsAfterCleanup'] = False
+                except OSError as error:
+                    evidence['groupExistsAfterCleanup'] = None
+                    group_cleanup_error('final-probe', error)
+                else:
+                    evidence['groupExistsAfterCleanup'] = True
             evidence.update(exitCode=child.returncode if child is not None else None,
                             elapsedSeconds=time.monotonic()-began,
                             finishedUTC=datetime.datetime.now(datetime.timezone.utc).isoformat())
@@ -374,7 +406,11 @@ def prepare_simulator(simulator, results, boot_log=None):
                     boot_log.request_stop()
                 except Exception:
                     pass  # Optional observation must preserve the boot outcome.
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError) as original_error:
+        try:
+            observe_first_failure(original_error, results, simulator, 'simulator-' + phase, run_phase=run_owned_phase)
+        except Exception:
+            pass
         try:
             capture_simulator_bootstrap_failure(simulator, results)
         except Exception as error:
@@ -390,6 +426,7 @@ def cleanup_simulator(simulator, results):
     """Attempt both operations on our created UUID; keep the primary failure intact."""
     evidence = {"simulator": simulator, "success": True, "phases": []}
     receipt = results / "simulator-cleanup.json"
+    first_cleanup_failure = None
     for phase in ("shutdown", "delete"):
         entry = {"phase": phase}
         try:
@@ -402,17 +439,36 @@ def cleanup_simulator(simulator, results):
                 entry["recordingErrors"] = recorded["recordingErrors"]
                 evidence["success"] = False
         except (OSError, subprocess.SubprocessError) as error:
+            if first_cleanup_failure is None:
+                try:
+                    snapshot = failure_observation.recorded_failure(results, 'simulator-' + phase, error) or failure_observation.failure_snapshot(error)
+                except Exception:
+                    snapshot = None
+                first_cleanup_failure = (error, 'simulator-' + phase, snapshot)
             entry.update(success=False, errorType=type(error).__name__, error=str(error))
             evidence["success"] = False
         evidence["phases"].append(entry)
         try:
             receipt.write_text(json.dumps(evidence, indent=2), encoding="utf-8")
         except OSError as error:
+            if first_cleanup_failure is None:
+                try:
+                    snapshot = failure_observation.failure_snapshot(error)
+                except Exception:
+                    snapshot = None
+                first_cleanup_failure = (error, 'cleanup-receipt', snapshot)
             evidence["success"] = False
             try:
                 print("Cleanup receipt could not be recorded: " + str(error), file=sys.stderr)
             except Exception:
                 pass  # Optional diagnostics must not skip the next owned cleanup phase.
+    # Delete is attempted before any extra diagnostic work for cleanup-only failures.
+    if first_cleanup_failure is not None:
+        error, phase, snapshot = first_cleanup_failure
+        try:
+            observe_first_failure(error, results, simulator, phase, run_phase=run_owned_phase, snapshot=snapshot)
+        except Exception:
+            pass
     return evidence["success"]
 
 
@@ -528,7 +584,11 @@ def main():
             output(["xcrun", "xcresulttool", "export", "attachments", "--path", str(bundle),
                     "--output-path", str(results / "screenshots")], timeout=120)
             verify_summary(summary, expected_count)
-        except (OSError, subprocess.SubprocessError):
+        except Exception as original_error:
+            try:
+                observe_first_failure(original_error, results, simulator, failure_phase, run_phase=run_owned_phase)
+            except Exception:
+                pass
             if simulator and failure_phase != "bootstrap":
                 try:
                     capture_simulator_bootstrap_failure(simulator, results, failure_phase=failure_phase)

@@ -16,6 +16,9 @@ import uuid
 import shutil
 import tempfile
 
+import failure_observation
+from failure_observation import observe_first_failure
+
 EXPECTED_TEST_COUNT = 89
 
 
@@ -104,6 +107,7 @@ def main():
     results.mkdir(parents=True, exist_ok=False)
     simulator = None
     workspace = tempfile.TemporaryDirectory(prefix="telemetry-lifecycle-source-")
+    failure_phase = "setup"
     try:
         staged = Path(workspace.name) / "source"
         stage_sources(root, staged)
@@ -119,8 +123,12 @@ def main():
                     "simulator": simulator, "host_bundle": "local.webdashboard.Telemetry.LifecycleHost"}
         (results / "environment.json").write_text(json.dumps(evidence, indent=2), encoding="utf-8")
         print(json.dumps(evidence), flush=True)
-        output(["xcrun", "simctl", "boot", simulator])
-        output(["xcrun", "simctl", "bootstatus", simulator, "-b"], timeout=180)
+        failure_phase = "hosted-boot"
+        failure_observation.observe_call(lambda: output(["xcrun", "simctl", "boot", simulator]),
+                                         results, failure_phase, 60)
+        failure_phase = "hosted-bootstatus"
+        failure_observation.observe_call(lambda: output(["xcrun", "simctl", "bootstatus", simulator, "-b"], timeout=180),
+                                         results, failure_phase, 180)
         output(["xcodegen", "generate", "--spec", str(staged / "lifecycle-tests.yml")], timeout=120)
         bundle = results / "Lifecycle.xcresult"
         command = ["xcodebuild", "-project", str(staged / "Telemetry.xcodeproj"),
@@ -132,17 +140,31 @@ def main():
                    "CODE_SIGNING_ALLOWED=NO", "test"]
         (results / "command.json").write_text(json.dumps(command, indent=2), encoding="utf-8")
         log = results / "xcodebuild.log"
+        failure_phase = "hosted-xcode"
         with log.open("w", encoding="utf-8") as stream:
-            run = subprocess.run(command, stdout=stream, stderr=subprocess.STDOUT, text=True, timeout=900)
+            run = failure_observation.observe_call(
+                lambda: subprocess.run(command, stdout=stream, stderr=subprocess.STDOUT, text=True, timeout=900),
+                results, failure_phase, 900)
         print(log.read_text(encoding="utf-8", errors="replace")[-22000:], flush=True)
         if run.returncode:
             raise RuntimeError(f"xcodebuild exited {run.returncode}; see {log}")
-        summary = json.loads(output(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)]))
+        failure_phase = "result-read"
+        summary = json.loads(failure_observation.observe_call(
+            lambda: output(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)]),
+            results, failure_phase, 60))
         (results / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
         verify_summary(summary, EXPECTED_TEST_COUNT)
+    except BaseException as original_error:
+        try:
+            observe_first_failure(original_error, results, simulator, failure_phase)
+        except Exception:
+            pass
+        raise
     finally:
         primary_failure = sys.exc_info()[0] is not None
         cleanup_error = None
+        cleanup_failure_snapshot = None
+        cleanup_failure_phase = "cleanup"
         cleanup = {"simulator": simulator, "success": True, "phases": []}
         try:
             if simulator is not None:
@@ -152,7 +174,9 @@ def main():
                     entry = {"phase": phase, "command": command, "timeoutSeconds": 60,
                              "checkReturnCode": phase == "delete", "timedOut": False}
                     try:
-                        result = subprocess.run(command, check=phase == "delete", capture_output=True, timeout=60)
+                        result = failure_observation.observe_call(
+                            lambda: subprocess.run(command, check=phase == "delete", capture_output=True, timeout=60),
+                            results, 'hosted-' + phase, 60)
                         entry.update(accepted=True, commandSucceeded=result.returncode == 0, exitCode=result.returncode)
                     except Exception as error:
                         entry.update(accepted=False, commandSucceeded=False,
@@ -162,6 +186,11 @@ def main():
                         cleanup["success"] = False
                         if cleanup_error is None:
                             cleanup_error = error
+                            cleanup_failure_phase = 'hosted-' + phase
+                            try:
+                                cleanup_failure_snapshot = failure_observation.recorded_failure(results, cleanup_failure_phase, error)
+                            except Exception:
+                                pass
                     cleanup["phases"].append(entry)
         finally:
             try:
@@ -182,6 +211,11 @@ def main():
                 except Exception:
                     pass  # Optional diagnostics cannot replace the original failure.
             if cleanup_error is not None and not primary_failure:
+                try:
+                    observe_first_failure(cleanup_error, results, simulator, cleanup_failure_phase,
+                                          snapshot=cleanup_failure_snapshot)
+                except Exception:
+                    pass
                 raise cleanup_error
         # A pending body exception propagates unchanged after all cleanup attempts.
     print(f"HOSTED XCTEST PASS: {EXPECTED_TEST_COUNT} tests, zero failures/skips; real App/SQLite, Simulator only", flush=True)
