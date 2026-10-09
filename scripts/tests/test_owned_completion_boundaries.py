@@ -18,12 +18,17 @@ import verify_replay_seed as seed
 
 @unittest.skipUnless(os.name == 'posix', 'New owned POSIX child only')
 class OwnedCompletionBoundaryTests(unittest.TestCase):
-    def exercise(self, delay=None, timely=False, boundary_clock_fails=False, artificial_waits=0):
+    def exercise(self, delay=None, timely=False, boundary_clock_fails=False, artificial_waits=0,
+                 completion_before_progress=False):
         real_event = threading.Event
+        real_thread = threading.Thread
         real_popen = subprocess.Popen
         real_write = Path.write_text
         real_clock = time.monotonic
         created_events = []
+        observer_started = real_event()
+        waiters = []
+        fixture_errors = []
         children = []
         write_calls = progress_calls = 0
         observer_delay = .45 if timely else .15
@@ -49,6 +54,19 @@ class OwnedCompletionBoundaryTests(unittest.TestCase):
                 return event
             return real_event()
 
+        def launch_waiter(*args, **kwargs):
+            target = kwargs['target']
+            def ordered_completion():
+                # Overlap tests require main to enter the selected observer first.
+                # A real waiter may otherwise notify before main is scheduled again.
+                if delay in ('progress', 'save') and not completion_before_progress:
+                    if not observer_started.wait(3):
+                        fixture_errors.append('Main did not enter the selected observer')
+                target()
+            waiter = real_thread(*args, **dict(kwargs, target=ordered_completion))
+            waiters.append(waiter)
+            return waiter
+
         def launch(*args, **kwargs):
             child = real_popen(*args, **kwargs)
             children.append(child)
@@ -58,6 +76,7 @@ class OwnedCompletionBoundaryTests(unittest.TestCase):
             nonlocal progress_calls
             progress_calls += 1
             if delay == 'progress' and progress_calls == 1:
+                observer_started.set()
                 self.assertTrue(created_events[0].event.wait(3), 'Waiter must notify independently of main progress')
                 time.sleep(observer_delay)
             return {}
@@ -66,7 +85,11 @@ class OwnedCompletionBoundaryTests(unittest.TestCase):
             nonlocal write_calls
             if path.name == 'phase.json':
                 write_calls += 1
+                if write_calls == 2 and completion_before_progress:
+                    waiters[0].join(timeout=3)
+                    self.assertFalse(waiters[0].is_alive(), 'Completion must precede main progress')
                 if delay == 'save' and write_calls == 2:
+                    observer_started.set()
                     self.assertTrue(created_events[0].event.wait(3), 'Waiter must notify independently of main receipt write')
                     time.sleep(observer_delay)
             return real_write(path, *args, **kwargs)
@@ -83,6 +106,7 @@ class OwnedCompletionBoundaryTests(unittest.TestCase):
             caught = None
             try:
                 with patch.object(runner.threading, 'Event', side_effect=new_event), \
+                        patch.object(runner.threading, 'Thread', side_effect=launch_waiter), \
                         patch.object(runner.subprocess, 'Popen', side_effect=launch), \
                         patch.object(seed, 'owned_progress', side_effect=progress), \
                         patch.object(Path, 'write_text', new=write), \
@@ -101,6 +125,7 @@ class OwnedCompletionBoundaryTests(unittest.TestCase):
                             pass
                     child.wait(timeout=3)
             receipt = json.loads((root/'phase.json').read_text())
+        self.assertEqual(fixture_errors, [])
         self.assertTrue(receipt['completionWaiterStopped'])
         self.assertFalse(receipt['groupExistsAfterCleanup'])
         if timely:
@@ -138,6 +163,12 @@ class OwnedCompletionBoundaryTests(unittest.TestCase):
         self.assertLessEqual(b['saveAtCompletionStartedMonotonic'], b['eventSetStartedMonotonic'])
         self.assertLessEqual(b['eventSetStartedMonotonic'], b['saveAtCompletionReturnedMonotonic'])
         self.assertLessEqual(b['saveAtCompletionReturnedMonotonic'], b['progressAtCompletionStartedMonotonic'])
+
+    def test_completion_before_main_progress_preserves_timeout_and_records_actual_order(self):
+        receipt = self.exercise(completion_before_progress=True)
+        b = self.assert_observed(receipt)
+        self.assertLessEqual(b['eventSetReturnedMonotonic'], b['progressAtCompletionStartedMonotonic'])
+        self.assertLessEqual(b['progressAtCompletionReturnedMonotonic'], b['eventObservedByMainMonotonic'])
 
     def test_notification_delay_is_measured_without_moving_original_timeout(self):
         receipt = self.exercise('notification')
