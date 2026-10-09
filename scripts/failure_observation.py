@@ -3,18 +3,38 @@
 The CI worker reads allowlisted numeric/owned-UUID state only. It inherits its
 supervisor's new process group; no existing device or service is controlled.
 """
+import os
+import sys
+import time
+
+
+def _worker_checkpoint(stage):
+    """Best-effort CLI boundary; no imports, paths or probe output in its payload."""
+    if (__name__ != '__main__' or os.environ.get('GITHUB_ACTIONS') != 'true'
+            or stage not in ('python-entry', 'module-imports-complete', 'arguments-valid',
+                             'journal-entry-write-started', 'journal-entry-written', 'journal-entry-write-failed')):
+        return
+    try:
+        payload = ('{"stage":"' + stage + '","observedMonotonic":' + str(time.monotonic())
+                   + ',"observedEpoch":' + str(time.time()) + '}\n').encode('ascii')
+        os.write(1, payload)  # One small direct write; avoid Python stdout buffering.
+    except Exception:
+        pass  # Checkpoint failure cannot change the original result or cleanup.
+
+
+_worker_checkpoint('python-entry')
+
 import argparse
 import datetime
 import json
 import math
-import os
 from pathlib import Path
 import re
 import selectors
 import subprocess
-import sys
-import time
 import uuid
+
+_worker_checkpoint('module-imports-complete')
 
 DIAGNOSTIC_BUDGET_SECONDS = 20
 PROBE_BUDGET_SECONDS = 3
@@ -457,8 +477,11 @@ def worker(results, simulator, deadline):
              'scope': 'CI-only, owned UUID and numeric allowlist; no raw system dump'}
     destination = results / 'failure-diagnostic-probes.json'
     # Persist worker entry before optional imports, system file reads or subprocess observations.
+    _worker_checkpoint('journal-entry-write-started')
     if not safe_write(destination, value):
+        _worker_checkpoint('journal-entry-write-failed')
         return 2
+    _worker_checkpoint('journal-entry-written')
 
     class JournalWriteError(Exception):
         pass
@@ -573,6 +596,7 @@ if __name__ == '__main__':
         raise SystemExit(2)
     try:
         device = str(uuid.UUID(args.simulator)).upper() if args.simulator != '-' else None
+        _worker_checkpoint('arguments-valid')
         raise SystemExit(worker(args.worker, device, args.deadline))
     except Exception:
         raise SystemExit(2)  # No raw probe output or private exception details.

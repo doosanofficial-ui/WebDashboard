@@ -428,5 +428,101 @@ class FirstFailureObservationTests(unittest.TestCase):
                 self.assertIsNone(value['childExitCode'])
                 self.assertFalse(value['childReaped'])
 
+
+
+class WorkerBootstrapCheckpointTests(unittest.TestCase):
+    """Actual CLI boundaries; fixtures stop before any external probe starts."""
+
+    def run_controlled_worker(self, mode):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            gate = folder / 'fixture-entered.txt'
+            results = folder / 'results'
+            if mode in ('first-write-error', 'checkpoint-write-error'):
+                results.write_text('Owned regular file fixture')
+            else:
+                results.mkdir()
+            if mode == 'blocked-import':
+                (folder / 'argparse.py').write_text(
+                    "import os,time\n"
+                    "with open(os.environ['OBSERVER_FIXTURE_GATE'],'w') as stream: stream.write('entered')\n"
+                    "time.sleep(10)\n")
+            elif mode == 'blocked-first-open':
+                (folder / 'sitecustomize.py').write_text(
+                    "import os,time,pathlib\noriginal_open=pathlib.Path.open\n"
+                    "def controlled_open(self,*args,**kwargs):\n"
+                    " if self.name=='failure-diagnostic-probes.json':\n"
+                    "  with open(os.environ['OBSERVER_FIXTURE_GATE'],'w') as stream: stream.write('entered')\n"
+                    "  time.sleep(10)\n"
+                    " return original_open(self,*args,**kwargs)\n"
+                    "pathlib.Path.open=controlled_open\n")
+            elif mode == 'checkpoint-write-error':
+                (folder / 'sitecustomize.py').write_text(
+                    "import os\noriginal_write=os.write\n"
+                    "def controlled_write(fd,data):\n"
+                    " if fd==1:\n"
+                    "  with open(os.environ['OBSERVER_FIXTURE_GATE'],'w') as stream: stream.write('entered')\n"
+                    "  raise OSError('Owned checkpoint fixture')\n"
+                    " return original_write(fd,data)\n"
+                    "os.write=controlled_write\n")
+            env = dict(os.environ, GITHUB_ACTIONS='true', PYTHONDONTWRITEBYTECODE='1',
+                       PYTHONPATH=str(folder), OBSERVER_FIXTURE_GATE=str(gate))
+            command = [sys.executable, str(ROOT / 'scripts/failure_observation.py'),
+                       '--worker', str(results), '--simulator', '-',
+                       '--deadline', str(time.monotonic() + 20)]
+            log = folder / 'worker.log'
+            with log.open('wb') as stream:
+                child = subprocess.Popen(command, stdout=stream, stderr=subprocess.STDOUT,
+                                         env=env, cwd=folder, start_new_session=True)
+                try:
+                    if mode in ('first-write-error', 'checkpoint-write-error'):
+                        child.wait(timeout=5)
+                        if mode == 'checkpoint-write-error':
+                            self.assertTrue(gate.exists(), 'Checkpoint write fault must actually be reached')
+                    else:
+                        until = time.monotonic() + 5
+                        while not gate.exists() and child.poll() is None and time.monotonic() < until:
+                            time.sleep(.01)
+                        self.assertTrue(gate.exists(), 'Intended boundary must actually be reached')
+                        child.terminate()
+                        child.wait(timeout=1)
+                finally:
+                    if child.poll() is None:
+                        child.kill()
+                        child.wait(timeout=1)
+            lines = [json.loads(line) for line in log.read_text().splitlines()]
+            return lines, child.returncode, (results / 'failure-diagnostic-probes.json').exists()
+
+    def test_cli_records_python_entry_before_a_blocked_import(self):
+        lines, code, journal_exists = self.run_controlled_worker('blocked-import')
+        self.assertNotEqual(code, 0)
+        self.assertFalse(journal_exists)
+        self.assertEqual([line['stage'] for line in lines], ['python-entry'])
+        self.assertIsInstance(lines[0]['observedMonotonic'], (int, float))
+        self.assertIsInstance(lines[0]['observedEpoch'], (int, float))
+
+    def test_cli_records_first_journal_attempt_before_a_blocked_open(self):
+        lines, code, journal_exists = self.run_controlled_worker('blocked-first-open')
+        self.assertNotEqual(code, 0)
+        self.assertFalse(journal_exists)
+        self.assertEqual([line['stage'] for line in lines],
+                         ['python-entry', 'module-imports-complete', 'arguments-valid', 'journal-entry-write-started'])
+
+    def test_cli_reports_first_journal_error_without_changing_exit_or_exposing_paths(self):
+        lines, code, journal_exists = self.run_controlled_worker('first-write-error')
+        self.assertEqual(code, 2)
+        self.assertFalse(journal_exists)
+        self.assertTrue(lines, 'A silent first-write failure needs an allowlisted checkpoint')
+        self.assertEqual(lines[-1]['stage'], 'journal-entry-write-failed')
+        for line in lines:
+            self.assertEqual(set(line), {'stage', 'observedMonotonic', 'observedEpoch'})
+
+    def test_checkpoint_output_error_preserves_original_first_journal_failure(self):
+        lines, code, journal_exists = self.run_controlled_worker('checkpoint-write-error')
+        self.assertEqual(code, 2, 'Optional stdout failure must retain the original journal exit')
+        self.assertFalse(journal_exists)
+        self.assertEqual(lines, [], 'A failed checkpoint write must not expose a traceback or raw details')
+
+
 if __name__ == '__main__':
     unittest.main()
