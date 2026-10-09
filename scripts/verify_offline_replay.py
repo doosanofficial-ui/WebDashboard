@@ -131,6 +131,22 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False,
     child = None
     boundary_simulator = failure_observation.simctl_device(command)
     completion = {}
+    # Fixed numeric observations only; no new probes, threads, I/O or readiness claims.
+    boundaries = {'schemaVersion': 1,
+        'clockScope': 'Monotonic call observations; not kernel execution or notification delivery',
+        'eventSetStartedMonotonic': None, 'eventSetReturnedMonotonic': None,
+        'eventObservedByMainMonotonic': None,
+        'progressCalls': 0, 'progressLatestStartedMonotonic': None,
+        'progressLatestReturnedMonotonic': None,
+        'progressAtCompletionStartedMonotonic': None, 'progressAtCompletionReturnedMonotonic': None,
+        'saveCalls': 0, 'saveLatestStartedMonotonic': None, 'saveLatestReturnedMonotonic': None,
+        'saveAtCompletionStartedMonotonic': None, 'saveAtCompletionReturnedMonotonic': None}
+    evidence['completionBoundaries'] = boundaries
+    def observe_boundary(key):
+        try:
+            boundaries[key] = time.monotonic()
+        except Exception:
+            boundaries[key] = None  # Unknown must not reuse a previous call's timestamp.
     completion_ready = threading.Event()
     waiter = None
     def note_failure(error, destination, source, observed=None):
@@ -173,18 +189,28 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False,
             completion['error'] = error
             note_failure(error, completion, 'completion-waiter')
         finally:
+            observe_boundary('eventSetStartedMonotonic')
             completion_ready.set()
+            observe_boundary('eventSetReturnedMonotonic')
     def recording_error(error):
         evidence.setdefault("recordingErrors", []).append(str(error))
         print("Phase evidence could not be recorded: " + str(error), file=sys.stderr)
     def save():
+        boundaries['saveCalls'] = min(boundaries['saveCalls'] + 1, 65535)
+        boundaries['saveLatestReturnedMonotonic'] = None
+        observe_boundary('saveLatestStartedMonotonic')
         try:
             receipt.write_text(json.dumps(evidence, indent=2), encoding="utf-8")
         except OSError as error:
             if not best_effort_recording:
                 raise
             recording_error(error)
+        finally:
+            observe_boundary('saveLatestReturnedMonotonic')
     def record_progress():
+        boundaries['progressCalls'] = min(boundaries['progressCalls'] + 1, 65535)
+        boundaries['progressLatestReturnedMonotonic'] = None
+        observe_boundary('progressLatestStartedMonotonic')
         try:
             progress = owned_progress(child.pid, log, began)
             evidence["progress"].append(progress)
@@ -192,6 +218,8 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False,
             if not best_effort_recording:
                 raise
             recording_error(error)
+        finally:
+            observe_boundary('progressLatestReturnedMonotonic')
     def group_cleanup_error(operation, error):
         evidence.setdefault("groupCleanupErrors", []).append({
             "operation": operation, "type": type(error).__name__,
@@ -260,6 +288,12 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False,
             while not completion_ready.wait(timeout=15):
                 record_progress()
                 save()
+            observe_boundary('eventObservedByMainMonotonic')
+            # Freeze the pre-cleanup call intervals; final progress/save must not overwrite them.
+            for operation in ('progress', 'save'):
+                for boundary in ('Started', 'Returned'):
+                    boundaries[operation + 'AtCompletion' + boundary + 'Monotonic'] = boundaries[
+                        operation + 'Latest' + boundary + 'Monotonic']
             if 'error' in completion:
                 raise completion['error']
             code = completion['exitCode']
