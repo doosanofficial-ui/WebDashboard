@@ -90,7 +90,25 @@ def safe_write(path, value, exclusive=True):
         return False  # Optional evidence cannot replace the caller's result.
 
 
-def observe_call(operation, results, phase, timeout):
+def captured_output_metadata(output, stderr=None):
+    """Lengths only: raw bytes or UTF-8 size of <=64Ki characters; otherwise unknown."""
+    def byte_length(value):
+        if isinstance(value, bytes):
+            return len(value)
+        if isinstance(value, str):
+            if len(value) > 65536:
+                return None  # Optional text counting must have bounded work.
+            try:
+                # Bound temporary encoding memory; never persist any output body.
+                return sum(len(value[i:i + 4096].encode('utf-8')) for i in range(0, len(value), 4096))
+            except UnicodeEncodeError:
+                return None
+        return None
+    return {'outputPresent': output is not None, 'outputBytes': byte_length(output),
+            'stderrPresent': stderr is not None, 'stderrBytes': byte_length(stderr)}
+
+
+def observe_call(operation, results, phase, timeout, record_output_metadata=False):
     """Keep the original subprocess call, kwargs, result and exception object."""
     value = {}
     try:
@@ -107,6 +125,8 @@ def observe_call(operation, results, phase, timeout):
         try:
             value['childExitCode'] = getattr(result, 'returncode', None)
             value['returnedNormally'] = True
+            if record_output_metadata:
+                value['outputMetadata'] = captured_output_metadata(result)
         except Exception:
             pass
         return result
@@ -115,6 +135,9 @@ def observe_call(operation, results, phase, timeout):
             value['errorType'] = type(error).__name__
             value['childExitCode'] = getattr(error, 'returncode', None)
             value['firstFailure'] = failure_snapshot(error, value['childExitCode'], 'subprocess-call-return')
+            if record_output_metadata:
+                value['outputMetadata'] = captured_output_metadata(getattr(error, 'output', None),
+                                                                  getattr(error, 'stderr', None))
         except Exception:
             pass
         raise

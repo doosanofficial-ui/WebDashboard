@@ -132,7 +132,8 @@ class HostedCleanupControlFlowTests(unittest.TestCase):
     The fixture's owned/unrelated markers are ordinary files, not Simulators.
     No Xcode, simctl, product host, or existing device can execute here.
     """
-    def trial(self, body=None, shutdown=None, delete=None, receipt_error=False, workspace_error=False, stderr_error=False):
+    def trial(self, body=None, shutdown=None, delete=None, receipt_error=False, workspace_error=False, stderr_error=False,
+              reader_capture=False, reader_output=b"fixture partial output", reader_stderr=None, metadata_error=False):
         from contextlib import ExitStack, redirect_stdout, redirect_stderr
         from unittest.mock import patch
         import io
@@ -151,8 +152,10 @@ class HostedCleanupControlFlowTests(unittest.TestCase):
             events, calls = [], []
             boot_error = subprocess.TimeoutExpired(["xcrun", "simctl", "bootstatus", device, "-b"], 180)
             shutdown_error = subprocess.TimeoutExpired(["xcrun", "simctl", "shutdown", device], 60)
-            reader_error = subprocess.TimeoutExpired(["fixture-reader"], 60)
+            reader_error = subprocess.TimeoutExpired(["fixture-reader"], 60, output=reader_output, stderr=reader_stderr)
             original_write = Path.write_text
+            original_open = Path.open
+            original_output = runner.output
             class Workspace:
                 name = str(private)
                 def cleanup(self):
@@ -185,6 +188,8 @@ class HostedCleanupControlFlowTests(unittest.TestCase):
                     return ""
                 if command[1:5] == ["xcresulttool", "get", "test-results", "summary"]:
                     self.assertEqual(timeout, 60)
+                    if reader_capture:
+                        return original_output(command, timeout=timeout)
                     if body == "reader":
                         raise reader_error
                     return json.dumps({"totalTestCount": runner.EXPECTED_TEST_COUNT, "passedTests": runner.EXPECTED_TEST_COUNT, "failedTests": 0, "skippedTests": 0})
@@ -219,6 +224,10 @@ class HostedCleanupControlFlowTests(unittest.TestCase):
                 if receipt_error and path.name == "simulator-cleanup.json":
                     raise OSError("synthetic cleanup receipt failure")
                 return original_write(path, *args, **kwargs)
+            def open_path(path, *args, **kwargs):
+                if metadata_error and path.name == "result-read-observation.json" and args and args[0] == "x":
+                    raise OSError("synthetic reader metadata receipt failure")
+                return original_open(path, *args, **kwargs)
             class BrokenStderr(io.StringIO):
                 def write(self, value):
                     raise BrokenPipeError("synthetic stderr diagnostic failure")
@@ -235,6 +244,12 @@ class HostedCleanupControlFlowTests(unittest.TestCase):
                 stack.enter_context(patch.object(runner, "record_toolchain", return_value={"xcode_version": "27.0"}))
                 stack.enter_context(patch.object(runner, "output", side_effect=output))
                 stack.enter_context(patch.object(runner.subprocess, "run", side_effect=run))
+                reader_process = stack.enter_context(patch.object(runner.subprocess, "check_output",
+                    side_effect=reader_error if body == "reader" else None,
+                    return_value=json.dumps({"totalTestCount": runner.EXPECTED_TEST_COUNT,
+                        "passedTests": runner.EXPECTED_TEST_COUNT, "failedTests": 0, "skippedTests": 0})))
+                summary_gate = stack.enter_context(patch.object(runner, "verify_summary", wraps=runner.verify_summary))
+                stack.enter_context(patch.object(Path, "open", open_path))
                 stack.enter_context(patch.object(Path, "write_text", write))
                 stack.enter_context(redirect_stdout(stdout))
                 stack.enter_context(redirect_stderr(stderr))
@@ -245,11 +260,98 @@ class HostedCleanupControlFlowTests(unittest.TestCase):
             receipt = results / "simulator-cleanup.json"
             self.assertEqual(other.read_text(), "preserve unrelated fixture")
             first = results / 'first-failure-observation.json'
+            reader_observation = results / 'result-read-observation.json'
+            xcode_observation = results / 'hosted-xcode-observation.json'
             return {"error": caught, "bootError": boot_error, "shutdownError": shutdown_error,
                     "readerError": reader_error, "firstFailure": json.loads(first.read_text()) if first.is_file() else None,
+                    "readerObservation": json.loads(reader_observation.read_text()) if reader_observation.is_file() else None,
+                    "xcodeObservation": json.loads(xcode_observation.read_text()) if xcode_observation.is_file() else None,
+                    "readerProcessCall": reader_process.call_args, "summaryGateCalls": summary_gate.call_count,
+                    "summaryExists": (results / "summary.json").exists(),
                     "events": events, "calls": calls, "ownedRemoved": not owned.exists(),
                     "workspaceRemoved": not private.exists(), "stdout": stdout.getvalue(), "stderr": stderr.getvalue(),
                     "receipt": json.loads(receipt.read_text()) if receipt.is_file() else None}
+
+    def assert_reader_failed_after_successful_test_command(self, value):
+        self.assertIs(value["error"], value["readerError"])
+        self.assertEqual(value["error"].timeout, 60)
+        self.assertEqual(value["firstFailure"]["phase"], "result-read")
+        self.assertTrue(value["xcodeObservation"]["returnedNormally"])
+        self.assertEqual(value["xcodeObservation"]["childExitCode"], 0)
+        self.assertNotIn("outputMetadata", value["xcodeObservation"])
+        self.assertEqual(value["events"], ["shutdown", "delete", "workspace"])
+        self.assertEqual(value["summaryGateCalls"], 0)
+        self.assertFalse(value["summaryExists"])
+        self.assertNotIn("HOSTED XCTEST PASS", value["stdout"])
+
+    def test_reader_timeout_records_lengths_without_promoting_successful_test_command(self):
+        value = self.trial(body="reader")
+        self.assert_reader_failed_after_successful_test_command(value)
+        self.assertTrue(value["ownedRemoved"])
+        self.assertTrue(value["workspaceRemoved"])
+        observation = value["readerObservation"]
+        self.assertEqual(observation.get("outputMetadata"), {
+            "outputPresent": True, "outputBytes": 22, "stderrPresent": False, "stderrBytes": None})
+        self.assertEqual(observation["timeoutSeconds"], 60)
+        self.assertEqual(observation["errorType"], "TimeoutExpired")
+        self.assertIsNone(observation["childExitCode"])
+        self.assertGreaterEqual(observation["callReturnedMonotonic"], observation["callStartedMonotonic"])
+
+    def test_reader_timeout_survives_cleanup_and_metadata_recording_failures(self):
+        for faults in ({"shutdown": "timeout", "delete": "nonzero"},
+                       {"metadata_error": True}, {"receipt_error": True},
+                       {"workspace_error": True, "stderr_error": True},
+                       {"shutdown": "timeout", "delete": "nonzero", "receipt_error": True,
+                        "workspace_error": True, "stderr_error": True, "metadata_error": True}):
+            with self.subTest(faults=faults):
+                value = self.trial(body="reader", **faults)
+                self.assert_reader_failed_after_successful_test_command(value)
+                if faults.get("metadata_error"):
+                    self.assertIsNone(value["readerObservation"])
+                else:
+                    self.assertEqual(value["readerObservation"].get("outputMetadata"), {
+                        "outputPresent": True, "outputBytes": 22, "stderrPresent": False, "stderrBytes": None})
+
+        from unittest.mock import patch
+        with patch.object(runner.failure_observation, "captured_output_metadata",
+                          side_effect=ValueError("synthetic optional metadata calculation failure")):
+            failed = self.trial(body="reader")
+            succeeded = self.trial()
+        self.assert_reader_failed_after_successful_test_command(failed)
+        self.assertNotIn("outputMetadata", failed["readerObservation"])
+        self.assertIsNone(succeeded["error"])
+        self.assertTrue(succeeded["readerObservation"]["returnedNormally"])
+        self.assertEqual(succeeded["summaryGateCalls"], 1)
+        self.assertTrue(succeeded["summaryExists"])
+
+    def test_reader_output_contract_preserves_partial_values_and_original_budget(self):
+        import json
+        for payload, stderr, output_bytes, stderr_bytes in (
+                (b"private-reader-output", b"hidden-stderr", 21, 13),
+                ("한글", None, 6, None), ("한글" * 3000, None, 18000, None),
+                ("\ud800", None, None, None), (object(), None, None, None),
+                ("x" * 65537, None, None, None), (None, None, None, None),
+                (b"", b"", 0, 0), ("", None, 0, None)):
+            with self.subTest(output_bytes=output_bytes, stderr_bytes=stderr_bytes):
+                value = self.trial(body="reader", reader_capture=True, reader_output=payload, reader_stderr=stderr)
+                self.assert_reader_failed_after_successful_test_command(value)
+                self.assertIs(value["error"].output, payload)
+                self.assertIs(value["error"].stderr, stderr)
+                arguments, kwargs = value["readerProcessCall"]
+                self.assertEqual(arguments[0][:6], ["xcrun", "xcresulttool", "get", "test-results", "summary", "--path"])
+                self.assertEqual(kwargs, {"text": True, "stderr": subprocess.STDOUT, "timeout": 60})
+                self.assertEqual(value["readerObservation"].get("outputMetadata"), {
+                    "outputPresent": payload is not None, "outputBytes": output_bytes,
+                    "stderrPresent": stderr is not None, "stderrBytes": stderr_bytes})
+                recorded = json.dumps(value["readerObservation"], ensure_ascii=False) + value["stdout"] + value["stderr"]
+                for private in ("private-reader-output", "hidden-stderr", "한글"):
+                    self.assertNotIn(private, recorded)
+        value = self.trial(reader_capture=True)
+        self.assertIsNone(value["error"])
+        self.assertTrue(value["readerObservation"]["returnedNormally"])
+        self.assertEqual(value["summaryGateCalls"], 1)
+        self.assertTrue(value["summaryExists"])
+        self.assertGreater(value["readerObservation"].get("outputMetadata", {}).get("outputBytes", 0), 0)
 
     def test_shutdown_timeout_still_deletes_owned_uuid_and_preserves_failure(self):
         value = self.trial(shutdown="timeout")

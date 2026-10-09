@@ -153,7 +153,7 @@ def main():
         failure_phase = "result-read"
         summary = json.loads(failure_observation.observe_call(
             lambda: output(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)]),
-            results, failure_phase, 60))
+            results, failure_phase, 60, record_output_metadata=True))
         (results / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
         verify_summary(summary, EXPECTED_TEST_COUNT)
     except BaseException as original_error:
