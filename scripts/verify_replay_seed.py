@@ -194,24 +194,13 @@ def resource_snapshot():
 
 
 def owned_progress(process_group, log, began):
-    value = {'ownedProcessGroup': process_group, 'elapsedSeconds': time.monotonic()-began,
-             'logBytes': log.stat().st_size, 'logModifiedEpoch': log.stat().st_mtime}
-    try:
-        # Only this newly-created group; no command arguments or global process dump.
-        found = subprocess.run(['pgrep', '-g', str(process_group), '.'], capture_output=True, text=True, timeout=2)
-        pids = [pid for pid in found.stdout.split() if pid.isdigit()]
-        if pids:
-            observed = subprocess.run(['ps', '-p', ','.join(pids), '-o',
-                                      'pid=,ppid=,pgid=,state=,%cpu=,time=,etime=,comm='],
-                                     capture_output=True, text=True, timeout=2)
-            value['ownedProcesses'] = [line for line in observed.stdout.splitlines()
-                                      if len(line.split()) >= 3 and line.split()[2] == str(process_group)]
-            value['processColumns'] = ['pid', 'ppid', 'pgid', 'state', 'cpuPercent', 'cpuTime', 'elapsed', 'commandName']
-        else:
-            value['ownedProcesses'] = []
-    except (OSError, subprocess.SubprocessError) as error:
-        value['processObservationError'] = str(error)
-    return value
+    # Native pgrep/ps spawning can outlast its timeout and block completion/TERM.
+    # Keep this synchronous observation local; omitted process rows are unknown.
+    status = log.stat()
+    return {'ownedProcessGroup': process_group, 'elapsedSeconds': time.monotonic()-began,
+            'logBytes': status.st_size, 'logModifiedEpoch': status.st_mtime,
+            'ownedProcesses': None, 'processObservationStatus': 'not-sampled',
+            'processObservationReason': 'Native inspection omitted from completion and cleanup path'}
 
 
 def build_artifact(root, results):
