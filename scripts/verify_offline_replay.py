@@ -135,10 +135,19 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False,
     waiter = None
     def note_failure(error, destination, source, observed=None):
         try:
+            timed_out = isinstance(error, subprocess.TimeoutExpired)
             destination['firstFailure'] = failure_observation.failure_snapshot(
-                error, child.returncode if child is not None else None, source, observed)
+                error, child.returncode if child is not None else None, source, observed,
+                sample_resources=not timed_out)
             if boundary_simulator and child is not None:
-                destination['firstFailure']['ownedBoundary'] = failure_observation.child_boundary(child, boundary_simulator)
+                if timed_out:
+                    # Cached identity only: native/resource context must not gate TERM.
+                    destination['firstFailure']['ownedBoundary'] = {
+                        'pid': child.pid, 'simulator': boundary_simulator,
+                        'skipped': 'Owned cleanup takes priority after Timeout',
+                        'kernelExecTimestamp': None}
+                else:
+                    destination['firstFailure']['ownedBoundary'] = failure_observation.child_boundary(child, boundary_simulator)
         except Exception:
             pass  # Optional in-process metadata cannot change the phase verdict.
     def wait_for_completion():

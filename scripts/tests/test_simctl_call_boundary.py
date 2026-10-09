@@ -87,7 +87,7 @@ class SimctlCallBoundaryTests(unittest.TestCase):
         self.assertLessEqual(receipt['firstFailure']['observedMonotonic'], receipt['killRequestedMonotonic'])
         self.assertIsNotNone(receipt['childExitCode'])
 
-    def test_bootstatus_records_native_boundary_before_owned_stop(self):
+    def test_bootstatus_timeout_records_cached_identity_without_native_sampling(self):
         self.assertTrue(callable(getattr(observation, 'owned_boundary', None)), 'Native PID path observation is missing')
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -97,12 +97,16 @@ class SimctlCallBoundaryTests(unittest.TestCase):
                 return real_popen([sys.executable, '-c', 'import time;time.sleep(2)'], **kwargs)
             with patch.object(replay.subprocess, 'Popen', side_effect=launch), \
                  patch('verify_replay_seed.owned_progress', return_value={}), \
-                 patch.object(observation, 'owned_boundary', return_value={'simulator': DEVICE, 'executable': 'framework-simctl'}):
+                 patch.object(observation, 'owned_boundary', side_effect=AssertionError('Timeout native sampling')) as native:
                 with self.assertRaises(subprocess.TimeoutExpired):
                     replay.run_owned_phase(command, root/'boot.log', root/'boot.json', .12)
             receipt = json.loads((root/'boot.json').read_text())
             self.assertEqual(receipt['firstFailure']['ownedBoundary']['simulator'], DEVICE)
-            self.assertEqual(receipt['firstFailure']['ownedBoundary']['executable'], 'framework-simctl')
+            native.assert_not_called()
+            boundary = receipt['firstFailure']['ownedBoundary']
+            self.assertEqual(boundary['pid'], receipt['pid'])
+            self.assertEqual(boundary['skipped'], 'Owned cleanup takes priority after Timeout')
+            self.assertNotIn('executable', boundary)
             self.assertLessEqual(receipt['firstFailure']['observedMonotonic'], receipt['phaseStartedMonotonic'] + receipt['groupStopRequestedElapsedSeconds'])
 
     def test_snapshot_and_receipt_fault_cannot_mask_timeout_or_skip_reap(self):

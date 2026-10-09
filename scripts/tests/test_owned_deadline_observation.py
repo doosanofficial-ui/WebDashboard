@@ -96,6 +96,8 @@ class OwnedDeadlineObservationTests(unittest.TestCase):
         self.assertEqual(caught.exception.timeout, self.budget)
         self.assertTrue(self.receipt['timedOut'])
         self.assertEqual(self.receipt['exitCode'], 0)
+        self.assertEqual(self.receipt['firstFailure']['childExitCodeBeforeStop'], 0)
+        self.assertIsNone(self.receipt['firstFailure']['resources'])
 
 
 if __name__ == '__main__':

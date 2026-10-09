@@ -60,12 +60,17 @@ def resources():
     return value
 
 
-def failure_snapshot(error, child_exit_code=None, source='caller', observed_monotonic=None):
+def failure_snapshot(error, child_exit_code=None, source='caller', observed_monotonic=None,
+                     sample_resources=True):
     """Observation time, never an inferred kernel exit timestamp."""
     value = {'observedMonotonic': time.monotonic() if observed_monotonic is None else observed_monotonic,
         'observedUTC': datetime.datetime.now(datetime.timezone.utc).isoformat(),
         'errorType': type(error).__name__, 'source': source,
         'childExitCodeBeforeStop': child_exit_code, 'kernelExitTimestamp': None}
+    if not sample_resources:
+        value.update(resources=None, resourcesSampleMonotonic=None,
+                     contextDeferredReason='Owned cleanup takes priority after Timeout')
+        return value
     try:
         value['resources'] = resources()
         value['resourcesSampleMonotonic'] = time.monotonic()
