@@ -341,17 +341,38 @@ final class OfflineReplayUITests: XCTestCase {
         openFixtureSession(app)
         revealExport(app, format: "json").tap()
         _ = readyNativeSaveButton(app)
+        let homeObservation = HomeStateObservation()
         // This is the owned test Simulator's Home, never a physical device.
+        homeObservation.mark(.homeRequested)
         XCUIDevice.shared.press(.home)
-        // Home can leave an offline app running or suspended in background.
+        homeObservation.mark(.homeReturned)
+        // Preserve both original reads and OR short circuit; observe their separate call times.
         let background = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            app.state == .runningBackground || app.state == .runningBackgroundSuspended
+            homeObservation.readState("predicate-background", { app.state }) == .runningBackground ||
+                homeObservation.readState("predicate-suspended", { app.state }) == .runningBackgroundSuspended
         }, object: nil)
+        homeObservation.mark(.waitRequested)
         let backgroundResult = XCTWaiter.wait(for: [background], timeout: 5)
-        let backgroundState = XCTAttachment(string: "state after Home: \(app.state.rawValue)")
+        homeObservation.mark(.waitReturned)
+        let attachedState = homeObservation.readState("after-wait-attachment", { app.state })
+        let backgroundState = XCTAttachment(string: "state after Home: \(attachedState.rawValue)")
         backgroundState.name = "DEMO-native-export-background-state"
         backgroundState.lifetime = .keepAlways
         add(backgroundState)
+        // Preserve completed observations before any optional, potentially slow screen capture.
+        let trace = XCTAttachment(string: homeObservation.json())
+        trace.name = "DEMO-native-export-home-state-queries"
+        trace.lifetime = .keepAlways
+        add(trace)
+        if backgroundResult != .completed {
+            // Separate post-verdict screen observation; never activate the app for evidence.
+            XCTContext.runActivity(named: "DEMO-native-export-home-failure-screen") { activity in
+                let screen = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+                screen.name = "DEMO-native-export-home-failure-screen"
+                screen.lifetime = .keepAlways
+                activity.add(screen)
+            }
+        }
         XCTAssertEqual(backgroundResult, .completed, "state after Home: \(app.state.rawValue)")
         app.activate()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 5))
