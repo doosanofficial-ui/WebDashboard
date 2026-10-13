@@ -950,9 +950,9 @@ final class TelemetryModel: NSObject {
         persistDashboardProfile()
     }
 
-    func snapDashboard(pageID: String, grid: Int = 8) {
-        guard var profile = dashboardProfile else { return }
-        profile.snapToGrid(pageID: pageID, grid: grid)
+    func snapDashboard(pageID: String, grid: Int = 1) {
+        guard var profile = dashboardProfile,
+              dashboardLayoutHistory.snap(profile: &profile, pageID: pageID, grid: grid) else { return }
         dashboardProfile = profile
         persistDashboardProfile()
     }

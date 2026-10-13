@@ -147,7 +147,7 @@ private struct SetupView: View {
                 .foregroundStyle(TelemetryTheme.mutedText)
             setupStep(
                 number: "1",
-                title: "Start recording",
+                title: model.localRecordingEnabled ? "Stop recording" : "Start recording",
                 detail: model.localRecordingEnabled ? model.localRecordingStatus : "Open a local SQLite session",
                 ready: model.localRecordingEnabled
             ) {
@@ -155,7 +155,7 @@ private struct SetupView: View {
             }
             setupStep(
                 number: "2",
-                title: "Start GPS",
+                title: model.collecting ? "Stop GPS" : "Start GPS",
                 detail: model.collecting ? model.locationStatus : "Precise location permission required",
                 ready: model.collecting
             ) {
@@ -199,7 +199,7 @@ private struct SetupView: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(AppLocalization.text("\(title), \(detail)"))
+        .accessibilityLabel("\(AppLocalization.text(title)), \(AppLocalization.text(detail))")
     }
 
     private var permissionsCard: some View {

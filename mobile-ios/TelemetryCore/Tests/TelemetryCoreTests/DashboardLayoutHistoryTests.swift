@@ -65,4 +65,42 @@ final class DashboardLayoutHistoryTests: XCTestCase {
             widgetID: "active", rect: .init(x: 1, y: 1, width: 2, height: 1)))
         XCTAssertFalse(history.canRedo(in: profile))
     }
+    func testSnapUsesCellUnitsAndKeepsNoOpRedo() throws {
+        var profile = try fixture(); let original = profile; var history = DashboardLayoutHistory()
+        XCTAssertFalse(history.snap(profile: &profile, pageID: "page"))
+        XCTAssertEqual(profile, original)
+        XCTAssertTrue(history.commit(profile: &profile, expectedProfileID: profile.id, expectedPage: profile.pages[0],
+            widgetID: "active", rect: .init(x: 1, y: 3, width: 2, height: 1)))
+        XCTAssertTrue(history.undo(profile: &profile))
+        XCTAssertFalse(history.snap(profile: &profile, pageID: "page"))
+        XCTAssertTrue(history.canRedo(in: profile))
+    }
+    func testWholePageSnapIsOneAtomicUndoRedoCommand() throws {
+        var profile = try fixture(); var history = DashboardLayoutHistory()
+        try profile.updateWidgetRect(pageID: "page", widgetID: "active", rect: .init(x: 1, y: 3, width: 3, height: 3))
+        try profile.updateWidgetRect(pageID: "page", widgetID: "neighbor", rect: .init(x: 5, y: 1, width: 3, height: 3))
+        let original = profile
+        XCTAssertTrue(history.snap(profile: &profile, pageID: "page", grid: 2))
+        XCTAssertEqual(profile.pages[0].widgets.map(\.rect), [
+            .init(x: 2, y: 4, width: 4, height: 4), .init(x: 6, y: 2, width: 4, height: 4)])
+        let snapped = profile
+        XCTAssertTrue(history.undo(profile: &profile))
+        XCTAssertEqual(profile, original)
+        XCTAssertFalse(history.canUndo(in: profile))
+        XCTAssertTrue(history.redo(profile: &profile))
+        XCTAssertEqual(profile, snapped)
+    }
+    func testStaleWidgetBlocksWholeSnapUndoWithoutPartialWrites() throws {
+        var profile = try fixture(); var history = DashboardLayoutHistory()
+        try profile.updateWidgetRect(pageID: "page", widgetID: "active", rect: .init(x: 1, y: 3, width: 3, height: 3))
+        try profile.updateWidgetRect(pageID: "page", widgetID: "neighbor", rect: .init(x: 5, y: 1, width: 3, height: 3))
+        XCTAssertTrue(history.snap(profile: &profile, pageID: "page", grid: 2))
+        try profile.updateWidgetRect(pageID: "page", widgetID: "neighbor", rect: .init(x: 7, y: 7, width: 2, height: 1))
+        let current = profile
+        XCTAssertFalse(history.undo(profile: &profile))
+        XCTAssertEqual(profile, current)
+        XCTAssertFalse(history.snap(profile: &profile, pageID: "missing", grid: 2))
+        XCTAssertFalse(history.snap(profile: &profile, pageID: "page", grid: 0))
+        XCTAssertEqual(profile, current)
+    }
 }

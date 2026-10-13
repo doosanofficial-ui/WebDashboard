@@ -36,6 +36,7 @@ final class BLEDiscoveryController: NSObject, @preconcurrency CBCentralManagerDe
 
     private var central: CBCentralManager?
     private var peripherals: [UUID: CBPeripheral] = [:]
+    private var inspectionPeripherals: [UUID: CBPeripheral] = [:]
     private var devices: [UUID: BLEDiscoveredDevice] = [:]
     private var scanning = false
 
@@ -68,7 +69,10 @@ final class BLEDiscoveryController: NSObject, @preconcurrency CBCentralManagerDe
     func stop() {
         scanning = false
         central?.stopScan()
-        for peripheral in peripherals.values where peripheral.state == .connected {
+        var cancelled = Set<UUID>()
+        for peripheral in Array(peripherals.values) + Array(inspectionPeripherals.values)
+            where peripheral.state == .connected || peripheral.state == .connecting {
+            guard cancelled.insert(peripheral.identifier).inserted else { continue }
             central?.cancelPeripheralConnection(peripheral)
         }
         publish("BLE scan stopped")
@@ -81,6 +85,7 @@ final class BLEDiscoveryController: NSObject, @preconcurrency CBCentralManagerDe
         }
         scanning = false
         central.stopScan()
+        inspectionPeripherals[id] = peripheral
         update(id) { $0.state = "connecting for GATT inspection" }
         if peripheral.state == .connected {
             peripheral.discoverServices(nil)
@@ -179,12 +184,14 @@ final class BLEDiscoveryController: NSObject, @preconcurrency CBCentralManagerDe
     func centralManager(_ central: CBCentralManager,
                         didFailToConnect peripheral: CBPeripheral,
                         error: Error?) {
+        inspectionPeripherals.removeValue(forKey: peripheral.identifier)
         update(peripheral.identifier) { $0.state = "connection failed" }
     }
 
     func centralManager(_ central: CBCentralManager,
                         didDisconnectPeripheral peripheral: CBPeripheral,
                         error: Error?) {
+        inspectionPeripherals.removeValue(forKey: peripheral.identifier)
         update(peripheral.identifier) { $0.state = "disconnected" }
     }
 
