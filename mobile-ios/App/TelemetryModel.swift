@@ -423,6 +423,13 @@ final class TelemetryModel: NSObject {
         adapterSignalValue = nil
         canSource = "None"
         rawCANText = "-"
+        // An idle Demo preview can leave DEMO without a live adapter profile.
+        // Keep the recording's mode while accepted measurements are pending.
+        if runMode == .demo, !localRecordingEnabled, localRecorder == nil,
+           recordingWriteQueue == nil, !recordingClosing {
+            runMode = .live
+            adapterStatus = "Adapter disconnected"
+        }
         publishCarPlayProjection()
     }
 

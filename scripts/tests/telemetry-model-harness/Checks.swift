@@ -121,6 +121,63 @@ import Foundation
         expect(!replay.collecting, "Replay cannot start GPS collection")
         expect(replay.locationService.starts == 0, "Replay does not request native location acquisition")
         expect(replay.recorded.isEmpty, "Replay MARK cannot add recorded events")
+        // These checks fail if stopping a non-recording Demo clears the values
+        // but leaves DEMO selected, or resets the mode while a session is active.
+        let preview = Coordinator()
+        preview.runMode = .demo
+        preview.localRecordingEnabled = false
+        preview.collecting = false
+        preview.adapterStatus = "Demo adapter monitoring"
+        preview.adapterSignalValue = 100
+        preview.rawCANText = "0x123  01"
+        preview.applyLocalSignals(CANFrame(receivedAtEpoch: 300), values: ["demo.signal": 100], source: "Demo")
+        preview.stopDemoAdapter()
+        expect(preview.runMode == .live, "stopping an idle Demo returns to LIVE without a profile")
+        expect(preview.adapterStatus == "Adapter disconnected" && preview.canSource == "None",
+               "Demo Stop presents LIVE as disconnected")
+        expect(preview.frame == nil && preview.points.isEmpty && preview.rawCANText == "-" && preview.adapterSignalValue == nil,
+               "Demo Stop clears synthetic presentation")
+        expect(!preview.localRecordingEnabled && !preview.collecting && preview.recorded.isEmpty && preview.locationService.starts == 0,
+               "Demo Stop does not start recording or GPS")
+        expect(preview.demoAdapter.starts == 0 && preview.liveAdapter.starts == 0 && preview.diagnosticAdapter.starts == 0,
+               "Demo Stop does not start any adapter")
+        preview.stopDemoAdapter()
+        expect(preview.runMode == .live && preview.recorded.isEmpty && preview.locationService.starts == 0,
+               "repeated Demo Stop remains disconnected and inactive")
+
+        let stopLive = Coordinator()
+        stopLive.runMode = .demo
+        stopLive.localRecordingEnabled = false
+        stopLive.collecting = false
+        stopLive.stopLiveAdapter()
+        expect(stopLive.runMode == .live && stopLive.canSource == "None",
+               "Stop live alias also leaves an idle Demo in LIVE")
+
+        // Each pending recording boundary independently blocks a mode change.
+        for boundary in ["enabled", "recorder", "queue", "closing"] {
+            let retained = Coordinator()
+            retained.runMode = .demo
+            retained.localRecordingEnabled = boundary == "enabled"
+            let recorder = RecorderBoundary(), queue = WriteQueueBoundary()
+            if boundary == "recorder" { retained.localRecorder = recorder }
+            if boundary == "queue" { retained.recordingWriteQueue = queue }
+            retained.recordingClosing = boundary == "closing"
+            retained.stopDemoAdapter()
+            expect(retained.runMode == .demo, "Demo Stop retains session mode while \(boundary) is pending")
+            expect(retained.localRecordingEnabled == (boundary == "enabled")
+                && retained.recordingClosing == (boundary == "closing")
+                && (boundary != "recorder" || retained.localRecorder === recorder)
+                && (boundary != "queue" || retained.recordingWriteQueue === queue),
+                "Demo Stop preserves the \(boundary) recording boundary")
+        }
+
+        let stoppedReplay = Coordinator()
+        stoppedReplay.runMode = .replay
+        stoppedReplay.localRecordingEnabled = false
+        stoppedReplay.collecting = false
+        stoppedReplay.stopDemoAdapter()
+        expect(stoppedReplay.runMode == .replay, "Demo Stop never selects LIVE over Replay")
+
         print("APP COORDINATOR SOURCE HARNESS: \(checks) assertions, \(failures) failures (not UIKit/device evidence)")
         if failures > 0 { exit(1) }
     }

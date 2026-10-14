@@ -102,7 +102,14 @@ struct CLLocation {
     func start() { starts += 1 }
     func stop() { stops += 1 }
 }
-@MainActor final class Adapter { func stop() {} }
+@MainActor final class Adapter {
+    var starts = 0
+    func start() { starts += 1 }
+    func stop() {}
+}
+// Identity markers for recorder/queue boundaries; no SQLite or file operations.
+@MainActor final class RecorderBoundary {}
+@MainActor final class WriteQueueBoundary {}
 @MainActor enum CredentialStore {
     static var credential: String?
     static func read() -> String? { credential }
@@ -150,6 +157,9 @@ actor TelemetryStore {
     var queueDepth = 0
     var collecting = true
     var localRecordingEnabled = true
+    var localRecorder: RecorderBoundary?
+    var recordingWriteQueue: WriteQueueBoundary?
+    var recordingClosing = false
     var locationStatus = "Collecting"
     var lastMarkAt: Date?
     var lastLocation: TelemetryEvent?

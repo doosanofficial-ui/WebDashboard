@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "mobile-ios/App/TelemetryModel.swift"
 METHODS = ["endpoint", "startLocation", "stopLocation", "store", "refreshQueueDepth",
            "handleLocations", "mark", "handleDiagnosticResult", "applyLocalDiagnosticSignals",
-           "handleLiveFrame", "ingestLocal", "applyLocalSignals", "stopDemoAdapter", "configureOptionalUpload"]
+           "handleLiveFrame", "ingestLocal", "applyLocalSignals", "stopDemoAdapter", "stopLiveAdapter", "configureOptionalUpload"]
 
 
 def extract(source: str, name: str) -> str:
