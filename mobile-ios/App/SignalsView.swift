@@ -11,8 +11,9 @@ struct SignalsView: View {
 
     var body: some View {
         NavigationStack {
-            TimelineView(.periodic(from: .now, by: 0.5)) { timeline in
-                let displayDate = model.replayTimestamp.map(Date.init(timeIntervalSince1970:)) ?? timeline.date
+            TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+                // CAN updates can arrive between scheduled timeline ticks.
+                let displayDate = model.replayTimestamp.map(Date.init(timeIntervalSince1970:)) ?? Date()
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: TelemetryTheme.Spacing.medium) {
                         healthCard(at: displayDate)
