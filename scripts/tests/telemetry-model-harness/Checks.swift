@@ -40,6 +40,25 @@ import Foundation
         localFailure.startLocation()
         expect(localFailure.locationService.starts == 0, "real local failure still blocks start")
 
+        let stoppedGPS = Coordinator()
+        stoppedGPS.handleLocations([CLLocation(timestamp: Date(timeIntervalSince1970: 100))])
+        let retainedFix = stoppedGPS.lastLocation?.capturedAt
+        let retainedTrackCount = stoppedGPS.locationTrack.count
+        stoppedGPS.stopLocation()
+        let eventsAtStop = stoppedGPS.recorded.count
+        stoppedGPS.handleLocations([CLLocation(timestamp: Date(timeIntervalSince1970: 101))])
+        expect(!stoppedGPS.collecting && stoppedGPS.locationService.stops == 1,
+               "GPS Stop changes collection state before a late callback")
+        expect(stoppedGPS.lastLocation?.capturedAt == retainedFix && stoppedGPS.locationTrack.count == retainedTrackCount,
+               "late GPS callback after Stop preserves the last fix and track")
+        expect(stoppedGPS.recorded.count == eventsAtStop,
+               "late GPS callback after Stop cannot append recorded measurements")
+        stoppedGPS.collecting = true
+        stoppedGPS.localRecordingEnabled = false
+        stoppedGPS.handleLocations([CLLocation(timestamp: Date(timeIntervalSince1970: 102))])
+        expect(stoppedGPS.lastLocation?.capturedAt == 102 && stoppedGPS.recorded.count == eventsAtStop,
+               "GPS presentation can update while recording remains off")
+
         CredentialStore.credential = "test-only-not-a-real-token"
         let full = Coordinator()
         full.serverText = "https://telemetry.example.invalid"
@@ -100,6 +119,7 @@ import Foundation
         replay.startLocation()
         replay.mark()
         expect(!replay.collecting, "Replay cannot start GPS collection")
+        expect(replay.locationService.starts == 0, "Replay does not request native location acquisition")
         expect(replay.recorded.isEmpty, "Replay MARK cannot add recorded events")
         print("APP COORDINATOR SOURCE HARNESS: \(checks) assertions, \(failures) failures (not UIKit/device evidence)")
         if failures > 0 { exit(1) }
