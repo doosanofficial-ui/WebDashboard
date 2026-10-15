@@ -80,4 +80,17 @@ After a certified restoration, effective-language acceptance must launch the own
 
 The existing capture code deliberately records Live controls with recording/GPS OFF and Setup controls before importing a profile. These are locator examples, not evidence of a failed current operation or completed action. The local help-example-state-note.proposed.patch adds language-specific context only to live/setup; it does not assert every Replay/Signals screen is pre-action. It is not applied, compiled or visually accepted while Teams owns the screen.
 
-Only the source audit, its regressions and this preparation record are independently eligible for repository integration. Preserve the product UI proposal as unverified. Record synthetic file tests, source-gate failures, native gaps and prior GUI28/28 as separate evidence classes.
+The source audit, its regressions and the independently verified synthetic metadata follow-up below are eligible for repository integration. Preserve the product UI proposal as unverified. Record synthetic file tests, source-gate failures, native gaps and prior GUI28/28 as separate evidence classes.
+
+
+## Task2 follow-up: isolated synthetic metadata transaction
+
+The 2026-10-15 follow-up adds scripts/darwin_file_metadata.py, scripts/synthetic_data_preservation.py and their three test files. The old local preserved_app_data.py and unconditional native barriers remain frozen. This module accepts only its newly created marked temporary workspace; it does not add a native CLI or establish a writer/cache boundary.
+
+- [x] Reproduce metadata loss with independent ls/xattr assertions against the old copy2 path.
+- [x] Preserve and compare ordered ACLs, exact binary/empty/absent xattrs, root/entry permissions, ownership/flags and nanosecond directory/file/root mtimes; retain the root inode.
+- [x] Verify backup and full staging before moving trial entries, preserve trial root metadata and reject metadata mismatch without a success receipt.
+- [x] Exercise failure/interrupt/recovery paths with disposable files; no actual app/data access.
+- [ ] Certify actual writer/cache synchronization, external stores and effective preference restoration: still blocked; not attempted by this change.
+
+See [synthetic metadata verification](../../reports/help-synthetic-metadata-preservation-2026-10-15.md) for the contract, synthetic evidence and explicit limits. Filesystem regression success cannot authorize runner installation, app lifecycle actions, UI/capture or Library upload. The product wording proposal remains unverified and unapplied.
