@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Fail closed when bundled actual guide captures or their source provenance drift."""
-import hashlib,json,re
+import argparse,hashlib,json,re
 from pathlib import Path
 
 def require(condition, message):
@@ -38,6 +38,36 @@ def expected_screen_inputs(root):
              and p.relative_to(resources).parts[0]!='HelpScreenshots'}
     return inputs
 
+def audit_source_provenance(root):
+    """Compare source inputs without modifying assets or certifying a capture run."""
+    root=Path(root)
+    directory=root/'mobile-ios/App/Resources/HelpScreenshots'
+    manifest=json.loads((directory/'manifest.json').read_text())
+    recorded=manifest['screenInputs']
+    expected=expected_screen_inputs(root)
+    current={relative:hashlib.sha256((root/relative).read_bytes().replace(b'\r\n',b'\n')).hexdigest()
+             for relative in sorted(expected)}
+    missing=sorted(expected-set(recorded))
+    extra=sorted(set(recorded)-expected)
+    stale=sorted(relative for relative in expected & set(recorded)
+                 if current[relative]!=recorded[relative])
+    targets=expected_capture_targets((root/'mobile-ios/App/AppHelpView.swift').read_text(encoding='utf-8'))
+    return {
+        'schemaVersion':1,
+        'scope':'source-input-audit-only',
+        'sourceInputsMatch':not (missing or extra or stale),
+        'fullAssetVerificationPerformed':False,
+        'assetFilesModified':False,
+        'expectedSourceInputCount':len(expected),
+        'recordedSourceInputCount':len(recorded),
+        'missingSourceInputs':missing,
+        'extraSourceInputs':extra,
+        'staleSourceInputs':stale,
+        'currentSourceInputs':current,
+        'expectedCaptureTargets':targets,
+    }
+
+
 def verify(root):
     directory=root/'mobile-ios/App/Resources/HelpScreenshots'
     manifest=json.loads((directory/'manifest.json').read_text())
@@ -63,4 +93,17 @@ def verify(root):
         require(receipt['test']==expected_test and receipt['timestamp']>0,'Language capture receipt required')
     print('APP HELP CAPTURES PASS:28 actual ko/en step images; source/bytes/anchors/provenance match')
 
-if __name__=='__main__':verify(Path(__file__).resolve().parents[1])
+def main(argv=None):
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--audit-source',action='store_true',
+                        help='Print a read-only source-input comparison; this does not verify captures')
+    args=parser.parse_args(argv)
+    root=Path(__file__).resolve().parents[1]
+    if args.audit_source:
+        report=audit_source_provenance(root)
+        print(json.dumps(report,indent=2,sort_keys=True))
+        return 0 if report['sourceInputsMatch'] else 1
+    verify(root)
+    return 0
+
+if __name__=='__main__':raise SystemExit(main())

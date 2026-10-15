@@ -103,3 +103,84 @@ class HelpAssetGateTests(unittest.TestCase):
             for path in manifest['screenInputs']:
                 source=target/path;source.write_bytes(source.read_bytes().replace(b'\r\n',b'\n').replace(b'\n',b'\r\n'))
             module.verify(target)
+
+
+def source_audit_fixture(target):
+    root=Path(__file__).resolve().parents[2]
+    app=target/'mobile-ios/App'
+    (app/'CarPlay').mkdir(parents=True)
+    (app/'Resources/en.lproj').mkdir(parents=True)
+    (app/'Resources/HelpScreenshots').mkdir()
+    shutil.copyfile(root/'mobile-ios/App/AppHelpView.swift',app/'AppHelpView.swift')
+    (app/'Screen.swift').write_bytes(b'first\nsecond\n')
+    (app/'CarPlay/Projection.swift').write_bytes(b'projection\n')
+    (app/'Resources/en.lproj/Localizable.strings').write_bytes(b'"Example" = "Example";\n')
+    inputs={p:hashlib.sha256((target/p).read_bytes()).hexdigest()
+            for p in module.expected_screen_inputs(target)}
+    manifest=app/'Resources/HelpScreenshots/manifest.json'
+    manifest.write_text(json.dumps({'screenInputs':inputs}))
+    return manifest
+
+
+class HelpSourceAuditTests(unittest.TestCase):
+    def test_source_match_is_not_claimed_as_full_asset_verification(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target=Path(directory);manifest=source_audit_fixture(target)
+            before=manifest.read_bytes()
+            report=module.audit_source_provenance(target)
+            self.assertTrue(report['sourceInputsMatch'])
+            self.assertFalse(report['fullAssetVerificationPerformed'])
+            self.assertFalse(report['assetFilesModified'])
+            self.assertEqual(report['expectedSourceInputCount'],3)
+            self.assertEqual(len(report['expectedCaptureTargets']),28)
+            self.assertEqual(report['expectedCaptureTargets']['Help-live-ko-2'],'toggle-gps')
+            self.assertEqual(report['expectedCaptureTargets']['Help-editor-en-1'],
+                             'resize-dashboard-widget-fixture-0')
+            self.assertEqual(manifest.read_bytes(),before)
+            self.assertFalse(list(manifest.parent.glob('*.png')))
+
+    def test_missing_extra_and_stale_inputs_are_reported_together_without_writes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target=Path(directory);path=source_audit_fixture(target)
+            manifest=json.loads(path.read_text())
+            missing='mobile-ios/App/CarPlay/Projection.swift'
+            del manifest['screenInputs'][missing]
+            extra='../outside-capture-scope.swift'
+            manifest['screenInputs'][extra]='not-a-current-input'
+            path.write_text(json.dumps(manifest))
+            (target/'mobile-ios/App/Screen.swift').write_bytes(b'changed\n')
+            before={str(p.relative_to(target)):p.read_bytes()
+                    for p in target.rglob('*') if p.is_file()}
+            report=module.audit_source_provenance(target)
+            self.assertFalse(report['sourceInputsMatch'])
+            self.assertEqual(report['missingSourceInputs'],[missing])
+            self.assertEqual(report['extraSourceInputs'],[extra])
+            self.assertEqual(report['staleSourceInputs'],['mobile-ios/App/Screen.swift'])
+            self.assertEqual(report['recordedSourceInputCount'],3)
+            self.assertEqual({str(p.relative_to(target)):p.read_bytes()
+                              for p in target.rglob('*') if p.is_file()},before)
+
+    def test_source_audit_normalizes_line_endings_without_rewriting_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target=Path(directory);source_audit_fixture(target)
+            path=target/'mobile-ios/App/Screen.swift'
+            path.write_bytes(b'first\r\nsecond\r\n')
+            report=module.audit_source_provenance(target)
+            self.assertTrue(report['sourceInputsMatch'])
+            self.assertEqual(path.read_bytes(),b'first\r\nsecond\r\n')
+
+    def test_optimized_cli_audit_reports_drift_and_never_prints_asset_pass(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target=Path(directory);source_audit_fixture(target)
+            scripts=target/'scripts';scripts.mkdir()
+            driver=scripts/'verify_help_assets.py';shutil.copyfile(module.__file__,driver)
+            (target/'mobile-ios/App/CarPlay/NewProjection.swift').write_text('new source')
+            result=subprocess.run([sys.executable,'-B','-O',str(driver),'--audit-source'],
+                                  capture_output=True,text=True,timeout=10)
+            self.assertEqual(result.returncode,1,result.stderr)
+            report=json.loads(result.stdout)
+            self.assertEqual(report['missingSourceInputs'],
+                             ['mobile-ios/App/CarPlay/NewProjection.swift'])
+            self.assertFalse(report['fullAssetVerificationPerformed'])
+            self.assertNotIn('APP HELP CAPTURES PASS',result.stdout)
+            self.assertEqual(result.stderr,'')
