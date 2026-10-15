@@ -94,3 +94,10 @@ The 2026-10-15 follow-up adds scripts/darwin_file_metadata.py, scripts/synthetic
 - [ ] Certify actual writer/cache synchronization, external stores and effective preference restoration: still blocked; not attempted by this change.
 
 See [synthetic metadata verification](../../reports/help-synthetic-metadata-preservation-2026-10-15.md) for the contract, synthetic evidence and explicit limits. Filesystem regression success cannot authorize runner installation, app lifecycle actions, UI/capture or Library upload. The product wording proposal remains unverified and unapplied.
+
+
+## Task3 follow-up: completed source and memory checks, native boundary still open
+
+The independent review and tests are recorded in [writer/cache and example preparation](../../reports/help-writer-cache-and-example-preparation-2026-10-15.md). verify_help_memory_contract.py compiles the actual hash-pinned AppLanguageStore prefix against memory-only UserDefaults/Locale and checks EN/KO separately. It also checks the proposed Help data and syntax without applying the product patch. No actual cfprefsd behavior is certified.
+
+verify_help_preparation.py emits the reviewed28-target call order/anchor contract and distinguishes two capture selectors from all four acceptance selectors. The existing initial language override is not a persistence-write barrier; do not suppress explicit picker persistence to produce a green restoration claim. The bilingual setup/live context patch remains an unapplied artifact requiring full iOS/visual acceptance. All actual native operations and Library upload remain blocked by the current user scope, while these independent source checks are complete.

@@ -1,0 +1,32 @@
+--- a/mobile-ios/App/AppHelpView.swift
++++ b/mobile-ios/App/AppHelpView.swift
+@@ -34,6 +34,18 @@
+     let title: HelpCopy
+     let overview: HelpCopy
+     let steps: [HelpStep]
++    var screenshotStateNote: HelpCopy? {
++        switch id {
++        case "live":
++            HelpCopy(en: "These examples show the controls before recording or GPS is started. Follow the steps in order, then check the Expected result after each action.",
++                     ko: "이 예시는 기록과 GPS를 시작하기 전의 조작 위치를 보여줍니다. 순서대로 진행한 뒤 각 동작의 정상 결과를 확인하세요.")
++        case "setup":
++            HelpCopy(en: "These examples show the controls before a profile is imported. Start live adapter is disabled in the example; import your verified profile before connecting.",
++                     ko: "이 예시는 프로필을 가져오기 전의 조작 위치를 보여줍니다. 예시의 실차 어댑터 시작은 비활성 상태입니다. 연결하기 전에 검증된 프로필을 가져오세요.")
++        default:
++            nil
++        }
++    }
+     static let all: [HelpGuide] = [
+         .init(id: "setup", title: .init(en: "1. Connect a verified adapter", ko: "1. 검증된 어댑터 연결"),
+               overview: .init(en: "Use CAN/manufacturer diagnostics and GPS on your iPhone. No server, account or internet is needed for recording and Replay.", ko: "iPhone에서 CAN·제조사 진단과 GPS를 사용합니다. 기록과 Replay에는 서버·계정·인터넷이 필요하지 않습니다."), steps: [
+@@ -121,6 +133,10 @@
+                             .foregroundStyle(TelemetryTheme.mutedText)
+                     }.padding().telemetrySurface(.standard).accessibilityElement(children:.combine)
+                 }
++                if let note = guide.screenshotStateNote {
++                    Text(note.text).font(.footnote).foregroundStyle(TelemetryTheme.mutedText)
++                        .accessibilityIdentifier("help-example-state-note")
++                }
+                 Button { showingFullScreen=true } label: {
+                     VStack(spacing:8) {
+                         HelpScreenshot(name:imageName,guide:guide).frame(width:140)
