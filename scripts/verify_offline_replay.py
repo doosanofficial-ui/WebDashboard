@@ -676,11 +676,21 @@ def owned_ui_workspace(results):
                 raise
     except BaseException as cleanup_error:
         if entered and cleanup_error is not original_error:
+            failure_error = original_error if original_error is not None else cleanup_error
+            failure_phase = "workspace-body" if original_error is not None else "workspace-cleanup"
             try:
-                observe_first_failure(cleanup_error, results, None, "workspace-cleanup",
+                observe_first_failure(failure_error, results, None, failure_phase,
                                       collect_diagnostics=False)
             except BaseException:
                 pass  # Metadata must not replace the primary error or authorize more probes.
+            try:
+                (results / "workspace-cleanup-failure.json").write_text(json.dumps({
+                    "phase": "workspace-cleanup", "errorType": type(cleanup_error).__name__,
+                    "secondaryToBodyError": original_error is not None,
+                    "bodyErrorType": type(original_error).__name__ if original_error is not None else None,
+                }, indent=2))
+            except BaseException:
+                pass  # Cleanup evidence is optional and must not replace either original error.
             if original_error is not None:
                 raise original_error from cleanup_error
         raise

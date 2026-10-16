@@ -19,6 +19,7 @@ class WorkspaceCompletionBoundaryTests(unittest.TestCase):
         group = "help-max-en"
         device = "11111111-1111-4111-8111-111111111111"
         cleanup_error = OSError("synthetic workspace cleanup failure")
+        seed_error = ValueError("synthetic invalid seed artifact")
         body_error = subprocess.CalledProcessError(65, ["synthetic", "test"])
         output_error = BrokenPipeError("synthetic final status output failure")
         publish_error = OSError("synthetic completed pending-file close failure")
@@ -56,7 +57,7 @@ class WorkspaceCompletionBoundaryTests(unittest.TestCase):
                 def __exit__(self, *args):
                     events.append("workspace-cleanup")
                     visible_during_cleanup.append((results / "ui-completion.json").exists())
-                    if mode in ("cleanup-fail", "body-and-cleanup-fail"):
+                    if mode in ("cleanup-fail", "body-and-cleanup-fail", "seed-and-cleanup-fail"):
                         raise cleanup_error
 
             def output(command, timeout=60):
@@ -111,6 +112,8 @@ class WorkspaceCompletionBoundaryTests(unittest.TestCase):
                                     ("install_fixture", None), ("select_ui_destination", ("ios27", "iphone")),
                                     ("capture_simulator_bootstrap_failure", {})]:
                     stack.enter_context(patch.object(runner, name, return_value=value))
+                if mode == "seed-and-cleanup-fail":
+                    stack.enter_context(patch.object(runner, "private_artifact", side_effect=seed_error))
                 stack.enter_context(patch.object(runner, "output", side_effect=output))
                 stack.enter_context(patch.object(runner.failure_observation, "simctl_output",
                                                 side_effect=lambda command, *a, **k: output(command)))
@@ -124,6 +127,7 @@ class WorkspaceCompletionBoundaryTests(unittest.TestCase):
                     except BaseException as error:
                         caught = error
             expected = {"cleanup-fail": cleanup_error, "body-and-cleanup-fail": body_error,
+                        "seed-and-cleanup-fail": seed_error,
                         "output-fail": output_error, "publish-fail": publish_error}.get(mode)
             completion = results / "ui-completion.json"
             archived = list(results.glob("ui-completion.previous-*.json"))
@@ -136,7 +140,11 @@ class WorkspaceCompletionBoundaryTests(unittest.TestCase):
                     public_pass = True
                 except (ValueError, FileNotFoundError):
                     pass
-            return {"mode": mode, "events": events, "completionVisibleDuringWorkspaceCleanup": visible_during_cleanup,
+            first_failure = results / "first-failure-observation.json"
+            cleanup_failure = results / "workspace-cleanup-failure.json"
+            return {"firstFailureObservation": json.loads(first_failure.read_text()) if first_failure.exists() else None,
+                    "workspaceCleanupFailure": json.loads(cleanup_failure.read_text()) if cleanup_failure.exists() else None,
+                    "mode": mode, "events": events, "completionVisibleDuringWorkspaceCleanup": visible_during_cleanup,
                     "completionExists": completion.exists(), "publicAggregatePassed": public_pass,
                     "cliExitCode": cli.returncode, "cliPassPrinted": "FULL GATE PASS" in cli.stdout,
                     "originalErrorPreserved": (caught is expected if mode != "rerun" else isinstance(caught, FileExistsError)),
@@ -177,6 +185,15 @@ class WorkspaceCompletionBoundaryTests(unittest.TestCase):
 
     def test_pending_receipt_write_failure_cannot_publish_valid_json_as_success(self):
         self.assert_rejected(self.run_case("publish-fail"))
+
+
+    def test_seed_failure_stays_first_when_workspace_cleanup_also_fails(self):
+        result = self.run_case("seed-and-cleanup-fail")
+        self.assert_rejected(result)
+        self.assertEqual(result["ownedPhaseCalls"], 0, result)
+        self.assertEqual(result["firstFailureObservation"]["errorType"], "ValueError", result)
+        self.assertEqual(result["firstFailureObservation"]["phase"], "workspace-body", result)
+        self.assertEqual(result["workspaceCleanupFailure"]["errorType"], "OSError", result)
 
 
 if __name__ == "__main__":
