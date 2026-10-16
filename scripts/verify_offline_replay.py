@@ -16,7 +16,7 @@ import tempfile
 import uuid
 import export_dismissal_fixture as export_fixture
 import collect_help_source_inputs as help_sources
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 import export_dismissal_observation as export_audit
 
 from verify_ios_lifecycle import output, stage_sources, select_runtime_and_type, verify_summary, record_toolchain
@@ -96,6 +96,17 @@ def verify_group_results(root):
         selection = json.loads((root / group / "selection.json").read_text())
         if selection != {"group": group, "tests": tests}:
             raise ValueError(f"Unexpected/missing group selectors: {group}")
+        process = json.loads((root / group / "test-process.json").read_text())
+        if (not isinstance(process, dict) or process.get("launched") is not True
+                or type(process.get("exitCode")) is not int or process["exitCode"] != 0
+                or process.get("timedOut") is not False or process.get("firstFailure") is not None):
+            raise ValueError(f"Native test process did not finish successfully: {group}")
+        if (root / group / "first-failure-observation.json").exists():
+            raise ValueError(f"Group retained an original failure: {group}")
+        complete = json.loads((root / group / "ui-completion.json").read_text())
+        if (complete != {"group": group, "executedTests": len(tests), "result": "passed"}
+                or type(complete.get("executedTests")) is not int):
+            raise ValueError(f"Missing/invalid successful group completion: {group}")
         verify_summary(json.loads((root / group / "summary.json").read_text()), len(tests))
         executed.extend(tests)
     if len(executed) != 31 or len(set(executed)) != 31:
@@ -117,7 +128,7 @@ def phase_resource_snapshot():
     return value
 
 
-def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False, ensure_group_cleanup=False):
+def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False, ensure_group_cleanup=False, group_cleanup_timeout=0):
     """Record one bounded phase and stop only its newly owned POSIX process group."""
     if os.name != "posix":
         raise ValueError("Owned phase requires POSIX process groups")
@@ -334,15 +345,25 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False,
                 except OSError as error:
                     evidence["progressRecordingError"] = str(error)
             if ensure_group_cleanup and child is not None:
-                try:
-                    os.killpg(child.pid, 0)
-                except ProcessLookupError:
-                    evidence['groupExistsAfterCleanup'] = False
-                except OSError as error:
-                    evidence['groupExistsAfterCleanup'] = None
-                    group_cleanup_error('final-probe', error)
-                else:
-                    evidence['groupExistsAfterCleanup'] = True
+                cleanup_began = time.monotonic()
+                cleanup_deadline = cleanup_began + group_cleanup_timeout
+                evidence['groupCleanupConfirmationBudgetSeconds'] = group_cleanup_timeout
+                evidence['cleanupIsAdditionalToCommandBudget'] = True
+                while True:
+                    try:
+                        os.killpg(child.pid, 0)
+                    except ProcessLookupError:
+                        evidence['groupExistsAfterCleanup'] = False
+                    except OSError as error:
+                        evidence['groupExistsAfterCleanup'] = None
+                        group_cleanup_error('final-probe', error)
+                    else:
+                        evidence['groupExistsAfterCleanup'] = True
+                    remaining_cleanup = cleanup_deadline - time.monotonic()
+                    if evidence['groupExistsAfterCleanup'] is False or remaining_cleanup <= 0:
+                        break
+                    time.sleep(min(0.01, remaining_cleanup))
+                evidence['groupCleanupConfirmationElapsedSeconds'] = time.monotonic() - cleanup_began
             evidence.update(exitCode=child.returncode if child is not None else None,
                             elapsedSeconds=time.monotonic()-began,
                             finishedUTC=datetime.datetime.now(datetime.timezone.utc).isoformat())
@@ -361,17 +382,23 @@ def run_seed_phase(command, log, receipt, timeout):
     return run_owned_phase(command, log, receipt, timeout)
 
 
-def owned_posterboard_signatures(simulator):
+def owned_posterboard_signatures(simulator, deadline=None, clock=None):
     """Read recent reports only for this created UUID; never expose other reports."""
+    clock = clock or time.monotonic
     directory = Path.home() / "Library/Logs/DiagnosticReports"
-    evidence = {"reports": [], "directoryAvailable": directory.is_dir(), "observationErrors": [], "metadataScanIncomplete": False, "scannedDirectoryEntries": 0,
+    evidence = {"reports": [], "directoryAvailable": None, "observationErrors": [], "metadataScanIncomplete": False, "scannedDirectoryEntries": 0,
                 "scope": "PosterBoard .ips from last five minutes matching created Simulator UUID; scan at most1second/200 entries; at most20 files/2MiB each. Missing reports do not exclude a crash."}
-    began = time.monotonic()
+    if deadline is not None and clock() >= deadline:
+        evidence.update(metadataScanIncomplete=True, notRunReason="diagnostic-deadline-reached")
+        return evidence
+    evidence["directoryAvailable"] = directory.is_dir()
+    began = clock()
     recent = 0
     try:
         with os.scandir(directory) as entries:
             for entry in entries:
-                if evidence["scannedDirectoryEntries"] >= 200 or time.monotonic() - began >= 1:
+                if (evidence["scannedDirectoryEntries"] >= 200 or clock() - began >= 1
+                        or (deadline is not None and clock() >= deadline)):
                     evidence["metadataScanIncomplete"] = True
                     break
                 evidence["scannedDirectoryEntries"] += 1
@@ -415,8 +442,11 @@ def owned_posterboard_signatures(simulator):
     return evidence
 
 
-def capture_simulator_bootstrap_failure(simulator, results, failure_phase="bootstrap"):
-    """Gather owned failure evidence; retain artifact names and never retry the failed phase."""
+def capture_simulator_bootstrap_failure(simulator, results, failure_phase="bootstrap", deadline=None, clock=None):
+    """Gather owned evidence within one shared optional budget; never retry a failure."""
+    clock = clock or time.monotonic
+    if deadline is None:
+        deadline = clock() + failure_observation.DIAGNOSTIC_BUDGET_SECONDS
     simulator = str(uuid.UUID(simulator)).upper()
     screen = results / "simulator-bootstrap-screen.png"
     commands = [
@@ -425,12 +455,18 @@ def capture_simulator_bootstrap_failure(simulator, results, failure_phase="boots
                   "--predicate", 'eventMessage CONTAINS[c] "' + simulator + '"']),
         ("screenshot", ["xcrun", "simctl", "io", simulator, "screenshot", "--type=png", str(screen)])]
     evidence = {"simulator": simulator, "failurePhase": failure_phase, "phases": [], "screenshotCaptured": False,
+                "diagnosticDeadlineMonotonic": deadline,
                 "scope": "Read-only diagnostics for created UUID after " + failure_phase + " failure; no retry"}
     for phase, command in commands:
         entry = {"phase": phase, "success": False}
+        remaining = deadline - clock()
+        if remaining <= 0:
+            entry["notRunReason"] = "diagnostic-deadline-reached"
+            evidence["phases"].append(entry)
+            continue
         try:
             run_owned_phase(command, results / ("simulator-diagnostic-" + phase + ".log"),
-                            results / ("simulator-diagnostic-" + phase + ".json"), 10)
+                            results / ("simulator-diagnostic-" + phase + ".json"), min(10, remaining))
             entry["success"] = True
             if phase == "screenshot" and screen.is_file():
                 with screen.open("rb") as stream:
@@ -438,8 +474,89 @@ def capture_simulator_bootstrap_failure(simulator, results, failure_phase="boots
         except (OSError, subprocess.SubprocessError) as error:
             entry.update(errorType=type(error).__name__, error=str(error))
         evidence["phases"].append(entry)
-    evidence["posterBoard"] = owned_posterboard_signatures(simulator)
+    if clock() >= deadline:
+        evidence["posterBoard"] = {"reports": [], "metadataScanIncomplete": True,
+                                  "notRunReason": "diagnostic-deadline-reached"}
+    else:
+        evidence["posterBoard"] = owned_posterboard_signatures(simulator, deadline=deadline, clock=clock)
     (results / "simulator-bootstrap-diagnostics.json").write_text(json.dumps(evidence, indent=2), encoding="utf-8")
+    return evidence
+
+
+FAILED_RESULT_OUTPUT_LIMIT_BYTES = 2 * 1024 * 1024
+RESULT_GROUP_CONFIRMATION_SECONDS = 1
+
+
+def collect_failed_test_results(bundle, results, deadline, clock=None):
+    """Retain failed native evidence only after its entire owned writer group stops."""
+    clock = clock or time.monotonic
+    evidence = {"diagnosticDeadlineMonotonic": deadline, "phases": [],
+                "outputLimitBytesPerPhase": FAILED_RESULT_OUTPUT_LIMIT_BYTES,
+                "cleanupScope": "TERM/reap and group confirmation are additional to command budgets; not a20second wall guarantee",
+                "scope": "Optional parsing of the failed native result; never a passing test verdict"}
+    commands = [
+        ("summary", ["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)]),
+        ("attachments", ["xcrun", "xcresulttool", "export", "attachments", "--path", str(bundle),
+                         "--output-path", str(results / "screenshots")])]
+    available = bundle is not None and bundle.is_dir()
+    for phase, command in commands:
+        entry = {"phase": phase, "success": False}
+        remaining = deadline - clock()
+        if not available:
+            entry["notRunReason"] = "xcresult-unavailable"
+        elif remaining <= 0:
+            entry["notRunReason"] = "diagnostic-deadline-reached"
+        else:
+            entry["timeoutSeconds"] = min(10, remaining)
+            log = results / ("failed-result-" + phase + ".log")
+            receipt = results / ("failed-result-" + phase + "-process.json")
+            entry.update(stdoutLog=log.name, processReceipt=receipt.name,
+                         groupCleanupConfirmationBudgetSeconds=RESULT_GROUP_CONFIRMATION_SECONDS,
+                         cleanupIsAdditionalToCommandBudget=True)
+            bounded = [sys.executable, str(Path(__file__).with_name("bounded_command_output.py")),
+                       str(FAILED_RESULT_OUTPUT_LIMIT_BYTES)] + command
+            recorded = None
+            try:
+                recorded = run_owned_phase(bounded, log, receipt, entry["timeoutSeconds"],
+                                           ensure_group_cleanup=True,
+                                           group_cleanup_timeout=RESULT_GROUP_CONFIRMATION_SECONDS)
+            except Exception as error:
+                entry.update(errorType=type(error).__name__, error=str(error))
+            if recorded is None:
+                try:
+                    with receipt.open("rb") as stream:
+                        raw = stream.read(FAILED_RESULT_OUTPUT_LIMIT_BYTES + 1)
+                    if len(raw) > FAILED_RESULT_OUTPUT_LIMIT_BYTES:
+                        raise ValueError("Oversized process receipt")
+                    recorded = json.loads(raw)
+                except Exception as error:
+                    entry["processReceiptError"] = type(error).__name__
+                    recorded = {}
+            if not isinstance(recorded, dict):
+                entry["processReceiptError"] = "InvalidProcessReceipt"
+                recorded = {}
+            entry["groupExistsAfterCleanup"] = recorded.get("groupExistsAfterCleanup")
+            entry["groupCleanupConfirmed"] = (recorded.get("launched") is True and
+                                               entry["groupExistsAfterCleanup"] is False)
+            entry["groupCleanupConfirmationElapsedSeconds"] = recorded.get("groupCleanupConfirmationElapsedSeconds")
+            if not entry["groupCleanupConfirmed"]:
+                entry["evidenceUnavailableReason"] = "owned-group-cleanup-unconfirmed"
+            elif "errorType" not in entry:
+                try:
+                    with log.open("rb") as stream:
+                        raw = stream.read(FAILED_RESULT_OUTPUT_LIMIT_BYTES + 1)
+                    if len(raw) > FAILED_RESULT_OUTPUT_LIMIT_BYTES:
+                        raise ValueError("Oversized native result output")
+                    if phase == "summary":
+                        summary = json.loads(raw)
+                        if not isinstance(summary, dict):
+                            raise ValueError("Native summary must be an object")
+                        (results / "failed-summary.json").write_text(json.dumps(summary, indent=2))
+                    entry["success"] = True
+                except Exception as error:
+                    entry.update(errorType=type(error).__name__, error=str(error))
+        evidence["phases"].append(entry)
+    (results / "test-result-collection.json").write_text(json.dumps(evidence, indent=2))
     return evidence
 
 
@@ -459,12 +576,14 @@ def prepare_simulator(simulator, results, boot_log=None):
                 except Exception:
                     pass  # Optional observation must preserve the boot outcome.
     except (OSError, subprocess.SubprocessError) as original_error:
+        deadline = time.monotonic() + failure_observation.DIAGNOSTIC_BUDGET_SECONDS
         try:
-            observe_first_failure(original_error, results, simulator, 'simulator-' + phase, run_phase=run_owned_phase)
+            observe_first_failure(original_error, results, simulator, 'simulator-' + phase,
+                                  run_phase=run_owned_phase, deadline=deadline)
         except Exception:
             pass
         try:
-            capture_simulator_bootstrap_failure(simulator, results)
+            capture_simulator_bootstrap_failure(simulator, results, deadline=deadline)
         except Exception as error:
             # Optional evidence must not replace the bootstrap error, including a broken stderr.
             try:
@@ -533,6 +652,49 @@ def selection_includes(selected_tests, target):
     return False
 
 
+def create_result_directory(results):
+    """Refuse reuse while preserving and retiring any previous success receipt."""
+    if results.is_dir():
+        completion = results / "ui-completion.json"
+        if completion.exists() or completion.is_symlink():
+            completion.rename(results / ("ui-completion.previous-" + uuid.uuid4().hex + ".json"))
+    results.mkdir(parents=True, exist_ok=False)
+
+
+@contextmanager
+def owned_ui_workspace(results):
+    """Keep the body error if owned workspace finalization also fails."""
+    original_error = None
+    entered = False
+    try:
+        with tempfile.TemporaryDirectory(prefix="telemetry-offline-ui-") as directory:
+            entered = True
+            try:
+                yield Path(directory)
+            except BaseException as error:
+                original_error = error
+                raise
+    except BaseException as cleanup_error:
+        if entered and cleanup_error is not original_error:
+            try:
+                observe_first_failure(cleanup_error, results, None, "workspace-cleanup",
+                                      collect_diagnostics=False)
+            except BaseException:
+                pass  # Metadata must not replace the primary error or authorize more probes.
+            if original_error is not None:
+                raise original_error from cleanup_error
+        raise
+    if original_error is not None:
+        raise original_error  # A resource manager must not suppress a failed run.
+
+
+def publish_ui_completion(results, group, count):
+    """Publish only after all required cleanup/output; partial writes stay unpublished."""
+    pending = results / (".ui-completion-pending-" + uuid.uuid4().hex + ".json")
+    pending.write_text(json.dumps({"group": group, "executedTests": count, "result": "passed"}, indent=2))
+    pending.replace(results / "ui-completion.json")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--result-directory", type=Path, required=True)
@@ -548,7 +710,7 @@ def main():
                         help="Run one new native lifecycle test; default executes all twenty-five UI regressions")
     args = parser.parse_args()
     results = args.result_directory.resolve()
-    results.mkdir(parents=True, exist_ok=False)
+    create_result_directory(results)
     focused_methods = {"native-export-dismissal": "testNativeExportCancelReentryAndReplayAcrossTabs", "background-export-lifecycle": "testNativeExportBackgroundReturnCancelAndReentry",
                        "active-slider-drag": "testPlayingLongSliderDragPreservesCapturedUserTarget",
                        "recorded-history": "testRecordedSignalHistoryContainsOnlySelectedTimePrefix",
@@ -581,13 +743,13 @@ def main():
     simulator = None
     boot_log = None
     container = None
+    bundle = None
     help_capture_enabled = any(selection_includes(selected_tests, test) for test in HELP_CAPTURE_TESTS)
     # Help captures require untransformed App sources. Export diagnostics remain
     # available in the replay group/focused test, which do not capture Help.
     export_audit_enabled = not help_capture_enabled and selection_includes(
         selected_tests, "TelemetryUITests/OfflineReplayUITests/testNativeExportCancelReentryAndReplayAcrossTabs")
-    with tempfile.TemporaryDirectory(prefix="telemetry-offline-ui-") as directory:
-        workspace = Path(directory)
+    with owned_ui_workspace(results) as workspace:
         seed_artifact = private_artifact(root, args.seed_artifact.resolve(), workspace / "seed-artifact",
                                           toolchain, platform.machine(), current_commit(root),
                                           args.seed_manifest_sha256)
@@ -672,13 +834,22 @@ def main():
                 completed_inputs = help_sources.finish_capture(root, staged, help_inputs, current_commit(root))
                 (results / "help-source-inputs.json").write_text(json.dumps(completed_inputs, indent=2))
         except Exception as original_error:
+            deadline = time.monotonic() + failure_observation.DIAGNOSTIC_BUDGET_SECONDS
             try:
-                observe_first_failure(original_error, results, simulator, failure_phase, run_phase=run_owned_phase)
+                observe_first_failure(original_error, results, simulator, failure_phase,
+                                      run_phase=run_owned_phase, deadline=deadline,
+                                      collect_diagnostics=failure_phase != "ui-test")
             except Exception:
                 pass
+            if failure_phase == "ui-test":
+                try:
+                    collect_failed_test_results(bundle, results, deadline)
+                except Exception:
+                    pass  # Optional artifact/receipt errors cannot mask the native test failure.
             if simulator and failure_phase != "bootstrap":
                 try:
-                    capture_simulator_bootstrap_failure(simulator, results, failure_phase=failure_phase)
+                    capture_simulator_bootstrap_failure(simulator, results, failure_phase=failure_phase,
+                                                       deadline=deadline)
                 except Exception as error:
                     try:
                         print("Simulator diagnostics unavailable: " + str(error), file=sys.stderr)
@@ -723,8 +894,9 @@ def main():
                     raise RuntimeError("Owned boot event collector cleanup unresolved; see simulator-boot-stream.json")
                 if not cleaned and not primary_failure:
                     raise RuntimeError("Owned Simulator cleanup failed; see simulator-cleanup.json")
-        gate = "SE VIEWPORT RE-EXECUTION" if args.se_viewport else "OFFLINE REPLAY UI"
-        print(f"{gate} PASS: {expected_count} executed tests, zero failures/skips; Simulator fixture, not hardware evidence")
+    gate = "SE VIEWPORT RE-EXECUTION" if args.se_viewport else "OFFLINE REPLAY UI"
+    print(f"{gate} PASS: {expected_count} executed tests, zero failures/skips; Simulator fixture, not hardware evidence", flush=True)
+    publish_ui_completion(results, args.group, expected_count)
 
 
 if __name__ == "__main__":

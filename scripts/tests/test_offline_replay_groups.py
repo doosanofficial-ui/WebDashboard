@@ -1,14 +1,107 @@
 import json
+import contextlib
+import io
 from pathlib import Path
 import re
+import subprocess
 import sys
 import tempfile
+import time
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import verify_offline_replay as runner
 
+
+def successful_receipts(target, group, tests):
+    (target / "test-process.json").write_text(json.dumps({"launched": True, "exitCode": 0, "timedOut": False}))
+    (target / "ui-completion.json").write_text(json.dumps({"group": group, "executedTests": len(tests), "result": "passed"}))
+
+
 class ReplayGroupTests(unittest.TestCase):
+    def green_groups(self, root):
+        for group, tests in runner.TEST_GROUPS.items():
+            (root / group).mkdir()
+            (root / group / "selection.json").write_text(json.dumps({"group": group, "tests": tests}))
+            successful_receipts(root / group, group, tests)
+            (root / group / "summary.json").write_text(json.dumps({"totalTestCount": len(tests), "passedTests": len(tests), "failedTests": 0, "skippedTests": 0}))
+
+    def test_failed_collected_green_counts_do_not_pass_independent_aggregate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.green_groups(root)
+            failed = root / "help-max-en"
+            (failed / "summary.json").unlink()
+            (failed / "test-process.json").write_text(json.dumps({"launched": True, "exitCode": 65, "timedOut": False}))
+            (failed / "first-failure-observation.json").write_text(json.dumps({"phase": "ui-test", "errorType": "CalledProcessError"}))
+            (failed / "ui-completion.json").unlink()
+            bundle = failed / "Synthetic.xcresult"
+            bundle.mkdir()
+            with self.assertRaises((ValueError, FileNotFoundError)):
+                runner.verify_group_results(root)
+
+            def phase(command, log, receipt, timeout, **kwargs):
+                log.write_text(json.dumps({"totalTestCount": 1, "passedTests": 1, "failedTests": 0, "skippedTests": 0}))
+                return {"launched": True, "groupExistsAfterCleanup": False}
+
+            with patch.object(runner, "run_owned_phase", side_effect=phase):
+                runner.collect_failed_test_results(bundle, failed, time.monotonic() + 1)
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream), self.assertRaises((ValueError, FileNotFoundError)):
+                runner.verify_group_results(root)
+            self.assertNotIn("FULL GATE PASS", stream.getvalue())
+            self.assertTrue((failed / "failed-summary.json").is_file())
+            self.assertFalse((failed / "summary.json").exists())
+
+    def test_exit65_or_timeout_rejects_even_green_counters(self):
+        for receipt in [{"launched": True, "exitCode": 65, "timedOut": False},
+                        {"launched": True, "exitCode": 0, "timedOut": True},
+                        {"launched": True, "exitCode": False, "timedOut": False}]:
+            with self.subTest(receipt=receipt), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                self.green_groups(root)
+                (root / "help-max-en/test-process.json").write_text(json.dumps(receipt))
+                with self.assertRaises(ValueError):
+                    runner.verify_group_results(root)
+
+    def test_first_failure_latch_rejects_green_process_and_counters(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.green_groups(root)
+            (root / "help-max-en/first-failure-observation.json").write_text(json.dumps({"phase": "ui-test"}))
+            with self.assertRaises(ValueError):
+                runner.verify_group_results(root)
+
+    def test_missing_or_invalid_completion_rejects_green_counters(self):
+        for completion in [None, {"group": "help-max-en", "executedTests": 1, "result": "failed"}]:
+            with self.subTest(completion=completion), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                self.green_groups(root)
+                target = root / "help-max-en/ui-completion.json"
+                if completion is None:
+                    target.unlink()
+                else:
+                    target.write_text(json.dumps(completion))
+                with self.assertRaises((ValueError, FileNotFoundError)):
+                    runner.verify_group_results(root)
+
+    def test_independent_cli_rejects_failed_receipts_with_green_counters(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.green_groups(root)
+            command = [sys.executable, "-B", str(Path(runner.__file__)), "--verify-groups", str(root)]
+            normal = subprocess.run(command, text=True, capture_output=True, timeout=10)
+            self.assertEqual(normal.returncode, 0, normal.stderr)
+            self.assertIn("FULL GATE PASS", normal.stdout)
+            for receipt in [{"launched": True, "exitCode": 65, "timedOut": False},
+                            {"launched": True, "exitCode": 0, "timedOut": True}]:
+                with self.subTest(receipt=receipt):
+                    (root / "help-max-en/test-process.json").write_text(json.dumps(receipt))
+                    failed = subprocess.run(command, text=True, capture_output=True, timeout=10)
+                    self.assertNotEqual(failed.returncode, 0)
+                    self.assertNotIn("FULL GATE PASS", failed.stdout)
+
     def test_partition_is_disjoint_and_covers_all_31_language_tests(self):
         root = Path(__file__).resolve().parents[2] / "mobile-ios/UITests"
         expected = set()
@@ -43,6 +136,7 @@ class ReplayGroupTests(unittest.TestCase):
             for group, tests in runner.TEST_GROUPS.items():
                 (root / group).mkdir()
                 (root / group / "selection.json").write_text(json.dumps({"group": group, "tests": tests}))
+                successful_receipts(root / group, group, tests)
                 (root / group / "summary.json").write_text(json.dumps({"totalTestCount":len(tests),"passedTests":len(tests),"failedTests":0,"skippedTests":0}))
             runner.verify_group_results(root)
             target = root / "layout/summary.json"
@@ -77,6 +171,7 @@ class ReplayGroupTests(unittest.TestCase):
             for group, tests in runner.TEST_GROUPS.items():
                 (root / group).mkdir()
                 (root / group / 'selection.json').write_text(json.dumps({'group': group, 'tests': tests}))
+                successful_receipts(root / group, group, tests)
                 if group != 'replay-route':
                     (root / group / 'summary.json').write_text(json.dumps({'totalTestCount': len(tests), 'passedTests': len(tests), 'failedTests': 0, 'skippedTests': 0}))
             with self.assertRaises(FileNotFoundError): runner.verify_group_results(root)
@@ -96,6 +191,7 @@ class ReplayGroupTests(unittest.TestCase):
                     for group, tests in runner.TEST_GROUPS.items():
                         (root / group).mkdir()
                         (root / group / 'selection.json').write_text(json.dumps({'group': group, 'tests': tests}))
+                        successful_receipts(root / group, group, tests)
                         if group != missing:
                             (root / group / 'summary.json').write_text(json.dumps({'totalTestCount': len(tests), 'passedTests': len(tests), 'failedTests': 0, 'skippedTests': 0}))
                     with self.assertRaises(FileNotFoundError):

@@ -5,7 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 from contextlib import ExitStack
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -304,16 +304,23 @@ class PostBootstrapDiagnosticsTests(unittest.TestCase):
                 else:
                     runner.main()
             cleanup.assert_called_once_with(device, results)
+            completion = results / 'ui-completion.json'
+            if failure_phase:
+                self.assertFalse(completion.exists(), 'Failed runs must not create successful completion evidence')
+            else:
+                self.assertEqual(json.loads(completion.read_text()),
+                                 {'group': 'replay', 'executedTests': 10, 'result': 'passed'})
             self.assertEqual(events, ['capture', 'cleanup'] if failure_phase else ['cleanup'],
                              'Owned failure evidence must be attempted before cleanup, including capture errors')
             if failure_phase == 'ui-test':
-                capture.assert_called_once_with(device, results, failure_phase='ui-test')
+                capture.assert_called_once_with(device, results, failure_phase='ui-test', deadline=ANY)
             elif failure_phase == 'fixture-install':
-                capture.assert_called_once_with(device, results, failure_phase='fixture-install')
+                capture.assert_called_once_with(device, results, failure_phase='fixture-install', deadline=ANY)
             elif failure_phase == 'app-container':
-                capture.assert_called_once_with(device, results, failure_phase='app-container')
+                capture.assert_called_once_with(device, results, failure_phase='app-container', deadline=ANY)
             elif failure_phase == 'bootstrap':
-                capture.assert_called_once_with(device, results)
+                capture.assert_called_once_with(device, results, deadline=ANY)
+                self.assertIsInstance(capture.call_args.kwargs["deadline"], (int, float))
             else:
                 capture.assert_not_called()
 

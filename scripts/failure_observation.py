@@ -563,8 +563,9 @@ def worker(results, simulator, deadline):
         return 2
 
 
-def observe_first_failure(error, results, simulator, phase, run_phase=None, snapshot=None):
-    """At most one extra diagnostic budget. All errors remain optional."""
+def observe_first_failure(error, results, simulator, phase, run_phase=None, snapshot=None, deadline=None, clock=None, collect_diagnostics=True):
+    """Latch once and share any caller deadline. All observation errors remain optional."""
+    clock = clock or time.monotonic
     try:
         simulator = str(uuid.UUID(simulator)).upper() if simulator else None
         if snapshot is None:
@@ -572,23 +573,37 @@ def observe_first_failure(error, results, simulator, phase, run_phase=None, snap
         value = {'errorType': type(error).__name__, 'phase': phase, 'simulator': simulator,
                  'firstFailure': snapshot or failure_snapshot(error, getattr(error, 'returncode', None)),
                  'callerReceivedMonotonic': time.monotonic(), 'selectedXcode': selected_xcode(results),
-                 'diagnosticBudgetSeconds': DIAGNOSTIC_BUDGET_SECONDS,
+                 'diagnosticBudgetSeconds': (DIAGNOSTIC_BUDGET_SECONDS if deadline is None else
+                     max(0, min(DIAGNOSTIC_BUDGET_SECONDS, deadline - clock()))),
+                 'diagnosticDeadlineMonotonic': deadline,
                  'scope': 'First original failure; subsequent failures never overwrite this file'}
         if not safe_write(results / 'first-failure-observation.json', value):
             return
         status = {'success': False, 'ownedGroupCleanupResolved': None}
-        if os.environ.get('GITHUB_ACTIONS') != 'true':
+        if not collect_diagnostics:
+            status['skipped'] = 'Native test result collection prioritized within shared failure budget'
+        elif os.environ.get('GITHUB_ACTIONS') != 'true':
             status['skipped'] = 'External diagnostics restricted to hosted CI; no local device/service probing'
+        elif deadline is not None and clock() >= deadline:
+            status['skipped'] = 'diagnostic-deadline-reached'
         else:
             if run_phase is None:
                 from verify_offline_replay import run_owned_phase as run_phase
-            deadline = time.monotonic() + DIAGNOSTIC_BUDGET_SECONDS
+            if deadline is None:
+                deadline = clock() + DIAGNOSTIC_BUDGET_SECONDS
+                budget = DIAGNOSTIC_BUDGET_SECONDS
+            else:
+                budget = max(0, min(DIAGNOSTIC_BUDGET_SECONDS, deadline - clock()))
+            if budget <= 0:
+                status['skipped'] = 'diagnostic-deadline-reached'
+                safe_write(results / 'failure-diagnostic-status.json', status)
+                return
             command = [sys.executable, str(Path(__file__).resolve()), '--worker', str(results),
                        '--simulator', simulator or '-', '--deadline', str(deadline)]
             status['diagnosisRequestedMonotonic'] = time.monotonic()
             try:
                 recorded = run_phase(command, results / 'failure-diagnostic-worker.log',
-                    results / 'failure-diagnostic-worker.json', DIAGNOSTIC_BUDGET_SECONDS,
+                    results / 'failure-diagnostic-worker.json', budget,
                     ensure_group_cleanup=True)
                 status['success'] = bool(recorded and recorded.get('exitCode') == 0)
             except Exception as diagnostic_error:
