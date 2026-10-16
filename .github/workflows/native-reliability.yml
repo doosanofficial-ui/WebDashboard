@@ -64,6 +64,17 @@ jobs:
       - name: Verify observed BLE profile selection
         run: python3 scripts/verify_ble_profile.py
 
+  # Complete contract validation remains required and independent of fixture production.
+  native-contracts:
+    runs-on: xcode-27
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Require every contract including actual current Help provenance
+        run: python3 -B scripts/verify_native_contracts.py --suite all
+
   native-seed:
     outputs:
       seed_manifest_sha256: ${{ steps.seed.outputs.manifest_sha256 }}
@@ -75,7 +86,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Verify Seed artifact admission and failure contracts
-        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
+        run: python3 -B scripts/verify_native_contracts.py --suite seed
       - name: Build and qualify exact-input Seed within the original 240-second budget
         id: seed
         run: python3 scripts/verify_replay_seed.py --output "$RUNNER_TEMP/replay-seed"
@@ -148,7 +159,7 @@ jobs:
       - name: Require Xcode, iOS SDK and runtime 27.x
         run: python3 scripts/verify_ios_lifecycle.py --check-toolchain
       - name: Check exact SE selection and separate re-execution count
-        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
+        run: python3 -B scripts/verify_native_contracts.py --suite se
       - name: Install XcodeGen
         run: |
           if ! brew list xcodegen >/dev/null 2>&1; then

@@ -23,20 +23,30 @@ def expected_capture_targets(guide_source):
     require(len(expected)==28,'Guide step contract changed; update captures and tests together')
     return expected
 
-def expected_screen_inputs(root):
-    """Cover App source and localized resources, including nested App modules.
-
-    AppHelpView's ordered target contract is checked separately. Generated Help
-    assets cannot be inputs to their own provenance manifest.
-    """
-    app=root/'mobile-ios/App'
-    inputs={p.relative_to(root).as_posix() for p in app.rglob('*.swift')
-            if p!=app/'AppHelpView.swift'}
+def _screen_source_paths(app):
+    """One recursive rule for repository and physically staged App sources."""
+    paths={p for p in app.rglob('*.swift') if p!=app/'AppHelpView.swift'}
     resources=app/'Resources'
-    inputs|={p.relative_to(root).as_posix() for p in resources.rglob('*')
-             if p.is_file() and p.suffix in {'.json','.strings'}
-             and p.relative_to(resources).parts[0]!='HelpScreenshots'}
-    return inputs
+    paths|={p for p in resources.rglob('*') if p.is_file() and p.suffix in {'.json','.strings'}
+            and p.relative_to(resources).parts[0]!='HelpScreenshots'}
+    return {'mobile-ios/App/'+p.relative_to(app).as_posix():p for p in paths}
+
+
+def expected_screen_inputs(root):
+    """AppHelpView targets are separate; generated Help assets are not inputs."""
+    return set(_screen_source_paths(Path(root)/'mobile-ios/App'))
+
+
+def staged_source_input_hashes(mobile_ios_root):
+    paths=_screen_source_paths(Path(mobile_ios_root)/'App')
+    return {relative:hashlib.sha256(paths[relative].read_bytes().replace(b'\r\n',b'\n')).hexdigest()
+            for relative in sorted(paths)}
+
+
+def source_input_hashes(root):
+    """Canonical inventory for both capture-time source collection and checks."""
+    return staged_source_input_hashes(Path(root)/'mobile-ios')
+
 
 def audit_source_provenance(root):
     """Compare source inputs without modifying assets or certifying a capture run."""
@@ -45,8 +55,7 @@ def audit_source_provenance(root):
     manifest=json.loads((directory/'manifest.json').read_text())
     recorded=manifest['screenInputs']
     expected=expected_screen_inputs(root)
-    current={relative:hashlib.sha256((root/relative).read_bytes().replace(b'\r\n',b'\n')).hexdigest()
-             for relative in sorted(expected)}
+    current=source_input_hashes(root)
     missing=sorted(expected-set(recorded))
     extra=sorted(set(recorded)-expected)
     stale=sorted(relative for relative in expected & set(recorded)
@@ -76,8 +85,9 @@ def verify(root):
     require(set(manifest['screens'])==set(expected),'Missing, extra or duplicate actual capture')
     expected_inputs=expected_screen_inputs(root)
     require(set(manifest['screenInputs'])==expected_inputs,'Incomplete source provenance')
+    current=source_input_hashes(root)
     for path,digest in manifest['screenInputs'].items():
-        require(hashlib.sha256((root/path).read_bytes().replace(b'\r\n',b'\n')).hexdigest()==digest,f'Guided screen changed; regenerate actual screenshots: {path}')
+        require(current[path]==digest,f'Guided screen changed; regenerate actual screenshots: {path}')
     for name,receipt in manifest['screens'].items():
         image=directory/(name+'.png');markers=directory/(name+'.json')
         require(receipt['targetID']==expected[name],f'Guide target changed: {name}')

@@ -15,6 +15,7 @@ import subprocess
 import tempfile
 import uuid
 import export_dismissal_fixture as export_fixture
+import collect_help_source_inputs as help_sources
 from contextlib import nullcontext
 import export_dismissal_observation as export_audit
 
@@ -58,6 +59,7 @@ TEST_GROUPS["help"] = [
     "TelemetryUITests/LocalizationHelpUITests/testCaptureKoreanGuideScreens",
     "TelemetryUITests/LocalizationHelpUITests/testLanguageSwitchPersistsAndHelpPreservesReplay",
     "TelemetryUITests/LocalizationHelpUITests/testKoreanHelpAtMaximumTextAndLandscape"]
+HELP_CAPTURE_TESTS = tuple(TEST_GROUPS["help"][:2])
 TEST_GROUPS["help-max-en"] = [
     "TelemetryUITests/LocalizationHelpUITests/testEveryGuideAtMaximumTextShowsWholeNumberedImageAndClosesZoomInEnglish"]
 TEST_GROUPS["help-max-ko"] = [
@@ -522,6 +524,15 @@ def cleanup_simulator(simulator, results):
     return evidence["success"]
 
 
+def selection_includes(selected_tests, target):
+    """XCTest class/module selectors include their child test methods."""
+    for selected in selected_tests:
+        selected = selected.removeprefix("-only-testing:")
+        if target == selected or target.startswith(selected + "/"):
+            return True
+    return False
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--result-directory", type=Path, required=True)
@@ -538,12 +549,43 @@ def main():
     args = parser.parse_args()
     results = args.result_directory.resolve()
     results.mkdir(parents=True, exist_ok=False)
+    focused_methods = {"native-export-dismissal": "testNativeExportCancelReentryAndReplayAcrossTabs", "background-export-lifecycle": "testNativeExportBackgroundReturnCancelAndReentry",
+                       "active-slider-drag": "testPlayingLongSliderDragPreservesCapturedUserTarget",
+                       "recorded-history": "testRecordedSignalHistoryContainsOnlySelectedTimePrefix",
+                       "recorded-route": "testRecordedGPSRouteContainsOnlySelectedTimePrefix"}
+    selected_tests = ["-only-testing:" + test for test in HELP_CAPTURE_TESTS] if args.only_test == "help-capture" else ["-only-testing:TelemetryUITests/OfflineReplayUITests/testNativeExportBackgroundReturnCancelAndReentry", "-only-testing:TelemetryUITests/OfflineReplayUITests/testNativeJSONCSVSaveConfirmsCompletion"] if args.only_test == "native-save-reentry" else ["-only-testing:TelemetryUITests/UIClarityUITests/testRecordedTimeAccessibilityAtLargeTextAndLandscape"] if args.only_test == "large-text" else ["-only-testing:TelemetryUITests/UIClarityUITests/testSingleInstantRecordingExplainsUnavailableTimeNavigation"] if args.only_test == "single-instant" else ["-only-testing:TelemetryUITests/UIClarityUITests"] if args.only_test == "ui-clarity" else ["-only-testing:TelemetryUITests/OfflineReplayUITests/" + focused_methods[args.only_test]] if args.only_test else [
+        "-only-testing:TelemetryUITests/OfflineReplayUITests",
+        "-only-testing:TelemetryUITests/TelemetryUITests/testMeasurementExportControlIsVisible",
+        "-only-testing:TelemetryUITests/TelemetryUITests/testMeasurementCSVExportControlIsVisible",
+        "-only-testing:TelemetryUITests/UIClarityUITests",
+        "-only-testing:TelemetryUITests/DashboardEditingUITests",
+        "-only-testing:TelemetryUITests/SmallViewportUIRegression",
+        "-only-testing:TelemetryUITests/SmallViewportStatusUIRegression",
+        "-only-testing:TelemetryUITests/LocalizationHelpUITests"]
+    expected_count = 2 if args.only_test == "native-save-reentry" else 5 if args.only_test == "ui-clarity" else 1 if args.only_test else 31
+    if args.only_test == "help-capture":
+        selected_tests = ["-only-testing:" + test for test in HELP_CAPTURE_TESTS]
+        expected_count = 2
+    if args.group:
+        selected_tests = ["-only-testing:" + test for test in TEST_GROUPS[args.group]]
+        expected_count = len(TEST_GROUPS[args.group])
+        (results / "selection.json").write_text(json.dumps({"group": args.group, "tests": TEST_GROUPS[args.group]}, indent=2))
+    if args.se_viewport:
+        selected_tests = ["-only-testing:" + test for test in SE_VIEWPORT_TESTS]
+        expected_count = len(SE_VIEWPORT_TESTS)
+        (results / "selection.json").write_text(json.dumps({
+            "reexecution": "se-viewport", "repeatOf": "layout",
+            "requiredDeviceType": SE_DEVICE_TYPE, "tests": SE_VIEWPORT_TESTS}, indent=2))
     root = Path(__file__).resolve().parents[1]
     toolchain = record_toolchain(results)
     simulator = None
     boot_log = None
     container = None
-    export_audit_enabled = not args.se_viewport and args.group in [None, "replay"] and args.only_test in [None, "native-export-dismissal"]
+    help_capture_enabled = any(selection_includes(selected_tests, test) for test in HELP_CAPTURE_TESTS)
+    # Help captures require untransformed App sources. Export diagnostics remain
+    # available in the replay group/focused test, which do not capture Help.
+    export_audit_enabled = not help_capture_enabled and selection_includes(
+        selected_tests, "TelemetryUITests/OfflineReplayUITests/testNativeExportCancelReentryAndReplayAcrossTabs")
     with tempfile.TemporaryDirectory(prefix="telemetry-offline-ui-") as directory:
         workspace = Path(directory)
         seed_artifact = private_artifact(root, args.seed_artifact.resolve(), workspace / "seed-artifact",
@@ -558,6 +600,12 @@ def main():
         stage_sources(root, staged)
         if export_audit_enabled:
             (results / "export-audit-source.json").write_text(json.dumps(export_fixture.instrument_export_sources(root, staged), indent=2))
+        # Every selection containing Help captures, including the default full
+        # run, binds the same recursive inventory to staged App/test sources.
+        help_inputs = None
+        if help_capture_enabled:
+            help_inputs = help_sources.begin_capture(root, staged, current_commit(root))
+            (results / "help-source-inputs-before.json").write_text(json.dumps(help_inputs, indent=2))
         failure_phase = "bootstrap"
         try:
             catalog = json.loads(output(["xcrun", "simctl", "list", "runtimes", "--json"]))
@@ -602,33 +650,6 @@ def main():
             if export_audit_enabled:
                 export_audit.install_marker(container, current_commit(root))
             bundle = results / "ReplayUI.xcresult"
-            focused_methods = {"native-export-dismissal": "testNativeExportCancelReentryAndReplayAcrossTabs", "background-export-lifecycle": "testNativeExportBackgroundReturnCancelAndReentry",
-                               "active-slider-drag": "testPlayingLongSliderDragPreservesCapturedUserTarget",
-                               "recorded-history": "testRecordedSignalHistoryContainsOnlySelectedTimePrefix",
-                               "recorded-route": "testRecordedGPSRouteContainsOnlySelectedTimePrefix"}
-            selected_tests = ["-only-testing:" + test for test in TEST_GROUPS["help"][:2]] if args.only_test == "help-capture" else ["-only-testing:TelemetryUITests/OfflineReplayUITests/testNativeExportBackgroundReturnCancelAndReentry", "-only-testing:TelemetryUITests/OfflineReplayUITests/testNativeJSONCSVSaveConfirmsCompletion"] if args.only_test == "native-save-reentry" else ["-only-testing:TelemetryUITests/UIClarityUITests/testRecordedTimeAccessibilityAtLargeTextAndLandscape"] if args.only_test == "large-text" else ["-only-testing:TelemetryUITests/UIClarityUITests/testSingleInstantRecordingExplainsUnavailableTimeNavigation"] if args.only_test == "single-instant" else ["-only-testing:TelemetryUITests/UIClarityUITests"] if args.only_test == "ui-clarity" else ["-only-testing:TelemetryUITests/OfflineReplayUITests/" + focused_methods[args.only_test]] if args.only_test else [
-                "-only-testing:TelemetryUITests/OfflineReplayUITests",
-                "-only-testing:TelemetryUITests/TelemetryUITests/testMeasurementExportControlIsVisible",
-                "-only-testing:TelemetryUITests/TelemetryUITests/testMeasurementCSVExportControlIsVisible",
-                "-only-testing:TelemetryUITests/UIClarityUITests",
-                "-only-testing:TelemetryUITests/DashboardEditingUITests",
-                "-only-testing:TelemetryUITests/SmallViewportUIRegression",
-                "-only-testing:TelemetryUITests/SmallViewportStatusUIRegression",
-                "-only-testing:TelemetryUITests/LocalizationHelpUITests"]
-            expected_count = 2 if args.only_test == "native-save-reentry" else 5 if args.only_test == "ui-clarity" else 1 if args.only_test else 31
-            if args.only_test == "help-capture":
-                selected_tests = ["-only-testing:" + test for test in TEST_GROUPS["help"][:2]]
-                expected_count = 2
-            if args.group:
-                selected_tests = ["-only-testing:" + test for test in TEST_GROUPS[args.group]]
-                expected_count = len(TEST_GROUPS[args.group])
-                (results / "selection.json").write_text(json.dumps({"group": args.group, "tests": TEST_GROUPS[args.group]}, indent=2))
-            if args.se_viewport:
-                selected_tests = ["-only-testing:" + test for test in SE_VIEWPORT_TESTS]
-                expected_count = len(SE_VIEWPORT_TESTS)
-                (results / "selection.json").write_text(json.dumps({
-                    "reexecution": "se-viewport", "repeatOf": "layout",
-                    "requiredDeviceType": SE_DEVICE_TYPE, "tests": SE_VIEWPORT_TESTS}, indent=2))
             command = base + ["-resultBundlePath", str(bundle)] + selected_tests + ["test"]
             (results / "command.json").write_text(json.dumps(command, indent=2))
             failure_phase = "ui-test"
@@ -646,6 +667,10 @@ def main():
             output(["xcrun", "xcresulttool", "export", "attachments", "--path", str(bundle),
                     "--output-path", str(results / "screenshots")], timeout=120)
             verify_summary(summary, expected_count)
+            if help_inputs is not None:
+                failure_phase = "help-source-verify"
+                completed_inputs = help_sources.finish_capture(root, staged, help_inputs, current_commit(root))
+                (results / "help-source-inputs.json").write_text(json.dumps(completed_inputs, indent=2))
         except Exception as original_error:
             try:
                 observe_first_failure(original_error, results, simulator, failure_phase, run_phase=run_owned_phase)

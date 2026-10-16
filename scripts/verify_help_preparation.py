@@ -160,7 +160,8 @@ def build_plan(root):
             "preferenceReview": {"initialOverrideScope": "initial-display-only",
                                  "explicitSelectionPersists": True,
                                  "retainedStoreRequiresFreshEffectiveStateObservation": True,
-                                 "actualWriterCacheBoundaryImplemented": False},
+                                 "actualWriterCacheBoundaryImplemented": False,
+                                 "acceptanceContract": "scripts/verify_preference_restoration.py"},
             "remainingNativeEvidence": ["authorized owned writer/cache lifecycle boundary",
                                         "unoverridden effective language plus post-lifecycle inventory",
                                         "genuine new PNG/marker/AX receipts and direct visual review"]}

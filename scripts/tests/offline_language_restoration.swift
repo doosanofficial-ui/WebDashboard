@@ -49,6 +49,8 @@ enum Locale { static let preferredLanguages = ["en-US"] }
 
         let cached = UserDefaults()
         let cachedStore = AppLanguageStore(defaults: cached, preferredLanguages: ["en-US"])
+        let cachedOriginal = cached.values
+        let cachedOriginalLanguage = cachedStore.language.rawValue
         cachedStore.select(.korean)
         cached.values[key] = "en" // Simulated byte restoration, not a preference API.
         check("byte restoration does not refresh a retained AppLanguageStore", cached.values[key] == "en" && cachedStore.language == .korean)
@@ -56,10 +58,13 @@ enum Locale { static let preferredLanguages = ["en-US"] }
         check("a fresh unoverridden store reads restored state after synthetic quiescence", recreated.language == .english)
 
         let queued = UserDefaults()
+        let queuedOriginal = queued.values
         queued.deferWrites = true
         let queuedStore = AppLanguageStore(defaults: queued, preferredLanguages: ["en-US"])
         queuedStore.select(.korean)
+        let pendingBeforeRestore = queued.pending.count
         queued.values[key] = "en"
+        let queuedRestored = queued.values
         let matchedBeforeFlush = queued.values[key] == "en"
         queued.flushSyntheticQueue()
         let afterQueuedWrite = AppLanguageStore(defaults: queued, preferredLanguages: ["en-US"])
@@ -67,6 +72,8 @@ enum Locale { static let preferredLanguages = ["en-US"] }
 
         let absent = UserDefaults([:])
         let absentStore = AppLanguageStore(defaults: absent, preferredLanguages: ["ko-KR"])
+        let absentOriginal = absent.values
+        let absentOriginalLanguage = absentStore.language.rawValue
         absentStore.select(.english)
         absent.values.removeAll()
         let absentRecreated = AppLanguageStore(defaults: absent, preferredLanguages: ["ko-KR"])
@@ -84,9 +91,44 @@ enum Locale { static let preferredLanguages = ["en-US"] }
            let expected = AppLanguage(rawValue: arguments[index + 1]) {
             check("shared parser uses a process-local test override", AppLanguageStore.shared.language == expected && UserDefaults.standard.writes == 0 && UserDefaults.standard.reads == 0)
         }
+        func snapshot(_ values: [String: String], present: Bool = true,
+                      language: String? = nil, fresh: Bool? = nil) -> [String: Any] {
+            var value: [String: Any] = ["present": present, "values": values]
+            if let language { value["effectiveLanguage"] = language }
+            if let fresh { value["freshStore"] = fresh }
+            return value
+        }
+        func evidence(original: [String: Any], restored: [String: Any], after: [String: Any],
+                      pending: Int = 0, arguments: [String] = [], filesMatch: Bool = true) -> [String: Any] {
+            ["scope": "synthetic-preference-restoration", "domain": "synthetic.telemetry.preferences",
+             "phaseOrder": ["original", "quiesce-before-backup", "trial", "quiesce-before-restore",
+                            "restored", "relaunch", "post-lifecycle"],
+             "original": original, "restored": restored, "postLifecycle": after,
+             "barriers": ["beforeBackup": ["acknowledged": true, "pendingWrites": 0],
+                          "beforeRestore": ["acknowledged": pending == 0, "pendingWrites": pending]],
+             "launchArguments": arguments, "fileInventoryMatches": filesMatch]
+        }
+        let baseline = snapshot(cachedOriginal, language: cachedOriginalLanguage)
+        let restorationObservations: [String: [String: Any]] = [
+            "fresh-restored": evidence(original: baseline, restored: snapshot(cached.values),
+                after: snapshot(cached.values, language: recreated.language.rawValue, fresh: true)),
+            "retained-store": evidence(original: baseline, restored: snapshot(cached.values),
+                after: snapshot(cached.values, language: cachedStore.language.rawValue, fresh: false)),
+            "queued-writer": evidence(original: snapshot(queuedOriginal, language: "en"),
+                restored: snapshot(queuedRestored), after: snapshot(queued.values,
+                    language: afterQueuedWrite.language.rawValue, fresh: true),
+                pending: pendingBeforeRestore, filesMatch: queued.values == queuedOriginal),
+            "override-masking": evidence(original: baseline, restored: snapshot(wrongPersistent.values),
+                after: snapshot(wrongPersistent.values, language: masked.language.rawValue, fresh: true),
+                arguments: ["--app-language", "en"], filesMatch: wrongPersistent.values == cachedOriginal),
+            "originally-absent": evidence(original: snapshot(absentOriginal, present: false,
+                    language: absentOriginalLanguage), restored: snapshot(absent.values, present: false),
+                after: snapshot(absent.values, present: false, language: absentRecreated.language.rawValue, fresh: true))
+        ]
         let passed = cases.filter { $0["passed"] as? Bool == true }.count
         let result: [String: Any] = ["scope": "actual-product-store-source-with-memory-preferences",
                                     "cases": cases, "passed": passed, "failed": cases.count - passed,
+                                    "restorationObservations": restorationObservations,
                                     "actualUserDefaultsUsed": false, "actualLocalePreferencesRead": false,
                                     "realCFPreferencesCacheTested": false, "nativeRestorationCertified": false]
         print(String(data: try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]), encoding: .utf8)!)

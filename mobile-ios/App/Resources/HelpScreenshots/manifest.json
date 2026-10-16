@@ -296,7 +296,10 @@
     "mobile-ios/App/Resources/en.lproj/Localizable.strings": "5752235736e2bdd51b7d3dd3b36df00f2e7951404242e205a06e8ea6830db0b2",
     "mobile-ios/App/Resources/en.lproj/InfoPlist.strings": "9619871d5172877f7f5f25073666faa44b5c9681b9605f578d7d304e34c942b0",
     "mobile-ios/App/Resources/ko.lproj/Localizable.strings": "10ae8beffc0508826e39344985d1d0594bf5643a461c356e620e5a1e8905f799",
-    "mobile-ios/App/Resources/ko.lproj/InfoPlist.strings": "d5ee051671393ca49ee63c3a4353dc33fb28a73509174582d4d11178ca14de4a"
+    "mobile-ios/App/Resources/ko.lproj/InfoPlist.strings": "d5ee051671393ca49ee63c3a4353dc33fb28a73509174582d4d11178ca14de4a",
+    "mobile-ios/App/CarPlay/CarPlayProjection.swift": "96ce069314a1230ac55f23129896078dd9afe5e337ce1c14870a2106e1c3eda1",
+    "mobile-ios/App/CarPlay/CarPlayProjectionBridge.swift": "e10b479a92945798f25d031d56b484e95abb10d52a3d1ae151f9fbb280967103",
+    "mobile-ios/App/CarPlay/CarPlaySceneDelegate.swift": "149691ea963d927a54bb94bda81a4efed807b260433f1546a25c6686b3e0daab"
   },
   "captureSummary": {
     "passed": 2,
@@ -314,5 +317,20 @@
     "mobile-ios/UITests/LocalizationHelpUITests.swift": "bfc0d4bbedc1c713e230924d81cd18a6e53736d07ce2c55a2db83e26674b0a3f",
     "mobile-ios/LifecycleTests/AppLanguageTests.swift": "28af1776d55ad1cc4d744bf86ccfec476fa4031c8007c918ceea657c5ec63a1f"
   },
-  "captureScope": "New owned iPhone17 iOS27.0 synthetic fixture; actual original PNG bytes; no physical device evidence"
+  "captureScope": "New owned iPhone17 iOS27.0 synthetic fixture; actual original PNG bytes; no physical device evidence",
+  "sourceInventoryAmendment": {
+    "schemaVersion": 1,
+    "reason": "Restore omitted nested inputs from the original capture-time source snapshot",
+    "snapshotPath": "docs/evidence/help-capture-source-inputs-2026-10-09.json",
+    "snapshotSHA256": "bc76c6fe5669c13d2b348ab2aa4aa8b4ecc275ef159e940da29e13b447b7c45c",
+    "sourceBaseCommit": "8ddb12e1b80dd4831911f50a3d4e75517c0a2529",
+    "addedSourceInputs": {
+      "mobile-ios/App/CarPlay/CarPlayProjection.swift": "96ce069314a1230ac55f23129896078dd9afe5e337ce1c14870a2106e1c3eda1",
+      "mobile-ios/App/CarPlay/CarPlayProjectionBridge.swift": "e10b479a92945798f25d031d56b484e95abb10d52a3d1ae151f9fbb280967103",
+      "mobile-ios/App/CarPlay/CarPlaySceneDelegate.swift": "149691ea963d927a54bb94bda81a4efed807b260433f1546a25c6686b3e0daab"
+    },
+    "existingSourceHashesChanged": false,
+    "captureReceiptsChanged": false,
+    "certifiesCurrentSources": false
+  }
 }

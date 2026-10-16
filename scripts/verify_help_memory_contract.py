@@ -13,6 +13,7 @@ import subprocess
 import tempfile
 
 import verify_help_preparation as preparation
+import verify_preference_restoration as restoration
 
 
 def checked(command, *, timeout=90):
@@ -66,7 +67,22 @@ def run(root):
                                 and report["realCFPreferencesCacheTested"] is False
                                 for report in languages.values()) and not help_data["errors"],
                             "Host memory assertions failed")
+        acceptance = {}
+        for language, report in languages.items():
+            observations = report["restorationObservations"]
+            preparation.require(set(observations) == {"fresh-restored", "retained-store", "queued-writer",
+                                                       "override-masking", "originally-absent"},
+                                "Restoration observations are incomplete")
+            acceptance[language] = {}
+            for name, evidence in observations.items():
+                result = restoration.evaluate(evidence, expected_domain="synthetic.telemetry.preferences")
+                expected = name in ("fresh-restored", "originally-absent")
+                preparation.require(result["syntheticContractSatisfied"] == expected
+                                    and result["nativeRestorationCertified"] is False,
+                                    "Restoration acceptance contract failed: " + name)
+                acceptance[language][name] = result
         return {"schemaVersion": 1, "scope": "host-memory-preparation-only", "languages": languages,
+                "restorationAcceptance": acceptance,
                 "proposedHelp": help_data, "proposedHelpSyntaxParsed": True,
                 "languageStorePrefixSHA256": preparation.digest(prefix),
                 "proposedPatchSHA256": preparation.digest(preparation.proposal_patch(

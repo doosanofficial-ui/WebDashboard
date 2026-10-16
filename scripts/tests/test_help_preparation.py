@@ -33,6 +33,19 @@ class HelpPreparationTests(unittest.TestCase):
             destination = self.root / name
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / name, destination)
+        self.source_fixture()
+
+    def source_fixture(self, *, stale=False):
+        # This temporary source-only fixture never inherits the bundled asset's
+        # freshness. It contains no PNGs and cannot certify a native capture.
+        path = self.root / "mobile-ios/App/Resources/HelpScreenshots/manifest.json"
+        manifest = json.loads(path.read_text())
+        manifest["screenInputs"] = assets.source_input_hashes(self.root)
+        manifest["unitFixtureScope"] = "synthetic source audit only; no capture certificate"
+        path.write_text(json.dumps(manifest))
+        if stale:
+            source = self.root / "mobile-ios/App/DashboardView.swift"
+            source.write_text(source.read_text() + "\n// deliberate temporary source drift\n")
         self.before = self.inventory()
 
     def inventory(self):
@@ -54,10 +67,35 @@ class HelpPreparationTests(unittest.TestCase):
                          assets.expected_capture_targets((self.root / preparation.HELP_SOURCE).read_text()))
         self.assertEqual(self.inventory(), self.before)
 
-    def test_source_drift_never_becomes_native_execution_or_asset_success(self):
+    def test_clean_source_inventory_is_still_only_preparation(self):
+        self.source_fixture()
         report = preparation.build_plan(self.root)
-        self.assertEqual(len(report["sourceAudit"]["missingSourceInputs"]), 3)
-        self.assertEqual(len(report["sourceAudit"]["staleSourceInputs"]), 4)
+        self.assertTrue(report["sourceAudit"]["sourceInputsMatch"])
+        self.assertEqual(report["sourceAudit"]["missingSourceInputs"], [])
+        self.assertEqual(report["sourceAudit"]["staleSourceInputs"], [])
+        self.assertFalse(report["nativeExecutionAllowed"])
+        self.assertFalse(report["fullAssetVerificationPerformed"])
+        self.assertEqual(self.inventory(), self.before)
+
+    def test_new_nested_source_requires_a_new_inventory_entry(self):
+        self.source_fixture()
+        relative = "mobile-ios/App/SyntheticPreparationFixture/Additional.swift"
+        source = self.root / relative
+        self.assertFalse(source.exists())
+        source.parent.mkdir(parents=True)
+        source.write_text("// temporary new capture input\n")
+        before = self.inventory()
+        audit = preparation.build_plan(self.root)["sourceAudit"]
+        self.assertEqual(audit["missingSourceInputs"], [relative])
+        self.assertEqual(audit["staleSourceInputs"], [])
+        self.assertFalse(audit["sourceInputsMatch"])
+        self.assertEqual(self.inventory(), before)
+
+    def test_source_drift_never_becomes_native_execution_or_asset_success(self):
+        self.source_fixture(stale=True)
+        report = preparation.build_plan(self.root)
+        self.assertEqual(report["sourceAudit"]["missingSourceInputs"], [])
+        self.assertEqual(report["sourceAudit"]["staleSourceInputs"], ["mobile-ios/App/DashboardView.swift"])
         self.assertFalse(report["nativeExecutionAllowed"])
         self.assertFalse(report["nativeRestorationCertified"])
         self.assertFalse(report["assetFilesModified"])
@@ -147,7 +185,19 @@ class HelpPreparationTests(unittest.TestCase):
         self.assertEqual(committed.read_text(), patch)
         self.assertTrue(patch.startswith("--- a/mobile-ios/App/AppHelpView.swift\n"))
 
+    def test_cli_is_read_only_and_zero_for_a_clean_source_fixture(self):
+        self.source_fixture()
+        result = subprocess.run([sys.executable, "-B", "-O", str(Path(preparation.__file__)),
+                                 "--root", str(self.root)], capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertTrue(report["sourceAudit"]["sourceInputsMatch"])
+        self.assertFalse(report["nativeExecutionAllowed"])
+        self.assertFalse(report["fullAssetVerificationPerformed"])
+        self.assertEqual(self.inventory(), self.before)
+
     def test_cli_is_read_only_and_remains_nonzero_for_provenance_drift(self):
+        self.source_fixture(stale=True)
         result = subprocess.run([sys.executable, "-B", "-O", str(Path(preparation.__file__)),
                                  "--root", str(self.root)], capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 1, result.stderr)
