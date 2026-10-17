@@ -793,13 +793,62 @@ class PhaseIntegrationTests(unittest.TestCase):
 @unittest.skipUnless(os.name == 'posix', 'Synthetic process groups require POSIX')
 class AstraBoundaryRegressionTests(unittest.TestCase):
     """Port the review's two reproductions without native calls or PID reuse."""
-    def phase_trial(self, kind):
-        """Use actual host Python children and time; require the selected fault to enter."""
+    def retain_failed_trial(self, kind, error, evidence):
+        """Keep synthetic receipts after TemporaryDirectory cleanup, including CI Seed failure."""
+        previous = getattr(error, 'bootstatus_fixture_receipt', None)
+        if previous:
+            return Path(previous)
+        import hashlib
+        try:
+            source_hash = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+        except OSError:
+            source_hash = None
+        value = {'schemaVersion': 1, 'scope': 'synthetic-bootstatus-fixture-failure-only',
+                 'qualifiedSeedProduced': False, 'kind': kind, 'errorType': type(error).__name__,
+                 'error': str(error), 'fixtureSourceSHA256': source_hash,
+                 'ci': {key: os.environ.get(key) for key in ('GITHUB_RUN_ID', 'GITHUB_JOB', 'GITHUB_SHA')},
+                 'evidence': evidence, 'nativeExecuted': False}
+        try:
+            configured = os.environ.get('TELEMETRY_FIXTURE_FAILURE_DIR')
+            if configured:
+                base = Path(configured)
+            elif os.environ.get('GITHUB_ACTIONS') == 'true' and os.environ.get('RUNNER_TEMP'):
+                # The existing Seed always-upload step preserves this directory
+                # when its preceding contract step fails. On success we create
+                # nothing, so the qualified Seed producer still gets a new path.
+                base = Path(os.environ['RUNNER_TEMP']) / 'replay-seed/contract-failures'
+            else:
+                base = Path(tempfile.gettempdir()) / 'telemetry-contract-failures'
+            base.mkdir(parents=True, exist_ok=True)
+            safe_kind = kind if kind in ('control', 'image-popen', 'state-popen', 'receipt-write') else 'fixture'
+            saved = Path(tempfile.mkdtemp(prefix=safe_kind + '-', dir=base)) / 'failure.json'
+            saved.write_text(json.dumps(value, indent=2), encoding='utf-8')
+            error.bootstatus_fixture_receipt = str(saved)
+        except Exception as recording_error:
+            # The original assertion still propagates. CI logs retain the same
+            # structured receipt even if optional filesystem recording fails.
+            value['recordingErrorType'] = type(recording_error).__name__
+            try:
+                print('BOOTSTATUS_FIXTURE_FAILURE ' + json.dumps(value, sort_keys=True), flush=True)
+            except Exception:
+                pass
+            return None
+        try:
+            print('BOOTSTATUS_FIXTURE_FAILURE ' + json.dumps({'path': str(saved), **value}, sort_keys=True), flush=True)
+        except Exception:
+            pass
+        return saved
+
+    def phase_trial(self, kind, admission_pause=0):
+        """Actual primary/fault/cleanup time; model only the selected fault's admission."""
         real_popen, real_killpg = subprocess.Popen, os.killpg
         real_write, real_parse = failure_observation.safe_write, failure_observation.parse_probe
         processes, calls, launches, attempts, waits, writes, faults, points = [], [], [], [], [], [], [], []
         launch_options = []
-        fault_entered, checkpoint_entered = threading.Event(), threading.Event()
+        fault_entered, checkpoint_entered, admitting = threading.Event(), threading.Event(), threading.Event()
+        admission = {'scope': 'Fixture observation admission only; runner/fault/cleanup clocks remain actual',
+                     'pauseRequestedSeconds': admission_pause, 'modeledSamples': 0,
+                     'primaryClockUnmodified': runner.time is time}
         waiters = []
         with tempfile.TemporaryDirectory(prefix='bootstatus-term-boundary-') as directory:
             root = Path(directory)
@@ -809,11 +858,13 @@ class AstraBoundaryRegressionTests(unittest.TestCase):
             command = [sys.executable, '-B', '-c', source]
             def fault(label):
                 calls.append(label)
+                admission['releasedAtRealMonotonic'] = time.monotonic()
+                admitting.clear()  # The blocking Popen/journal and all cleanup use actual time.
                 fault_entered.set()
                 value = {'label': label, 'started': time.monotonic(),
                          'checkpointAttemptedAtEntry': bool(points and points[0].attempted)}
                 faults.append(value)
-                time.sleep(1)  # The original real diagnostic stall, without freezing either clock or waiter.
+                time.sleep(1)  # Real stall after admission release; primary clock/waiter are never frozen.
                 value['returned'] = time.monotonic()
             def launch(argv, **kwargs):
                 launches.append(list(argv))
@@ -861,9 +912,28 @@ class AstraBoundaryRegressionTests(unittest.TestCase):
                 real_observe = point.observe_once
                 def observe():
                     checkpoint_entered.set()
-                    return real_observe()
+                    if kind == 'state-popen':
+                        admission['startedAtRealMonotonic'] = time.monotonic()
+                        admission['pinnedMonotonic'] = point.scheduled
+                        admitting.set()
+                    try:
+                        return real_observe()
+                    finally:
+                        admitting.clear()
                 point.observe_once = observe
                 return point
+            def admission_clock():
+                if admitting.is_set():
+                    admission['modeledSamples'] += 1
+                    return admission['pinnedMonotonic']
+                return time.monotonic()
+            real_state = observation.read_owned_state
+            def prepared_state(*args):
+                if admission_pause:
+                    started = time.monotonic()
+                    time.sleep(admission_pause)
+                    admission['pauseActualSeconds'] = time.monotonic() - started
+                return real_state(*args)
             def write(path, value):
                 if Path(path).name != 'bootstatus-inflight-observation.json':
                     return real_write(path, value)
@@ -873,6 +943,12 @@ class AstraBoundaryRegressionTests(unittest.TestCase):
                 writes.append({'success': result, 'returned': time.monotonic(),
                                'persistedValueMatches': bool(result) and json.loads(Path(path).read_text()) == value})
                 return result
+            def read_receipt(name):
+                path = root / name
+                try:
+                    return json.loads(path.read_text()) if path.exists() else None
+                except Exception as read_error:
+                    return {'unavailable': type(read_error).__name__}
             from contextlib import ExitStack
             stack = ExitStack()
             try:
@@ -885,6 +961,14 @@ class AstraBoundaryRegressionTests(unittest.TestCase):
                 image = stack.enter_context(patch.object(observation, 'read_owned_image', create=True))
                 parse = stack.enter_context(patch.object(failure_observation, 'parse_probe', wraps=real_parse))
                 stack.enter_context(patch.object(failure_observation, 'safe_write', side_effect=write))
+                if kind == 'state-popen':
+                    # The contract here is TERM while the caller is inside Popen,
+                    # not opportunistic query admission (covered by StateQueryTests).
+                    # Freeze only that preparation gate until wrapped Popen enters;
+                    # never patch the shared time module or the runner's real clock.
+                    stack.enter_context(patch.object(observation, 'time',
+                        types.SimpleNamespace(monotonic=admission_clock, sleep=time.sleep)))
+                    stack.enter_context(patch.object(observation, 'read_owned_state', side_effect=prepared_state))
                 if kind == 'receipt-write':
                     stack.enter_context(patch.object(observation, 'read_owned_state', return_value={'synthetic': True}))
                 with self.assertRaises(subprocess.TimeoutExpired) as raised:
@@ -953,7 +1037,14 @@ class AstraBoundaryRegressionTests(unittest.TestCase):
                     self.assertLess(query_waits[0]['returned'], query_signals[1]['started'])
                     parse.assert_not_called()
                 phase_started = receipt['phaseStartedMonotonic']
-                return {'kind': kind, 'termSeconds': receipt['groupStopRequestedElapsedSeconds'],
+                return {'kind': kind, 'admission': admission,
+                        '_failureEvidence': {'phaseReceipt': receipt, 'checkpointReceipt': checkpoint,
+                            'launches': launches, 'attempts': attempts, 'waits': waits, 'writes': writes,
+                            'faults': faults, 'admission': admission,
+                            'productSnapshotBeforeFixtureCleanup': {'allReaped': product_reaped,
+                                'exitCodes': product_codes, 'queryStdoutClosed': pipes_closed, 'marker': marker_value,
+                                'waitersStopped': all(not worker.is_alive() for worker in waiters)}},
+                        'termSeconds': receipt['groupStopRequestedElapsedSeconds'],
                         'actualTermSeconds': terms[0]['started'] - phase_started,
                         'primaryMarkerAfterDeadline': marker_value is not None, 'marker': marker_value,
                         'diagnosticCalls': calls, 'faultEntered': fault_entered.is_set(),
@@ -968,8 +1059,18 @@ class AstraBoundaryRegressionTests(unittest.TestCase):
                         'queryStdoutClosedAtReturn': pipes_closed,
                         'actualHostPythonChildren': [{'role': role, 'pid': child.pid} for role, child in processes],
                         'allFixtureWaitersStopped': all(not worker.is_alive() for worker in waiters),
-                        'timingScope': 'Actual monotonic time and actual owned host Python children',
+                        'timingScope': 'Actual primary/fault/cleanup time and host Python children; fixture admission modeled',
                         'actualNativeLaunch': False}
+            except BaseException as error:
+                self.retain_failed_trial(kind, error, {
+                    'phaseReceipt': read_receipt('phase.json'),
+                    'checkpointReceipt': read_receipt('bootstatus-inflight-observation.json'),
+                    'launches': launches, 'attempts': attempts, 'waits': waits, 'writes': writes,
+                    'faults': faults, 'admission': admission, 'faultEntered': fault_entered.is_set(),
+                    'primaryMarker': read_receipt('primary-lived-after-deadline'),
+                    'productCodesBeforeFixtureCleanup': {role: child.returncode for role, child in processes},
+                    'waitersStoppedBeforeFixtureCleanup': all(not worker.is_alive() for worker in waiters)})
+                raise
             finally:
                 try:
                     for _, child in processes:
@@ -978,6 +1079,14 @@ class AstraBoundaryRegressionTests(unittest.TestCase):
                     for worker in waiters:
                         worker.join(timeout=3)
                         self.assertFalse(worker.is_alive(), 'The fixture must stop its original waiter')
+                except BaseException as error:
+                    self.retain_failed_trial(kind, error, {
+                        'failureDuringFixtureCleanup': True, 'phaseReceipt': read_receipt('phase.json'),
+                        'checkpointReceipt': read_receipt('bootstatus-inflight-observation.json'),
+                        'launches': launches, 'attempts': attempts, 'waits': waits, 'faults': faults,
+                        'admission': admission, 'ownedCodesAfterFixtureCleanupAttempt': {
+                            role: child.returncode for role, child in processes}})
+                    raise
                 finally:
                     stack.close()
 
@@ -987,29 +1096,110 @@ class AstraBoundaryRegressionTests(unittest.TestCase):
         self.assertEqual(control['diagnosticCalls'], [])
         for kind in ['image-popen', 'state-popen', 'receipt-write']:
             with self.subTest(kind=kind):
-                trial = self.phase_trial(kind)
-                results.append(trial)
-                self.assertFalse(trial['primaryMarkerAfterDeadline'], 'Diagnostic delay kept the original primary alive beyond deadline')
-                self.assertLessEqual(trial['termSeconds'], control['termSeconds'] + .12)
-                self.assertLessEqual(trial['actualTermSeconds'], control['actualTermSeconds'] + .12)
-                self.assertEqual(trial['diagnosticCalls'], [] if kind == 'image-popen' else [kind])
-                self.assertEqual(trial['originalTimeoutSeconds'], .9)
-                self.assertTrue(trial['allSyntheticChildrenReaped'])
-                self.assertEqual(trial['productExitCodes']['primary'], -15)
-                self.assertTrue(trial['queryStdoutClosedAtReturn'])
-                self.assertTrue(trial['allFixtureWaitersStopped'])
-                self.assertEqual(trial['cleanupOwner'], 'completion-waiter')
-                self.assertTrue(trial['cleanupFinished'])
-                self.assertIsNone(trial['preStopCode'])
-                for fault in trial['faults']:
-                    self.assertTrue(fault['checkpointAttemptedAtEntry'])
-                    self.assertLess(fault['startedElapsed'], .9)
-                    self.assertLess(fault['startedElapsed'], trial['actualTermSeconds'])
-                    self.assertGreaterEqual(fault['realDurationSeconds'], 1)
-                    self.assertGreater(fault['returnedElapsed'], trial['actualTermSeconds'])
-        print('Astra termination regression: ' + json.dumps(results, sort_keys=True))
+                trial = None
+                try:
+                    trial = self.phase_trial(kind)
+                    results.append(trial)
+                    self.assertFalse(trial['primaryMarkerAfterDeadline'], 'Diagnostic delay kept the original primary alive beyond deadline')
+                    self.assertLessEqual(trial['termSeconds'], control['termSeconds'] + .12)
+                    self.assertLessEqual(trial['actualTermSeconds'], control['actualTermSeconds'] + .12)
+                    self.assertEqual(trial['diagnosticCalls'], [] if kind == 'image-popen' else [kind])
+                    self.assertEqual(trial['originalTimeoutSeconds'], .9)
+                    self.assertTrue(trial['allSyntheticChildrenReaped'])
+                    self.assertEqual(trial['productExitCodes']['primary'], -15)
+                    self.assertTrue(trial['queryStdoutClosedAtReturn'])
+                    self.assertTrue(trial['allFixtureWaitersStopped'])
+                    self.assertEqual(trial['cleanupOwner'], 'completion-waiter')
+                    self.assertTrue(trial['cleanupFinished'])
+                    self.assertIsNone(trial['preStopCode'])
+                    for fault in trial['faults']:
+                        self.assertTrue(fault['checkpointAttemptedAtEntry'])
+                        self.assertLess(fault['startedElapsed'], .9)
+                        self.assertLess(fault['startedElapsed'], trial['actualTermSeconds'])
+                        self.assertGreaterEqual(fault['realDurationSeconds'], 1)
+                        self.assertGreater(fault['returnedElapsed'], trial['actualTermSeconds'])
+                except BaseException as error:
+                    self.retain_failed_trial(kind, error, trial['_failureEvidence'] if trial else {'trialUnavailable': True})
+                    raise
+        print('Astra termination regression: ' + json.dumps(
+            [{key: value for key, value in trial.items() if key != '_failureEvidence'} for trial in results], sort_keys=True))
 
 
+
+    def test_state_popen_preparation_preemption_cannot_skip_selected_fault(self):
+        control = self.phase_trial('control')
+        trial = None
+        try:
+            trial = self.phase_trial('state-popen', admission_pause=.12)
+            self.assertTrue(trial['faultEntered'])
+            self.assertTrue(trial['admission']['primaryClockUnmodified'])
+            self.assertGreater(trial['admission']['modeledSamples'], 0)
+            self.assertGreaterEqual(trial['admission']['pauseActualSeconds'], .1)
+            self.assertFalse(trial['primaryMarkerAfterDeadline'])
+            self.assertLessEqual(trial['actualTermSeconds'], control['actualTermSeconds'] + .12)
+            self.assertEqual(trial['originalTimeoutSeconds'], .9)
+            self.assertEqual(trial['diagnosticCalls'], ['state-popen'])
+            self.assertTrue(trial['allSyntheticChildrenReaped'])
+            self.assertTrue(trial['queryStdoutClosedAtReturn'])
+            self.assertTrue(trial['allFixtureWaitersStopped'])
+            self.assertGreaterEqual(trial['faults'][0]['realDurationSeconds'], 1)
+            self.assertLess(trial['faults'][0]['startedElapsed'], trial['actualTermSeconds'])
+            self.assertGreater(trial['faults'][0]['returnedElapsed'], trial['actualTermSeconds'])
+        except BaseException as error:
+            self.retain_failed_trial('state-popen', error, trial['_failureEvidence'] if trial else {'trialUnavailable': True})
+            raise
+
+    def test_failed_trial_receipt_outlives_temporary_phase_and_uses_seed_upload_path(self):
+        from contextlib import redirect_stdout
+        with tempfile.TemporaryDirectory(prefix='bootstatus-failure-receipt-test-') as directory:
+            root = Path(directory)
+            captured = io.StringIO()
+            # Expected negative fixture: admission completes only after the real
+            # primary outcome. It must fail, retain evidence, and never be skipped.
+            with patch.dict(os.environ, {'TELEMETRY_FIXTURE_FAILURE_DIR': '',
+                    'GITHUB_ACTIONS': 'true', 'RUNNER_TEMP': str(root)}), redirect_stdout(captured):
+                with self.assertRaises(AssertionError) as raised:
+                    self.phase_trial('state-popen', admission_pause=.65)
+            saved = Path(raised.exception.bootstatus_fixture_receipt)
+            value = json.loads(saved.read_text())
+            saved.relative_to(root / 'replay-seed/contract-failures')
+            self.assertEqual(value['scope'], 'synthetic-bootstatus-fixture-failure-only')
+            self.assertFalse(value['qualifiedSeedProduced'])
+            self.assertFalse(value['nativeExecuted'])
+            self.assertEqual(value['errorType'], 'AssertionError')
+            self.assertEqual(len(value['fixtureSourceSHA256']), 64)
+            evidence = value['evidence']
+            self.assertFalse(evidence['faultEntered'])
+            self.assertTrue(evidence['phaseReceipt']['timedOut'])
+            self.assertEqual(evidence['phaseReceipt']['timeoutSeconds'], .9)
+            self.assertTrue(evidence['phaseReceipt']['completionWaiterStopped'])
+            self.assertTrue(evidence['phaseReceipt']['groupStopFinished'])
+            self.assertTrue(evidence['waitersStoppedBeforeFixtureCleanup'])
+            self.assertEqual(evidence['checkpointReceipt']['state']['notRunReason'], 'primary-completed-before-query')
+            self.assertIn('BOOTSTATUS_FIXTURE_FAILURE ', captured.getvalue())
+
+    def test_receipt_write_error_preserves_original_assertion_and_log_evidence(self):
+        from contextlib import redirect_stdout
+        original = AssertionError('synthetic receipt failure oracle')
+        captured = io.StringIO()
+        with tempfile.TemporaryDirectory(prefix='bootstatus-failure-log-test-') as directory, \
+             patch.dict(os.environ, {'TELEMETRY_FIXTURE_FAILURE_DIR': directory}), \
+             patch.object(Path, 'write_text', side_effect=OSError('synthetic disk fault')), redirect_stdout(captured):
+            caught = None
+            try:
+                try:
+                    raise original
+                except BaseException as error:
+                    self.retain_failed_trial('state-popen', error, {'synthetic': True})
+                    raise
+            except BaseException as error:
+                caught = error
+        self.assertIs(caught, original)
+        payload = captured.getvalue().split('BOOTSTATUS_FIXTURE_FAILURE ', 1)[1]
+        value = json.loads(payload)
+        self.assertEqual(value['recordingErrorType'], 'OSError')
+        self.assertEqual(value['errorType'], 'AssertionError')
+        self.assertEqual(value['evidence'], {'synthetic': True})
 
     def test_post_expiry_preemption_and_denied_kill_cannot_query_reaped_pid(self):
         real_popen, real_killpg = subprocess.Popen, os.killpg
