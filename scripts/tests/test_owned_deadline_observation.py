@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import tempfile
@@ -74,13 +75,14 @@ class OwnedDeadlineObservationTests(unittest.TestCase):
         self.assertLessEqual(self.receipt['processCompletionObservedElapsedSeconds'], self.budget)
         self.assertGreater(self.receipt['elapsedSeconds'], self.budget)
 
-    def test_late_zero_exit_remains_timeout_even_after_observer_finds_exit(self):
+    def test_original_deadline_terminates_primary_while_observer_is_blocked(self):
         with self.assertRaises(subprocess.TimeoutExpired) as caught:
             self.run_observed_phase(0.75)
         self.assertEqual(caught.exception.timeout, self.budget)
         self.assertGreater(self.observations[0], self.budget)
         self.assertTrue(self.receipt['timedOut'])
-        self.assertEqual(self.receipt['exitCode'], 0)
+        self.assertEqual(self.receipt['exitCode'], -signal.SIGTERM)
+        self.assertEqual(self.receipt['groupStopOwner'], 'completion-waiter')
 
     def test_timely_nonzero_exit_preserves_error_during_slow_observation(self):
         with self.assertRaises(subprocess.CalledProcessError) as caught:

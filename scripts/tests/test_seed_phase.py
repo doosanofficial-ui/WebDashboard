@@ -41,7 +41,7 @@ class OwnedGroupModel:
         return self
 
     def wait(self, timeout):
-        if threading.get_ident() != self.owner_thread:
+        if threading.get_ident() != self.owner_thread and self.leader_running:
             self.waiter = threading.current_thread()
             self.waiter_entered.set()
             assert self.release_waiter.wait(2), 'Model waiter must be released'

@@ -23,6 +23,7 @@ from verify_ios_lifecycle import output, stage_sources, select_runtime_and_type,
 from verify_replay_seed import private_artifact, run_artifact, install_fixture, current_commit
 from owned_simulator_boot_log import OwnedSimulatorBootLog
 import failure_observation
+import bootstatus_observation
 from failure_observation import observe_first_failure
 
 
@@ -161,12 +162,19 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False,
         except Exception:
             boundaries[key] = None  # Unknown must not reuse a previous call's timestamp.
     completion_ready = threading.Event()
+    primary_outcome = threading.Event()  # Cancel optional work before cleanup/metadata can block.
+    stop_claim = threading.Lock()
+    stop_started = False
+    stop_deadline = None
+    stop_returned = threading.Event()
     waiter = None
-    def note_failure(error, destination, source, observed=None):
+    checkpoint = None
+    def note_failure(error, destination, source, observed=None, code_before_stop=...):
         try:
             timed_out = isinstance(error, subprocess.TimeoutExpired)
             destination['firstFailure'] = failure_observation.failure_snapshot(
-                error, child.returncode if child is not None else None, source, observed,
+                error, (child.returncode if child is not None else None)
+                if code_before_stop is ... else code_before_stop, source, observed,
                 sample_resources=not timed_out)
             if boundary_simulator and child is not None:
                 if timed_out:
@@ -180,8 +188,12 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False,
         except Exception:
             pass  # Optional in-process metadata cannot change the phase verdict.
     def wait_for_completion():
-        # Optional process/log observations must not hide a timely child exit.
-        # Accept only completion observed by the original phase deadline.
+        # Freeze the original verdict before cleanup or optional metadata.
+        # This existing waiter also owns failure termination: main may be blocked
+        # starting a diagnostic child or writing a receipt at the phase deadline.
+        error = None
+        observed = None
+        code_before_stop = None
         try:
             completion["waitStartedElapsedSeconds"] = time.monotonic() - began
             remaining = deadline - time.monotonic()
@@ -194,17 +206,28 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False,
                 raise subprocess.TimeoutExpired(command, timeout)
             completion['exitCode'] = code
             if code:
-                note_failure(subprocess.CalledProcessError(code, command), completion, 'completion-waiter', observed)
+                error = subprocess.CalledProcessError(code, command)
         except subprocess.TimeoutExpired:
-            completion['error'] = subprocess.TimeoutExpired(command, timeout)
-            note_failure(completion['error'], completion, 'completion-waiter')
-        except BaseException as error:
-            completion['error'] = error
-            note_failure(error, completion, 'completion-waiter')
+            error = completion['error'] = subprocess.TimeoutExpired(command, timeout)
+        except BaseException as caught:
+            error = completion['error'] = caught
         finally:
-            observe_boundary('eventSetStartedMonotonic')
-            completion_ready.set()
-            observe_boundary('eventSetReturnedMonotonic')
+            if observed is None:
+                observed = time.monotonic()
+            code_before_stop = child.returncode
+            primary_outcome.set()
+            try:
+                if error is not None:
+                    try:
+                        stop_owned_group('completion-waiter')
+                    except BaseException as cleanup_error:
+                        # An optional cleanup failure cannot replace the frozen verdict.
+                        completion['cleanupErrorType'] = type(cleanup_error).__name__
+                    note_failure(error, completion, 'completion-waiter', observed, code_before_stop)
+            finally:
+                observe_boundary('eventSetStartedMonotonic')
+                completion_ready.set()
+                observe_boundary('eventSetReturnedMonotonic')
     def recording_error(error):
         evidence.setdefault("recordingErrors", []).append(str(error))
         print("Phase evidence could not be recorded: " + str(error), file=sys.stderr)
@@ -213,7 +236,7 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False,
         boundaries['saveLatestReturnedMonotonic'] = None
         observe_boundary('saveLatestStartedMonotonic')
         try:
-            receipt.write_text(json.dumps(evidence, indent=2), encoding="utf-8")
+            receipt.write_text(json.dumps(evidence.copy(), indent=2), encoding="utf-8")
         except OSError as error:
             if not best_effort_recording:
                 raise
@@ -237,43 +260,56 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False,
         evidence.setdefault("groupCleanupErrors", []).append({
             "operation": operation, "type": type(error).__name__,
             "errno": getattr(error, "errno", None), "message": str(error)})
-    def stop_owned_group():
-        if child is None:
+    def stop_owned_group(owner='phase-caller'):
+        nonlocal stop_started, stop_deadline
+        if child is None or not stop_claim.acquire(blocking=False):
             return
-        evidence["groupStopRequestedElapsedSeconds"] = time.monotonic() - began
         try:
-            os.killpg(child.pid, signal.SIGTERM)
-            evidence["groupTermSent"] = True
-        except ProcessLookupError:
-            pass
-        except OSError as error:
-            group_cleanup_error("term", error)
+            if stop_started:
+                return
+            stop_deadline = time.monotonic() + 20  # Existing two ten-second cleanup waits.
+            stop_started = True  # Claim once; a concurrent/late caller never signals again.
+            evidence.update(groupStopOwner=owner, groupStopFinished=False)
+        finally:
+            stop_claim.release()
         try:
-            child.wait(timeout=10)
-        except (OSError, subprocess.TimeoutExpired) as error:
-            group_cleanup_error("leader-wait", error)
-        # Leader exit does not imply that its descendants exited.
-        try:
-            os.killpg(child.pid, 0)
-        except ProcessLookupError:
-            evidence["groupStillExistsAfterLeaderWait"] = False
-        except OSError as error:
-            evidence["groupStillExistsAfterLeaderWait"] = None
-            group_cleanup_error("probe", error)
-        else:
-            evidence["groupStillExistsAfterLeaderWait"] = True
-        if evidence["groupStillExistsAfterLeaderWait"] is not False:
+            evidence["groupStopRequestedElapsedSeconds"] = time.monotonic() - began
             try:
-                os.killpg(child.pid, signal.SIGKILL)
-                evidence["groupKillSent"] = True
+                os.killpg(child.pid, signal.SIGTERM)
+                evidence["groupTermSent"] = True
             except ProcessLookupError:
                 pass
             except OSError as error:
-                group_cleanup_error("kill", error)
-        try:
-            child.wait(timeout=10)
-        except (OSError, subprocess.TimeoutExpired) as error:
-            group_cleanup_error("final-reap", error)
+                group_cleanup_error("term", error)
+            try:
+                child.wait(timeout=max(0, min(10, stop_deadline - time.monotonic())))
+            except (OSError, subprocess.TimeoutExpired) as error:
+                group_cleanup_error("leader-wait", error)
+            # Leader exit does not imply that its descendants exited.
+            try:
+                os.killpg(child.pid, 0)
+            except ProcessLookupError:
+                evidence["groupStillExistsAfterLeaderWait"] = False
+            except OSError as error:
+                evidence["groupStillExistsAfterLeaderWait"] = None
+                group_cleanup_error("probe", error)
+            else:
+                evidence["groupStillExistsAfterLeaderWait"] = True
+            if evidence["groupStillExistsAfterLeaderWait"] is not False:
+                try:
+                    os.killpg(child.pid, signal.SIGKILL)
+                    evidence["groupKillSent"] = True
+                except ProcessLookupError:
+                    pass
+                except OSError as error:
+                    group_cleanup_error("kill", error)
+            try:
+                child.wait(timeout=max(0, min(10, stop_deadline - time.monotonic())))
+            except (OSError, subprocess.TimeoutExpired) as error:
+                group_cleanup_error("final-reap", error)
+            evidence["groupStopFinished"] = True
+        finally:
+            stop_returned.set()
     if timeout <= 0:
         evidence.update(timedOut=True, elapsedSeconds=0, exitCode=None,
                         finishedUTC=datetime.datetime.now(datetime.timezone.utc).isoformat())
@@ -296,9 +332,27 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False,
                             launchReturnedElapsedSeconds=time.monotonic() - began)
             waiter = threading.Thread(target=wait_for_completion, name="owned-phase-wait", daemon=True)
             waiter.start()
+            try:
+                checkpoint = bootstatus_observation.checkpoint_for(
+                    command, child, receipt.parent, began, deadline, primary_outcome)
+            except BaseException:
+                pass  # Optional setup cannot change the original waiter or deadline.
             save()
             record_progress()
-            while not completion_ready.wait(timeout=15):
+            while True:
+                interval = 15
+                if checkpoint is not None:
+                    try:
+                        interval = checkpoint.wait_seconds()
+                    except BaseException:
+                        checkpoint = None
+                if completion_ready.wait(timeout=interval):
+                    break
+                if checkpoint is not None:
+                    try:
+                        checkpoint.observe_once()
+                    except BaseException:
+                        checkpoint = None  # Never retry a broken optional checkpoint.
                 record_progress()
                 save()
             observe_boundary('eventObservedByMainMonotonic')
@@ -332,11 +386,24 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False,
             raise
         finally:
             primary_failure = sys.exc_info()[0] is not None
+            # A busy claim can still be publishing its state. Read both fields
+            # under the same lock before deciding whether cleanup is pending.
+            with stop_claim:
+                claimed_stop_started, claimed_stop_deadline = stop_started, stop_deadline
+            if claimed_stop_started:
+                # A simultaneous main failure must not abandon the waiter that
+                # claimed cleanup. Await only its remaining original budget;
+                # never repeat signals or reset either command/cleanup deadline.
+                evidence['groupStopAwaitedByCaller'] = not stop_returned.is_set()
+                stop_returned.wait(timeout=max(0, claimed_stop_deadline - time.monotonic()))
+                evidence['groupStopReturnedBeforeCaller'] = stop_returned.is_set()
             if waiter is not None and waiter.ident is not None:
                 waiter.join(timeout=1)
                 evidence['completionWaiterStopped'] = not waiter.is_alive()
             if "waitStartedElapsedSeconds" in completion:
                 evidence["childWaitStartedElapsedSeconds"] = completion["waitStartedElapsedSeconds"]
+            if 'cleanupErrorType' in completion:
+                evidence['completionCleanupErrorType'] = completion['cleanupErrorType']
             if 'observedElapsedSeconds' in completion:
                 evidence['processCompletionObservedElapsedSeconds'] = completion['observedElapsedSeconds']
             if child is not None:
