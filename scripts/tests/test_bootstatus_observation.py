@@ -1,6 +1,7 @@
 import ast
 import importlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -300,13 +301,141 @@ class PhaseIntegrationTests(unittest.TestCase):
         return error, receipt, query_calls, query_processes
 
     def test_timely_primary_success_survives_query_cancellation(self):
-        error, receipt, query_calls, queries = self.trial(.09)
-        self.assertIsNone(error)
+        import verify_replay_seed as seed
+        primary_waiting, finish_primary = threading.Event(), threading.Event()
+        waiters, calls, queries, states, signals, order = [], [], [], [], [], []
+        clock, notice, attempts = [0.0], [], []
+        class Primary:
+            pid, returncode = 12345, None
+            def wait(inner, timeout=None):
+                if threading.current_thread() not in waiters:
+                    waiters.append(threading.current_thread())
+                self.assertEqual(timeout, .3)
+                order.append('primary-wait')
+                primary_waiting.set()
+                if not finish_primary.wait(3):
+                    raise AssertionError('Invalid fixture: query did not release the primary')
+                inner.returncode = 0
+                order.append('primary-return')
+                return 0
+        class Query:
+            pid, returncode, stdin = 12346, None, None
+            def __init__(inner):
+                inner.stdout = io.BytesIO()
+            def wait(inner, timeout=None):
+                self.assertEqual(signals, [9], 'The owned query must be killed before its first reap')
+                self.assertGreater(timeout, 0)
+                self.assertLessEqual(timeout, .04)
+                inner.returncode = -9
+                order.append('query-reap')
+                return inner.returncode
+        primary, query_child = Primary(), Query()
+        class WaitingSelector:
+            def __init__(inner):
+                inner.selects = 0
+            def __enter__(inner): return inner
+            def __exit__(inner, *args): return False
+            def register(inner, stream, events):
+                self.assertIs(stream, query_child.stdout)
+                self.assertEqual(events, observation.selectors.EVENT_READ)
+            def get_map(inner): return {query_child.stdout: True}
+            def select(inner, timeout=None):
+                inner.selects += 1
+                self.assertEqual(inner.selects, 1, 'The live query did not honor primary cancellation')
+                self.assertFalse(notice[0].is_set())
+                self.assertGreater(timeout, 0)
+                self.assertLessEqual(timeout, .02)
+                order.append('query-blocked')
+                finish_primary.set()
+                if not notice[0].wait(3):
+                    raise AssertionError('Invalid fixture: the original waiter did not publish completion')
+                return []  # No stdout/EOF: cancellation must end the real query loop.
+        def factory(command, child, results, began, deadline, event):
+            self.assertIs(child, primary)
+            notice.append(event)
+            if not primary_waiting.wait(3):
+                raise AssertionError('Invalid fixture: the original waiter did not enter')
+            point = observation.BootstatusCheckpoint(child, DEVICE, results, began, deadline, event)
+            clock[0] = point.scheduled  # Reach the checkpoint without relying on wall-clock sleeps.
+            return point
+        def launch(command, **kwargs):
+            self.assertTrue(kwargs['start_new_session'])
+            if command == ['synthetic-primary']:
+                return primary
+            self.assertEqual(command, ['xcrun', 'simctl', 'list', 'devices', DEVICE, '--json'])
+            self.assertFalse(notice[0].is_set(), 'The primary must still be pending when the query starts')
+            self.assertIsNone(primary.returncode)
+            self.assertEqual(kwargs['stdout'], subprocess.PIPE)
+            self.assertEqual(kwargs['stdin'], subprocess.DEVNULL)
+            self.assertEqual(kwargs['stderr'], subprocess.DEVNULL)
+            queries.append(query_child)
+            order.append('query-start')
+            return query_child
+        real_query = observation.read_owned_state
+        def read_state(*args):
+            calls.append(args[0])
+            value = real_query(*args)
+            states.append(value)
+            return value
+        def signal_or_probe(pid, number):
+            attempts.append((pid, number))  # Record before cleanup can catch a failing assertion.
+            self.assertEqual(pid, query_child.pid, 'Timely primary success must not stop the primary group')
+            if number:
+                self.assertIsNone(query_child.returncode, 'No signal may follow the query reap')
+                signals.append(number)
+                order.append('query-stop')
+            else:
+                self.assertEqual(query_child.returncode, -9)
+                raise ProcessLookupError()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(observation, 'OBSERVE_AFTER_SECONDS', .04), \
+                    patch.object(observation, 'OBSERVATION_BUDGET_SECONDS', .12), \
+                    patch.object(observation, 'REAP_RESERVE_SECONDS', .04), \
+                    patch.object(observation, 'PROBE_LIMIT_SECONDS', .05), \
+                    patch.object(runner.time, 'monotonic', side_effect=lambda: clock[0]), \
+                    patch.object(observation, 'checkpoint_for', side_effect=factory), \
+                    patch.object(observation.subprocess, 'Popen', side_effect=launch), \
+                    patch.object(observation.selectors, 'DefaultSelector', WaitingSelector), \
+                    patch.object(observation, 'read_owned_state', side_effect=read_state), \
+                    patch.object(observation.os, 'killpg', side_effect=signal_or_probe), \
+                    patch.object(seed, 'owned_progress', return_value={}), \
+                    patch.object(failure_observation, 'parse_probe') as parse:
+                try:
+                    runner.run_owned_phase(['synthetic-primary'], root / 'phase.log', root / 'phase.json', .3)
+                finally:
+                    finish_primary.set()
+                    for waiter in waiters:
+                        if waiter is not threading.current_thread():
+                            waiter.join(timeout=3)
+                            self.assertFalse(waiter.is_alive(), 'The fixture must stop its original waiter')
+                receipt = json.loads((root / 'phase.json').read_text())
+                checkpoint = json.loads((root / 'bootstatus-inflight-observation.json').read_text())
         self.assertEqual(receipt['exitCode'], 0)
         self.assertFalse(receipt['timedOut'])
-        self.assertEqual(len(query_calls), 1)
+        self.assertEqual(len(calls), 1)
         self.assertEqual(len(queries), 1)
         self.assertLessEqual(receipt['processCompletionObservedElapsedSeconds'], .3)
+        self.assertEqual(receipt['timeoutSeconds'], .3)
+        self.assertTrue(receipt['completionWaiterStopped'])
+        self.assertEqual(attempts, [(query_child.pid, 9), (query_child.pid, 0)],
+                         'Only the owned query may be signaled or probed')
+        self.assertNotIn('completionCleanupErrorType', receipt)
+        self.assertNotIn('groupStopOwner', receipt)
+        self.assertEqual(calls, [DEVICE])
+        self.assertEqual(order, ['primary-wait', 'query-start', 'query-blocked', 'primary-return', 'query-stop', 'query-reap'])
+        self.assertEqual(checkpoint['state'], states[0], 'Persisted observation must contain the completed cancellation evidence')
+        self.assertEqual(states[0].get('notRunReason'), 'primary-completed-during-query')
+        self.assertNotIn('errorType', states[0], 'A query timeout/error must not impersonate cancellation')
+        self.assertTrue(states[0]['childReaped'])
+        self.assertTrue(states[0]['cleanupResolved'])
+        self.assertTrue(query_child.stdout.closed)
+        self.assertEqual(query_child.returncode, -9)
+        parse.assert_not_called()
+        print('SE synchronized cancellation: ' + json.dumps({'order': order, 'primaryExitCode': receipt['exitCode'],
+            'timedOut': receipt['timedOut'], 'timeoutSeconds': receipt['timeoutSeconds'],
+            'queryNotRunReason': states[0].get('notRunReason'), 'queryCleanupResolved': states[0]['cleanupResolved'],
+            'queryExitCode': query_child.returncode, 'signalAttempts': attempts, 'actualNativeOrOSChildLaunch': False}, sort_keys=True))
 
     def test_original_primary_timeout_and_budget_survive_query_timeout(self):
         error, receipt, query_calls, queries = self.trial(2, budget=.2)
