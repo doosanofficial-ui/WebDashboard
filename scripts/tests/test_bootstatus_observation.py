@@ -159,16 +159,35 @@ class StateQueryTests(unittest.TestCase):
         self.assertIsNone(value.get('data'))
 
     def test_primary_completion_cancels_query_without_waiting_for_its_full_budget(self):
-        timer = threading.Timer(.04, self.event.set)
-        timer.start()
-        try:
-            began = time.monotonic()
+        entered = threading.Event()
+        real_selector = observation.selectors.DefaultSelector
+        selects = []
+        def selector():
+            value = real_selector()
+            real_select = value.select
+            def select(timeout=None):
+                selects.append(timeout)
+                entered.set()
+                self.event.set()  # Publish completion only after the real query reaches its read loop.
+                return real_select(timeout)
+            value.select = select
+            return value
+        began = time.monotonic()
+        with patch.object(observation.selectors, 'DefaultSelector', side_effect=selector):
             value = self.query('import time; time.sleep(20)')
-        finally:
-            timer.join(timeout=.2)
         self.assertLess(time.monotonic() - began, .3)
-        self.assertEqual(value['notRunReason'], 'primary-completed-during-query')
+        self.assertTrue(entered.is_set(), 'The query must enter its real read loop before completion')
+        self.assertEqual(value.get('notRunReason'), 'primary-completed-during-query')
+        self.assertEqual(len(selects), 1)
+        self.assertEqual(len(self.launched), 1)
+        self.assertNotIn('errorType', value)
         self.assertTrue(value['childReaped'])
+        self.assertTrue(value['cleanupResolved'])
+        self.assertTrue(self.launched[0].stdout.closed)
+        print('SE entered query cancellation: ' + json.dumps({'readLoopEntered': entered.is_set(),
+            'queryChildren': len(self.launched), 'notRunReason': value['notRunReason'],
+            'childReaped': value['childReaped'], 'cleanupResolved': value['cleanupResolved'],
+            'actualToyPythonChild': True, 'actualNativeLaunch': False}, sort_keys=True))
 
     def test_exhausted_budget_never_launches_a_query(self):
         with patch.object(observation.subprocess, 'Popen') as native:
@@ -437,20 +456,195 @@ class PhaseIntegrationTests(unittest.TestCase):
             'queryNotRunReason': states[0].get('notRunReason'), 'queryCleanupResolved': states[0]['cleanupResolved'],
             'queryExitCode': query_child.returncode, 'signalAttempts': attempts, 'actualNativeOrOSChildLaunch': False}, sort_keys=True))
 
+    def synchronized_failure_trial(self, budget, code=None, hook_error=None):
+        """Finish the optional query before releasing the original primary verdict."""
+        import verify_replay_seed as seed
+        primary_waiting, finish_primary = threading.Event(), threading.Event()
+        clock, notice, work_deadline = [0.0], [], []
+        waiters, calls, queries, states, attempts, order, waits, fixture_errors, launches = [], [], [], [], [], [], [], [], []
+        command = ['synthetic-primary']
+        def require(event, message):
+            if not event.wait(3):
+                fixture_errors.append(message)
+                raise AssertionError('Invalid fixture: ' + message)
+        class Primary:
+            pid, returncode, initial_wait = 12345, None, True
+            def wait(inner, timeout=None):
+                waits.append(('primary', timeout))
+                if inner.initial_wait:
+                    inner.initial_wait = False
+                    waiters.append(threading.current_thread())
+                    order.append('primary-wait')
+                    primary_waiting.set()
+                    require(finish_primary, 'observation did not release the primary')
+                    if code is None:
+                        clock[0] = budget
+                        order.append('primary-timeout')
+                        raise subprocess.TimeoutExpired('synthetic-original-wait', timeout)
+                    clock[0], inner.returncode = .09, code
+                    order.append('primary-nonzero')
+                    return code
+                order.append('primary-reap')
+                if inner.returncode is None:
+                    inner.returncode = -15
+                return inner.returncode
+        class Query:
+            pid, returncode, stdin = 12346, None, None
+            def __init__(inner):
+                inner.stdout = io.BytesIO()
+            def wait(inner, timeout=None):
+                waits.append(('query', timeout))
+                inner.returncode = -9
+                order.append('query-reap')
+                return inner.returncode
+        primary, query_child = Primary(), Query()
+        class ExpiringSelector:
+            def __enter__(inner): return inner
+            def __exit__(inner, *args): return False
+            def register(inner, stream, events):
+                self.assertIs(stream, query_child.stdout)
+                self.assertEqual(events, observation.selectors.EVENT_READ)
+            def get_map(inner): return {query_child.stdout: True}
+            def select(inner, timeout=None):
+                order.append('query-blocked')
+                self.assertFalse(notice[0].is_set())
+                self.assertGreater(timeout, 0)
+                self.assertLessEqual(timeout, .02)
+                clock[0] = work_deadline[0]  # Expire the real query loop, not its original primary waiter.
+                return []
+        def factory(argv, child, results, began, deadline, event):
+            notice.append(event)
+            require(primary_waiting, 'original waiter did not enter')
+            point = observation.BootstatusCheckpoint(child, DEVICE, results, began, deadline, event)
+            real_observe = point.observe_once
+            def observe():
+                real_observe()
+                order.append('observation-finished')
+                finish_primary.set()
+                require(event, 'original waiter did not publish its outcome')
+            point.observe_once = observe
+            clock[0] = point.scheduled
+            return point
+        def launch(argv, **kwargs):
+            launches.append(list(argv))
+            self.assertTrue(kwargs['start_new_session'])
+            if argv == command:
+                return primary
+            self.assertEqual(argv, ['xcrun', 'simctl', 'list', 'devices', DEVICE, '--json'])
+            self.assertFalse(notice[0].is_set())
+            self.assertIsNone(primary.returncode)
+            self.assertEqual(kwargs['stdin'], subprocess.DEVNULL)
+            self.assertEqual(kwargs['stdout'], subprocess.PIPE)
+            self.assertEqual(kwargs['stderr'], subprocess.DEVNULL)
+            queries.append(query_child)
+            order.append('query-start')
+            return query_child
+        real_query = observation.read_owned_state
+        def read_state(*args):
+            calls.append(args[0])
+            if hook_error is not None:
+                order.append('observation-error')
+                raise hook_error
+            work_deadline.append(min(args[1] - observation.REAP_RESERVE_SECONDS,
+                                     clock[0] + observation.PROBE_LIMIT_SECONDS))
+            value = real_query(*args)
+            states.append(value)
+            return value
+        def signal_or_probe(pid, number):
+            attempts.append((pid, number))  # Never let product exception handlers hide a signal attempt.
+            order.append(('query' if pid == query_child.pid else 'primary') + ('-stop' if number else '-probe'))
+            if number == 0:
+                raise ProcessLookupError()
+        error = None
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(observation, 'OBSERVE_AFTER_SECONDS', .04),                 patch.object(observation, 'OBSERVATION_BUDGET_SECONDS', .12),                 patch.object(observation, 'REAP_RESERVE_SECONDS', .04),                 patch.object(observation, 'PROBE_LIMIT_SECONDS', .05),                 patch.object(runner.time, 'monotonic', side_effect=lambda: clock[0]),                 patch.object(observation, 'checkpoint_for', side_effect=factory),                 patch.object(observation.subprocess, 'Popen', side_effect=launch),                 patch.object(observation.selectors, 'DefaultSelector', ExpiringSelector),                 patch.object(observation, 'read_owned_state', side_effect=read_state),                 patch.object(observation.os, 'killpg', side_effect=signal_or_probe),                 patch.object(seed, 'owned_progress', return_value={}),                 patch.object(failure_observation, 'parse_probe') as parse:
+                try:
+                    try:
+                        runner.run_owned_phase(command, root / 'phase.log', root / 'phase.json', budget)
+                    except subprocess.SubprocessError as caught:
+                        error = caught
+                finally:
+                    finish_primary.set()
+                    for waiter in waiters:
+                        waiter.join(timeout=3)
+                        self.assertFalse(waiter.is_alive(), 'The fixture must stop its original waiter')
+                receipt = json.loads((root / 'phase.json').read_text())
+                checkpoint = json.loads((root / 'bootstatus-inflight-observation.json').read_text())
+        self.assertEqual(fixture_errors, [])
+        self.assertEqual(calls, [DEVICE], 'The optional observation must actually be attempted once')
+        self.assertEqual(waits[0], ('primary', budget))
+        self.assertEqual([v for owner, v in waits if owner == 'primary'][1:], [10, 10])
+        self.assertEqual(receipt['timeoutSeconds'], budget)
+        self.assertEqual(receipt['groupStopOwner'], 'completion-waiter')
+        self.assertTrue(receipt['groupStopFinished'])
+        self.assertTrue(receipt['groupStopReturnedBeforeCaller'])
+        self.assertTrue(receipt['completionWaiterStopped'])
+        self.assertNotIn('completionCleanupErrorType', receipt)
+        self.assertNotIn('groupCleanupErrors', receipt)
+        self.assertIsNotNone(error)
+        self.assertEqual(error.cmd, command)
+        self.assertEqual(receipt['firstFailure']['source'], 'completion-waiter')
+        self.assertEqual(receipt['firstFailure']['childExitCodeBeforeStop'], code)
+        self.assertEqual(checkpoint['budgetSeconds'], .12)
+        self.assertEqual(checkpoint['scheduledMonotonic'], .04)
+        self.assertEqual(checkpoint['deadlineMonotonic'], .04 + .12)
+        expected_signals = [(query_child.pid, 9), (query_child.pid, 0)] if hook_error is None else []
+        self.assertEqual(attempts, expected_signals + [(primary.pid, 15), (primary.pid, 0)])
+        self.assertEqual(launches, [command] + ([['xcrun', 'simctl', 'list', 'devices', DEVICE, '--json']]
+                                             if hook_error is None else []))
+        parse.assert_not_called()
+        return error, receipt, checkpoint, queries, states, order, waits
+
     def test_original_primary_timeout_and_budget_survive_query_timeout(self):
-        error, receipt, query_calls, queries = self.trial(2, budget=.2)
+        error, receipt, checkpoint, queries, states, order, waits = self.synchronized_failure_trial(.2)
         self.assertIsInstance(error, subprocess.TimeoutExpired)
         self.assertEqual(error.timeout, .2)
         self.assertEqual(receipt['timeoutSeconds'], .2)
         self.assertTrue(receipt['timedOut'])
-        self.assertEqual(len(query_calls), 1)
         self.assertEqual(len(queries), 1)
+        self.assertEqual(checkpoint['state'], states[0])
+        self.assertEqual(states[0].get('errorType'), 'TimeoutExpired')
+        self.assertNotIn('notRunReason', states[0], 'Cancellation/skipped work must not impersonate query timeout')
+        self.assertTrue(states[0]['childReaped'])
+        self.assertTrue(states[0]['cleanupResolved'])
+        self.assertEqual(states[0]['cleanupReapBudgetSeconds'], .04)
+        query_waits = [v for owner, v in waits if owner == 'query']
+        self.assertEqual(len(query_waits), 1)
+        self.assertGreater(query_waits[0], 0)
+        self.assertAlmostEqual(query_waits[0], .04)
+        self.assertTrue(queries[0].stdout.closed)
+        self.assertEqual(queries[0].returncode, -9)
+        self.assertEqual(receipt['exitCode'], -15)
+        self.assertEqual(order, ['primary-wait', 'query-start', 'query-blocked', 'query-stop', 'query-reap',
+                                 'query-probe', 'observation-finished', 'primary-timeout', 'primary-stop',
+                                 'primary-reap', 'primary-probe', 'primary-reap'])
+        print('SE synchronized primary timeout: ' + json.dumps({'order': order,
+            'originalTimeoutSeconds': error.timeout, 'receiptTimeoutSeconds': receipt['timeoutSeconds'],
+            'timedOut': receipt['timedOut'], 'queryErrorType': states[0]['errorType'],
+            'queryReaped': states[0]['childReaped'], 'queryCleanupResolved': states[0]['cleanupResolved'],
+            'actualNativeOrOSChildLaunch': False}, sort_keys=True))
 
     def test_original_primary_nonzero_exit_survives_observation_error(self):
-        error, receipt, _, _ = self.trial(.09, code=7, hook_error=ValueError('PRIVATE_TOKEN'))
+        error, receipt, checkpoint, queries, states, order, _ = self.synchronized_failure_trial(
+            .3, code=7, hook_error=ValueError('PRIVATE_TOKEN'))
         self.assertIsInstance(error, subprocess.CalledProcessError)
         self.assertEqual(error.returncode, 7)
         self.assertFalse(receipt['timedOut'])
+        self.assertEqual(receipt['timeoutSeconds'], .3)
+        self.assertLessEqual(receipt['processCompletionObservedElapsedSeconds'], .3)
+        self.assertEqual(receipt['exitCode'], 7)
+        self.assertEqual(checkpoint.get('errorType'), 'ValueError')
+        self.assertNotIn('PRIVATE_TOKEN', json.dumps(checkpoint) + json.dumps(receipt))
+        self.assertEqual(queries, [])
+        self.assertEqual(states, [])
+        self.assertEqual(order, ['primary-wait', 'observation-error', 'observation-finished',
+                                 'primary-nonzero', 'primary-stop', 'primary-reap', 'primary-probe', 'primary-reap'])
+        print('SE synchronized observation error: ' + json.dumps({'order': order,
+            'originalReturnCode': error.returncode, 'timedOut': receipt['timedOut'],
+            'receiptTimeoutSeconds': receipt['timeoutSeconds'], 'observationErrorType': checkpoint['errorType'],
+            'actualNativeOrOSChildLaunch': False}, sort_keys=True))
+
 
     def test_early_primary_completion_does_not_start_observation(self):
         # Keep the actual 150s checkpoint for this early-completion path; do not
@@ -600,83 +794,222 @@ class PhaseIntegrationTests(unittest.TestCase):
 class AstraBoundaryRegressionTests(unittest.TestCase):
     """Port the review's two reproductions without native calls or PID reuse."""
     def phase_trial(self, kind):
-        real_popen = subprocess.Popen
-        real_write = failure_observation.safe_write
-        processes, calls = [], []
+        """Use actual host Python children and time; require the selected fault to enter."""
+        real_popen, real_killpg = subprocess.Popen, os.killpg
+        real_write, real_parse = failure_observation.safe_write, failure_observation.parse_probe
+        processes, calls, launches, attempts, waits, writes, faults, points = [], [], [], [], [], [], [], []
+        launch_options = []
+        fault_entered, checkpoint_entered = threading.Event(), threading.Event()
+        waiters = []
         with tempfile.TemporaryDirectory(prefix='bootstatus-term-boundary-') as directory:
             root = Path(directory)
             marker = root / 'primary-lived-after-deadline'
-            source = 'import time; from pathlib import Path; time.sleep(1.05); Path(' + repr(str(marker)) + ').write_text("alive"); time.sleep(1.5)'
+            source = ('import time,os,json; from pathlib import Path; time.sleep(1.05); Path(' + repr(str(marker)) +
+                      ').write_text(json.dumps({"monotonic":time.monotonic(),"pid":os.getpid()})); time.sleep(1.5)')
+            command = [sys.executable, '-B', '-c', source]
+            def fault(label):
+                calls.append(label)
+                fault_entered.set()
+                value = {'label': label, 'started': time.monotonic(),
+                         'checkpointAttemptedAtEntry': bool(points and points[0].attempted)}
+                faults.append(value)
+                time.sleep(1)  # The original real diagnostic stall, without freezing either clock or waiter.
+                value['returned'] = time.monotonic()
             def launch(argv, **kwargs):
-                if '--image-worker' in argv:
-                    calls.append('image-popen')
-                    time.sleep(1)
-                    argv = [sys.executable, '-B', '-c', 'import time; time.sleep(.08)']
-                elif argv[:2] == ['xcrun', 'simctl']:
+                launches.append(list(argv))
+                launch_options.append(dict(kwargs))
+                if argv == command:
+                    role, actual = 'primary', argv
+                elif argv == ['xcrun', 'simctl', 'list', 'devices', DEVICE, '--json']:
+                    role, actual = 'query', [sys.executable, '-B', '-c', 'print("{}",flush=True)']
                     if kind == 'state-popen':
-                        calls.append('state-popen')
-                        time.sleep(1)
-                    argv = [sys.executable, '-B', '-c', 'print("{}",flush=True)']
-                child = real_popen(argv, **kwargs)
-                processes.append(child)
+                        fault('state-popen')
+                else:
+                    raise AssertionError('Only owned host Python surrogates may launch')
+                child = real_popen(actual, **kwargs)
+                processes.append((role, child))
+                real_wait = child.wait
+                def wait(timeout=None):
+                    thread = threading.current_thread()
+                    item = {'role': role, 'pid': child.pid, 'timeout': timeout,
+                            'started': time.monotonic(), 'thread': thread.name}
+                    waits.append(item)
+                    if role == 'primary' and thread.name == 'owned-phase-wait' and thread not in waiters:
+                        waiters.append(thread)
+                    try:
+                        code = real_wait(timeout=timeout)
+                    except BaseException as error:
+                        item['errorType'] = type(error).__name__
+                        raise
+                    else:
+                        item['exitCode'] = code
+                        return code
+                    finally:
+                        item['returned'] = time.monotonic()
+                child.wait = wait
                 return child
-            def image(*args):
-                if kind == 'image-popen':
-                    child = observation.subprocess.Popen(['--image-worker'], stdin=subprocess.DEVNULL,
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-                    child.wait(timeout=.5)
-                return {'synthetic': True}
+            def signal_or_probe(pid, number):
+                attempts.append({'pid': pid, 'signal': number, 'started': time.monotonic()})
+                if pid not in [child.pid for _, child in processes]:
+                    raise AssertionError('Refuse to signal an unowned process group')
+                return real_killpg(pid, number)
             def factory(argv, child, results, began, deadline, event):
-                return None if kind == 'control' else observation.BootstatusCheckpoint(child, DEVICE, results, began, deadline, event)
+                if kind == 'control':
+                    return None
+                point = observation.BootstatusCheckpoint(child, DEVICE, results, began, deadline, event)
+                points.append(point)
+                real_observe = point.observe_once
+                def observe():
+                    checkpoint_entered.set()
+                    return real_observe()
+                point.observe_once = observe
+                return point
             def write(path, value):
-                if Path(path).name == 'bootstatus-inflight-observation.json':
-                    calls.append('receipt-write')
-                    time.sleep(1)
-                return real_write(path, value)
+                if Path(path).name != 'bootstatus-inflight-observation.json':
+                    return real_write(path, value)
+                if kind == 'receipt-write':
+                    fault('receipt-write')
+                result = real_write(path, value)
+                writes.append({'success': result, 'returned': time.monotonic(),
+                               'persistedValueMatches': bool(result) and json.loads(Path(path).read_text()) == value})
+                return result
+            from contextlib import ExitStack
+            stack = ExitStack()
             try:
-                from contextlib import ExitStack
-                with ExitStack() as stack:
-                    for name, value in [('OBSERVE_AFTER_SECONDS', .3), ('OBSERVATION_BUDGET_SECONDS', .1),
-                                        ('REAP_RESERVE_SECONDS', .02), ('PROBE_LIMIT_SECONDS', .05)]:
-                        stack.enter_context(patch.object(observation, name, value))
-                    stack.enter_context(patch.object(observation, 'checkpoint_for', side_effect=factory))
-                    stack.enter_context(patch.object(observation.subprocess, 'Popen', side_effect=launch))
-                    stack.enter_context(patch.object(observation, 'read_owned_image', side_effect=image, create=True))
-                    if kind == 'receipt-write':
-                        stack.enter_context(patch.object(observation, 'read_owned_state', return_value={'synthetic': True}))
-                        stack.enter_context(patch.object(failure_observation, 'safe_write', side_effect=write))
-                    with self.assertRaises(subprocess.TimeoutExpired) as raised:
-                        runner.run_owned_phase([sys.executable, '-B', '-c', source], root / 'phase.log', root / 'phase.json', .9)
-                self.assertEqual(raised.exception.timeout, .9)
+                for name, value in [('OBSERVE_AFTER_SECONDS', .3), ('OBSERVATION_BUDGET_SECONDS', .1),
+                                    ('REAP_RESERVE_SECONDS', .02), ('PROBE_LIMIT_SECONDS', .05)]:
+                    stack.enter_context(patch.object(observation, name, value))
+                stack.enter_context(patch.object(observation, 'checkpoint_for', side_effect=factory))
+                stack.enter_context(patch.object(observation.subprocess, 'Popen', side_effect=launch))
+                stack.enter_context(patch.object(observation.os, 'killpg', side_effect=signal_or_probe))
+                image = stack.enter_context(patch.object(observation, 'read_owned_image', create=True))
+                parse = stack.enter_context(patch.object(failure_observation, 'parse_probe', wraps=real_parse))
+                stack.enter_context(patch.object(failure_observation, 'safe_write', side_effect=write))
+                if kind == 'receipt-write':
+                    stack.enter_context(patch.object(observation, 'read_owned_state', return_value={'synthetic': True}))
+                with self.assertRaises(subprocess.TimeoutExpired) as raised:
+                    runner.run_owned_phase(command, root / 'phase.log', root / 'phase.json', .9)
                 receipt = json.loads((root / 'phase.json').read_text())
-                for process in processes:
-                    process.wait(timeout=3)  # Self-expiring surrogates; no second signal after reap.
+                checkpoint_path = root / 'bootstatus-inflight-observation.json'
+                checkpoint = json.loads(checkpoint_path.read_text()) if checkpoint_path.exists() else None
+                # Snapshot product-owned cleanup before the fixture's final leak-prevention reap.
+                product_reaped = all(child.returncode is not None for _, child in processes)
+                product_codes = {role: child.returncode for role, child in processes}
+                pipes_closed = all(child.stdout is None or child.stdout.closed for role, child in processes if role == 'query')
+                primary = next(child for role, child in processes if role == 'primary')
+                terms = [item for item in attempts if item['pid'] == primary.pid and item['signal'] == 15]
+                marker_value = json.loads(marker.read_text()) if marker.exists() else None
+                image.assert_not_called()
+                self.assertEqual(raised.exception.timeout, .9)
+                self.assertEqual(raised.exception.cmd, command)
+                self.assertTrue(receipt['timedOut'])
+                self.assertEqual(len(terms), 1)
+                self.assertEqual(len(waiters), 1)
+                self.assertTrue(receipt['completionWaiterStopped'])
+                self.assertTrue(all(not worker.is_alive() for worker in waiters))
+                self.assertNotIn('completionCleanupErrorType', receipt)
+                self.assertNotIn('groupCleanupErrors', receipt)
+                self.assertEqual(receipt['firstFailure']['source'], 'completion-waiter')
+                self.assertIsNone(receipt['firstFailure']['childExitCodeBeforeStop'])
+                self.assertEqual(launches[0], command)
+                self.assertTrue(all(item.get('start_new_session') is True for item in launch_options))
+                self.assertTrue(all(item.get('stdin') == subprocess.DEVNULL for item in launch_options))
+                self.assertEqual(launch_options[0]['stderr'], subprocess.STDOUT)
+                self.assertTrue(all(item['stdout'] == subprocess.PIPE and item['stderr'] == subprocess.DEVNULL
+                                    for item in launch_options[1:]))
+                self.assertTrue(all(argv == ['xcrun', 'simctl', 'list', 'devices', DEVICE, '--json'] for argv in launches[1:]))
+                self.assertTrue(all(item['pid'] in [child.pid for _, child in processes] for item in attempts))
+                primary_waits = [item for item in waits if item['role'] == 'primary']
+                self.assertGreater(primary_waits[0]['timeout'], 0)
+                self.assertLessEqual(primary_waits[0]['timeout'], .9)
+                self.assertEqual(primary_waits[0]['errorType'], 'TimeoutExpired')
+                self.assertEqual(primary_waits[0]['thread'], 'owned-phase-wait')
+                self.assertEqual(len(primary_waits), 3)
+                self.assertTrue(all(0 < item['timeout'] <= 10 for item in primary_waits[1:]))
+                self.assertLess(terms[0]['started'], primary_waits[1]['started'])
+                self.assertEqual([item['signal'] for item in attempts if item['pid'] == primary.pid], [15, 0])
+                if marker_value is not None:
+                    self.assertEqual(marker_value['pid'], primary.pid)
+                self.assertEqual(checkpoint_entered.is_set(), kind != 'control')
+                self.assertEqual(fault_entered.is_set(), kind in ['state-popen', 'receipt-write'])
+                self.assertEqual(calls, [kind] if kind in ['state-popen', 'receipt-write'] else [])
+                self.assertEqual(len(writes), 0 if kind == 'control' else 1)
+                self.assertTrue(all(item['success'] and item['persistedValueMatches'] for item in writes))
+                if kind == 'state-popen':
+                    self.assertEqual(len(launches), 2)
+                    self.assertEqual(checkpoint['state']['notRunReason'], 'observation-deadline-reached')
+                    self.assertTrue(checkpoint['state']['childReaped'])
+                    self.assertTrue(checkpoint['state']['cleanupResolved'])
+                    self.assertTrue(checkpoint['state']['cleanupBeyondObservationDeadline'])
+                    self.assertEqual(checkpoint['state']['cleanupReapBudgetSeconds'], .02)
+                    query_waits = [item for item in waits if item['role'] == 'query']
+                    self.assertEqual(len(query_waits), 1)
+                    self.assertGreater(query_waits[0]['timeout'], 0)
+                    self.assertLessEqual(query_waits[0]['timeout'], .02)
+                    query = next(child for role, child in processes if role == 'query')
+                    query_signals = [item for item in attempts if item['pid'] == query.pid]
+                    self.assertEqual([item['signal'] for item in query_signals], [9, 0])
+                    self.assertLess(query_signals[0]['started'], query_waits[0]['started'])
+                    self.assertLess(query_waits[0]['returned'], query_signals[1]['started'])
+                    parse.assert_not_called()
+                phase_started = receipt['phaseStartedMonotonic']
                 return {'kind': kind, 'termSeconds': receipt['groupStopRequestedElapsedSeconds'],
-                        'primaryMarkerAfterDeadline': marker.exists(), 'diagnosticCalls': calls,
+                        'actualTermSeconds': terms[0]['started'] - phase_started,
+                        'primaryMarkerAfterDeadline': marker_value is not None, 'marker': marker_value,
+                        'diagnosticCalls': calls, 'faultEntered': fault_entered.is_set(),
+                        'faults': [{'startedElapsed': item['started'] - phase_started,
+                                    'returnedElapsed': item['returned'] - phase_started,
+                                    'realDurationSeconds': item['returned'] - item['started'],
+                                    'checkpointAttemptedAtEntry': item['checkpointAttemptedAtEntry']} for item in faults],
                         'originalTimeoutSeconds': receipt['timeoutSeconds'],
-                        'cleanupOwner': receipt.get('groupStopOwner'),
-                        'cleanupFinished': receipt.get('groupStopFinished', False),
+                        'cleanupOwner': receipt.get('groupStopOwner'), 'cleanupFinished': receipt.get('groupStopFinished', False),
                         'preStopCode': receipt.get('firstFailure', {}).get('childExitCodeBeforeStop'),
-                        'allSyntheticChildrenReaped': all(x.returncode is not None for x in processes)}
+                        'allSyntheticChildrenReaped': product_reaped, 'productExitCodes': product_codes,
+                        'queryStdoutClosedAtReturn': pipes_closed,
+                        'actualHostPythonChildren': [{'role': role, 'pid': child.pid} for role, child in processes],
+                        'allFixtureWaitersStopped': all(not worker.is_alive() for worker in waiters),
+                        'timingScope': 'Actual monotonic time and actual owned host Python children',
+                        'actualNativeLaunch': False}
             finally:
-                for process in processes:
-                    if process.returncode is None:
-                        process.wait(timeout=3)
+                try:
+                    for _, child in processes:
+                        if child.returncode is None:
+                            child.wait(timeout=3)  # Self-expiring surrogates; no second signal after reap.
+                    for worker in waiters:
+                        worker.join(timeout=3)
+                        self.assertFalse(worker.is_alive(), 'The fixture must stop its original waiter')
+                finally:
+                    stack.close()
 
     def test_diagnostic_launch_and_receipt_delays_do_not_delay_original_term(self):
         control = self.phase_trial('control')
         results = [control]
+        self.assertEqual(control['diagnosticCalls'], [])
         for kind in ['image-popen', 'state-popen', 'receipt-write']:
             with self.subTest(kind=kind):
                 trial = self.phase_trial(kind)
                 results.append(trial)
                 self.assertFalse(trial['primaryMarkerAfterDeadline'], 'Diagnostic delay kept the original primary alive beyond deadline')
                 self.assertLessEqual(trial['termSeconds'], control['termSeconds'] + .12)
+                self.assertLessEqual(trial['actualTermSeconds'], control['actualTermSeconds'] + .12)
+                self.assertEqual(trial['diagnosticCalls'], [] if kind == 'image-popen' else [kind])
+                self.assertEqual(trial['originalTimeoutSeconds'], .9)
                 self.assertTrue(trial['allSyntheticChildrenReaped'])
+                self.assertEqual(trial['productExitCodes']['primary'], -15)
+                self.assertTrue(trial['queryStdoutClosedAtReturn'])
+                self.assertTrue(trial['allFixtureWaitersStopped'])
                 self.assertEqual(trial['cleanupOwner'], 'completion-waiter')
                 self.assertTrue(trial['cleanupFinished'])
                 self.assertIsNone(trial['preStopCode'])
+                for fault in trial['faults']:
+                    self.assertTrue(fault['checkpointAttemptedAtEntry'])
+                    self.assertLess(fault['startedElapsed'], .9)
+                    self.assertLess(fault['startedElapsed'], trial['actualTermSeconds'])
+                    self.assertGreaterEqual(fault['realDurationSeconds'], 1)
+                    self.assertGreater(fault['returnedElapsed'], trial['actualTermSeconds'])
         print('Astra termination regression: ' + json.dumps(results, sort_keys=True))
+
+
 
     def test_post_expiry_preemption_and_denied_kill_cannot_query_reaped_pid(self):
         real_popen, real_killpg = subprocess.Popen, os.killpg
