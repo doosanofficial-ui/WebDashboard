@@ -101,7 +101,16 @@ def verify(root):
         language=name.split('-')[-2]
         expected_test='LocalizationHelpUITests/testCapture'+('Korean' if language=='ko' else 'English')+'GuideScreens()'
         require(receipt['test']==expected_test and receipt['timestamp']>0,'Language capture receipt required')
-    print('APP HELP CAPTURES PASS:28 actual ko/en step images; source/bytes/anchors/provenance match')
+    # Imported only by the complete gate; --audit-source remains source-only.
+    from help_capture_provenance import verify_capture_run
+    capture_test=root/'mobile-ios/UITests/LocalizationHelpUITests.swift'
+    require(capture_test.is_file(),'Capture test source required for same-run evidence')
+    capture_test_hash=hashlib.sha256(capture_test.read_bytes().replace(b'\r\n',b'\n')).hexdigest()
+    try:
+        verify_capture_run(manifest.get('captureRun'),manifest['screens'],current,expected,capture_test_hash)
+    except ValueError as error:
+        require(False,str(error))
+    print('APP HELP CAPTURES PASS:28 ko/en images; source/bytes/anchors and same-run product receipts match')
 
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)

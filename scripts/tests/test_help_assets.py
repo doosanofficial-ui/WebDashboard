@@ -1,5 +1,7 @@
 import hashlib, importlib.util, json, shutil, subprocess, sys, tempfile, unittest
 from pathlib import Path
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+import help_capture_provenance as capture_proof
 
 spec=importlib.util.spec_from_file_location("help_assets",Path(__file__).resolve().parents[1]/"verify_help_assets.py")
 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
@@ -14,6 +16,29 @@ def byte_validation_fixture(root,target):
         relative:hashlib.sha256((target/relative).read_bytes().replace(b'\r\n',b'\n')).hexdigest()
         for relative in module.expected_screen_inputs(target)
     }
+    # Explicitly synthetic contract values belong only to this temporary byte
+    # fixture. Real bundled assets must carry producer-issued XCTest receipts.
+    tests=target/'mobile-ios/UITests';tests.mkdir(parents=True)
+    capture_test=tests/'LocalizationHelpUITests.swift'
+    shutil.copyfile(root/'mobile-ios/UITests/LocalizationHelpUITests.swift',capture_test)
+    source={'schemaVersion':1,'scope':'help-capture-source-inventory','sourceBaseCommit':'a'*40,
+            'sourceInputs':manifest['screenInputs'],'captureTestSHA256':hashlib.sha256(capture_test.read_bytes().replace(b'\r\n',b'\n')).hexdigest(),
+            'captureCertified':False}
+    products={role:{'path':'unit-fixture/'+role,'executable':'unit-fixture-only',
+                    'executableSHA256':'b'*64,'bundleSHA256':'c'*64,'fileCount':1}
+              for role in ('application','runner','xctest')}
+    run={'schemaVersion':1,'scope':'same-run-help-products-and-captures','testMode':'test-without-building',
+         'runID':'11111111-1111-4111-8111-111111111111','sourceReceipt':source,
+         'sourceReceiptSHA256':capture_proof.object_digest(source),'productsBefore':products,'productsAfter':products,
+         'productsSHA256':capture_proof.object_digest(products),'xctestrunSHA256Before':'d'*64,'xctestrunSHA256After':'d'*64,
+         'resultBundleSHA256':'e'*64,'exportManifestSHA256':'f'*64,'captureCertified':False,'visualReviewRequired':True}
+    stamps=[item['timestamp'] for item in manifest['screens'].values()]
+    run.update(startedAt=min(stamps)-1,completedAt=max(stamps)+1,
+               simulatorUUID=next(iter(manifest['screens'].values()))['simulatorUUID'])
+    run['captures']={name:dict(receipt,schemaVersion=1,screen=name,runID=run['runID'],
+                              productsSHA256=run['productsSHA256'],sourceReceiptSHA256=run['sourceReceiptSHA256'])
+                     for name,receipt in manifest['screens'].items()}
+    manifest['captureRun']=run
     manifest['unitFixtureScope']='Byte-validation unit fixture only; not native capture or release evidence'
     path.write_text(json.dumps(manifest))
     return manifest
@@ -28,12 +53,34 @@ class HelpAssetGateTests(unittest.TestCase):
             path.write_text(json.dumps(bad))
             command=[sys.executable,'-B','-O','-c',
                      'import runpy,sys; from pathlib import Path; '
+                     'sys.path.insert(0,str(Path(sys.argv[1]).parent)); '
                      'runpy.run_path(sys.argv[1])["verify"](Path(sys.argv[2]))',
                      str(Path(module.__file__).resolve()),str(target)]
             result=subprocess.run(command,capture_output=True,text=True,timeout=10)
             self.assertNotEqual(result.returncode,0,'Optimized Python accepted invalid capture evidence')
             self.assertIn('Capture success receipt required',result.stderr)
             self.assertNotIn('APP HELP CAPTURES PASS',result.stdout)
+
+    def test_complete_gate_rejects_missing_or_mixed_run_even_when_source_and_bytes_match(self):
+        for fault in ('missing','mixed'):
+            with self.subTest(fault=fault),tempfile.TemporaryDirectory() as directory:
+                target=Path(directory);byte_validation_fixture(Path(__file__).resolve().parents[2],target)
+                path=target/'mobile-ios/App/Resources/HelpScreenshots/manifest.json'
+                manifest=json.loads(path.read_text())
+                if fault=='missing':manifest.pop('captureRun')
+                else:
+                    name=next(iter(manifest['captureRun']['captures']))
+                    manifest['captureRun']['captures'][name]['runID']='22222222-2222-4222-8222-222222222222'
+                path.write_text(json.dumps(manifest))
+                with self.assertRaisesRegex(AssertionError,'Missing same-run|Mixed capture execution'):
+                    module.verify(target)
+                optimized=subprocess.run([sys.executable,'-B','-O','-c',
+                    'import sys;from pathlib import Path;sys.path.insert(0,sys.argv[1]);'
+                    'from verify_help_assets import verify;verify(Path(sys.argv[2]))',
+                    str(Path(module.__file__).parent),str(target)],capture_output=True,text=True,timeout=10)
+                self.assertNotEqual(optimized.returncode,0,optimized.stdout)
+                self.assertRegex(optimized.stderr,'Missing same-run|Mixed capture execution')
+                self.assertNotIn('APP HELP CAPTURES PASS',optimized.stdout)
 
     def test_new_and_nested_app_sources_cannot_be_omitted(self):
         root=Path(__file__).resolve().parents[2]

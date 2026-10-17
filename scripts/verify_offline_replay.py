@@ -16,6 +16,8 @@ import tempfile
 import uuid
 import export_dismissal_fixture as export_fixture
 import collect_help_source_inputs as help_sources
+import help_capture_provenance as help_provenance
+from verify_help_assets import expected_capture_targets
 from contextlib import contextmanager, nullcontext
 import export_dismissal_observation as export_audit
 
@@ -875,11 +877,20 @@ def main():
                     "-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never"]
             if export_audit_enabled:
                 base.append(export_fixture.SWIFT_CONDITION)
-            run_owned_phase(base + ["build"], results / "build.log",
+            run_owned_phase(base + ["build-for-testing" if help_capture_enabled else "build"], results / "build.log",
                             results / "build-process.json", 600)
+            help_run = None
+            if help_capture_enabled:
+                # These final app/XCTest/runner products are installed/tested as-is.
+                # No rebuild or historical capture can satisfy the finish contract.
+                failure_phase = "help-product-prepare"
+                help_run = help_provenance.prepare_run(derived / "Build/Products", help_inputs, simulator)
+                (results / "help-capture-run-before.json").write_text(json.dumps(help_run, indent=2))
+            application = (derived / "Build/Products" / help_run["productsBefore"]["application"]["path"]
+                           if help_run is not None else derived / "Build/Products/Debug-iphonesimulator/Telemetry.app")
             failure_phase = "app-install"
             failure_observation.observe_call(lambda: output(["xcrun", "simctl", "install", simulator,
-                    str(derived / "Build/Products/Debug-iphonesimulator/Telemetry.app")], timeout=120),
+                    str(application)], timeout=120),
                     results, "app-install", 120)
             failure_phase = "app-container"
             container = Path(failure_observation.simctl_output(["xcrun", "simctl", "get_app_container", simulator,
@@ -889,7 +900,8 @@ def main():
             if export_audit_enabled:
                 export_audit.install_marker(container, current_commit(root))
             bundle = results / "ReplayUI.xcresult"
-            command = base + ["-resultBundlePath", str(bundle)] + selected_tests + ["test"]
+            command = (help_provenance.test_command(derived / "Build/Products", help_run, bundle, selected_tests)
+                       if help_run is not None else base + ["-resultBundlePath", str(bundle)] + selected_tests + ["test"])
             (results / "command.json").write_text(json.dumps(command, indent=2))
             failure_phase = "ui-test"
             with export_audit.RunnerHeartbeat(results / "runner-heartbeat.json") if export_audit_enabled else nullcontext():
@@ -910,6 +922,10 @@ def main():
                 failure_phase = "help-source-verify"
                 completed_inputs = help_sources.finish_capture(root, staged, help_inputs, current_commit(root))
                 (results / "help-source-inputs.json").write_text(json.dumps(completed_inputs, indent=2))
+                failure_phase = "help-product-verify"
+                capture_run = help_provenance.finish_run(derived / "Build/Products", help_run, completed_inputs,
+                    results / "screenshots", bundle, expected_capture_targets((staged / "App/AppHelpView.swift").read_text()))
+                (results / "help-capture-run.json").write_text(json.dumps(capture_run, indent=2))
         except Exception as original_error:
             deadline = time.monotonic() + failure_observation.DIAGNOSTIC_BUDGET_SECONDS
             try:

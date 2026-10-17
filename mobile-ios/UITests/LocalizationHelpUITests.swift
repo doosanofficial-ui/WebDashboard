@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import CryptoKit
 
 /// New, pre-seeded Simulator only. No vehicle acquisition or recording control is tapped.
 final class LocalizationHelpUITests: XCTestCase {
@@ -36,10 +37,27 @@ final class LocalizationHelpUITests: XCTestCase {
         XCTAssertLessThan(frame.maxY, bottom - 8, "Numbered target must clear the visible Tab bar")
         XCTAssertTrue(window.frame.contains(frame),"Numbered target must be wholly inside the actual screenshot: \(frame)")
         let name="Help-\(guide)-\(language)-\(number)"
-        let screenshot=XCTAttachment(screenshot:window.screenshot());screenshot.name=name;screenshot.lifetime = .keepAlways;add(screenshot)
+        let environment=ProcessInfo.processInfo.environment
+        guard let runID=environment["HELP_CAPTURE_RUN_ID"], UUID(uuidString:runID) != nil,
+              let products=environment["HELP_CAPTURE_PRODUCTS_SHA256"], products.count==64,
+              let source=environment["HELP_CAPTURE_SOURCE_SHA256"], source.count==64,
+              let simulator=environment["HELP_CAPTURE_SIMULATOR_UUID"], UUID(uuidString:simulator) != nil else {
+            XCTFail("Fresh same-run product/source context is required for Help captures");return
+        }
+        // Attach the exact PNG bytes whose digest is recorded below.
+        let image=window.screenshot().pngRepresentation
+        let screenshot=XCTAttachment(data:image,uniformTypeIdentifier:"public.png");screenshot.name=name;screenshot.lifetime = .keepAlways;add(screenshot)
         let marker:[[String:Any]]=[["number":number,"x":(frame.midX-window.frame.minX)/window.frame.width,"y":(frame.midY-window.frame.minY)/window.frame.height]]
         let data=try! JSONSerialization.data(withJSONObject:marker,options:[.sortedKeys])
         let metadata=XCTAttachment(data:data,uniformTypeIdentifier:"public.json");metadata.name=name+"-markers";metadata.lifetime = .keepAlways;add(metadata)
+        func digest(_ value:Data)->String {SHA256.hash(data:value).map {String(format:"%02x",$0)}.joined()}
+        let receipt:[String:Any]=["schemaVersion":1,"runID":runID,"productsSHA256":products,
+            "sourceReceiptSHA256":source,"simulatorUUID":simulator,"screen":name,"targetID":element.identifier,
+            "test":"LocalizationHelpUITests/testCapture"+(language=="ko" ? "Korean":"English")+"GuideScreens()",
+            "sha256":digest(image),"markerSHA256":digest(data),"timestamp":Date().timeIntervalSince1970,
+            "fixture":"synthetic-offline"]
+        let receiptData=try! JSONSerialization.data(withJSONObject:receipt,options:[.sortedKeys])
+        let proof=XCTAttachment(data:receiptData,uniformTypeIdentifier:"public.json");proof.name=name+"-capture-receipt";proof.lifetime = .keepAlways;add(proof)
         let tree=XCTAttachment(string:app.debugDescription);tree.name=name+"-AX";tree.lifetime = .keepAlways;add(tree)
     }
     private func captureScreens(_ language:String) {
