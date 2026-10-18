@@ -1,0 +1,73 @@
+name: Native Selected UI21
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: native-selected-ui21-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  # Exactly the21 unexecuted cases from run39111415420, with existing runners
+  # and deadlines. Replay10, SE repeats2 and Lifecycle92 are not repeated.
+  seed:
+    if: github.ref == 'refs/heads/main'
+    outputs:
+      seed_manifest_sha256: ${{ steps.seed.outputs.manifest_sha256 }}
+    runs-on: xcode-27
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify exact partition and qualified Seed contracts
+        run: |
+          python3 -B -m unittest discover -s scripts/tests -p test_offline_replay_groups.py -v
+          python3 -B scripts/verify_native_contracts.py --suite seed
+      - name: Produce exact-current-SHA Seed within the existing240-second limit
+        id: seed
+        run: python3 scripts/verify_replay_seed.py --output "$RUNNER_TEMP/replay-seed"
+      - name: Preserve Seed and admission evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: selected-ui21-seed-${{ github.sha }}
+          path: ${{ runner.temp }}/replay-seed
+          if-no-files-found: error
+          retention-days: 14
+
+  selected-ui:
+    needs: seed
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        group: [replay-route, layout, help, help-max-en, help-max-ko]
+    runs-on: xcode-27
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+      SEED_MANIFEST_SHA256: ${{ needs.seed.outputs.seed_manifest_sha256 }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - name: Download this run's exact-SHA qualified Seed
+        uses: actions/download-artifact@v7
+        with:
+          name: selected-ui21-seed-${{ github.sha }}
+          path: ${{ runner.temp }}/replay-seed
+      - name: Require the existing Xcode27 toolchain
+        run: python3 scripts/verify_ios_lifecycle.py --check-toolchain
+      - name: Install XcodeGen
+        run: |
+          if ! brew list xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+      - name: Verify one selected group on its own new Simulator without retries
+        run: python3 scripts/verify_offline_replay.py --group "${{ matrix.group }}" --seed-artifact "$RUNNER_TEMP/replay-seed" --seed-manifest-sha256 "$SEED_MANIFEST_SHA256" --result-directory "$RUNNER_TEMP/selected-ui21"
+      - name: Preserve actual selected UI outcomes and owned cleanup even after failure
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: selected-ui21-${{ matrix.group }}-${{ github.sha }}
+          path: ${{ runner.temp }}/selected-ui21
+          if-no-files-found: error
+          retention-days: 14
