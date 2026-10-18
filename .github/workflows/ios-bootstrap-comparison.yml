@@ -1,0 +1,47 @@
+name: iOS 27 Bootstrap Comparison
+on:
+  workflow_dispatch:
+    inputs:
+      se_viewport:
+        description: Use iPhone SE (3rd generation) instead of the regular iPhone destination
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  compare:
+    if: github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        mode: [separate, combined]
+    runs-on: xcode-27
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify diagnostic ownership, original budgets and Lifecycle boot isolation
+        run: |
+          python3 -B -m unittest discover -s scripts/tests -p test_bootstrap_compare.py -v
+          python3 -B -m unittest discover -s scripts/tests -p test_lifecycle_result_reader.py -v
+          python3 -B -m unittest discover -s scripts/tests -p test_lifecycle_bootstatus_observation.py -v
+      - name: Compare one fresh owned iOS 27 bootstrap under the unchanged 180-second limit
+        env:
+          TRIAL_MODE: ${{ matrix.mode }}
+          SE_VIEWPORT: ${{ inputs.se_viewport }}
+        run: |
+          args=(scripts/verify_bootstrap_compare.py --mode "$TRIAL_MODE" --result-directory "$RUNNER_TEMP/bootstrap-compare")
+          if [ "$SE_VIEWPORT" = "true" ]; then
+            args+=(--se-viewport)
+          fi
+          python3 "${args[@]}"
+      - name: Preserve bootstrap commands, progress and owned cleanup even after failure
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bootstrap-compare-${{ matrix.mode }}-${{ github.sha }}
+          path: ${{ runner.temp }}/bootstrap-compare
+          if-no-files-found: error
+          retention-days: 14
