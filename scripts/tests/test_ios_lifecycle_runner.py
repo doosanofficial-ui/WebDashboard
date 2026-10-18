@@ -243,6 +243,8 @@ class HostedCleanupControlFlowTests(unittest.TestCase):
                 stack.enter_context(patch.object(runner.export_fixture, "instrument_export_sources", return_value={}))
                 stack.enter_context(patch.object(runner, "record_toolchain", return_value={"xcode_version": "27.0"}))
                 stack.enter_context(patch.object(runner, "output", side_effect=output))
+                stack.enter_context(patch.object(runner, "read_test_summary_output", side_effect=lambda bundle, _results:
+                    output(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)], timeout=60)))
                 stack.enter_context(patch.object(runner.subprocess, "run", side_effect=run))
                 reader_process = stack.enter_context(patch.object(runner.subprocess, "check_output",
                     side_effect=reader_error if body == "reader" else None,

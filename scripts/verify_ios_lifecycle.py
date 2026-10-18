@@ -96,6 +96,20 @@ def output(command, timeout=60):
     return subprocess.check_output(command, text=True, stderr=subprocess.STDOUT, timeout=timeout)
 
 
+def read_test_summary_output(bundle, results):
+    """Retain reader output and process ownership under the original 60-second limit."""
+    # Match failure_observation's late import to avoid module initialization cycles.
+    # This result reader enables no Lifecycle boot observer or native inspection.
+    from verify_offline_replay import run_owned_phase
+    log = results / "result-read-command.log"
+    receipt = results / "result-read-process.json"
+    if log.exists() or receipt.exists():
+        raise FileExistsError("Result reader evidence already exists; use a new result directory")
+    run_owned_phase(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)],
+                    log, receipt, 60, ensure_group_cleanup=True)
+    return log.read_text(encoding="utf-8")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--result-directory", type=Path, required=True,
@@ -152,7 +166,7 @@ def main():
             raise RuntimeError(f"xcodebuild exited {run.returncode}; see {log}")
         failure_phase = "result-read"
         summary = json.loads(failure_observation.observe_call(
-            lambda: output(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)]),
+            lambda: read_test_summary_output(bundle, results),
             results, failure_phase, 60, record_output_metadata=True))
         (results / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
         verify_summary(summary, EXPECTED_TEST_COUNT)

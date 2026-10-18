@@ -118,6 +118,8 @@ class LifecycleObserverIsolationRegressionTests(unittest.TestCase):
                 stack.enter_context(patch.object(lifecycle.export_fixture, 'instrument_export_sources', return_value={}))
                 stack.enter_context(patch.object(lifecycle, 'record_toolchain', return_value={}))
                 stack.enter_context(patch.object(lifecycle, 'output', side_effect=output))
+                stack.enter_context(patch.object(lifecycle, "read_test_summary_output", side_effect=lambda bundle, _results:
+                    output(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)], timeout=60)))
                 stack.enter_context(patch.object(lifecycle.subprocess, 'run', side_effect=run))
                 stack.enter_context(patch.object(lifecycle.subprocess, 'Popen', side_effect=late_popen))
                 stack.enter_context(patch.object(lifecycle, 'observe_first_failure', side_effect=first_failure))
