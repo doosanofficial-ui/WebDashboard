@@ -1,14 +1,20 @@
-name: Native Selected UI21
+name: Native Selected UI
 on:
   workflow_dispatch:
+    inputs:
+      help_only:
+        description: Verify only the four Help cases that have not reached XCTest
+        type: boolean
+        required: false
+        default: false
 permissions:
   contents: read
 concurrency:
-  group: native-selected-ui21-${{ github.ref }}
+  group: ${{ inputs.help_only && 'native-help4' || 'native-selected-ui21' }}-${{ github.ref }}
   cancel-in-progress: false
 jobs:
-  # Exactly the21 unexecuted cases from run39111415420, with existing runners
-  # and deadlines. Replay10, SE repeats2 and Lifecycle92 are not repeated.
+  # Select the original21 cases or only its unexecuted Help4 group.
+  # Existing runner deadlines, exact-SHA Seed and independent UI gates stay intact.
   seed:
     if: github.ref == 'refs/heads/main'
     outputs:
@@ -41,7 +47,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        group: [replay-route, layout, help, help-max-en, help-max-ko]
+        group: ${{ fromJSON(inputs.help_only && '["help"]' || '["replay-route","layout","help","help-max-en","help-max-ko"]') }}
     runs-on: xcode-27
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
