@@ -60,10 +60,24 @@ func regularFiles(at root: URL) throws -> Set<String> {
         var frames: [(CANFrame, DecodedSignal)] = []
         var failure: String?
         var checkedTicks: [Int] = []
+        let observationStart = ProcessInfo.processInfo.systemUptime
+        var lastProgress = observationStart
+        var observationTimes: [Double] = []
+        var observationStates: [String] = []
+        demo.onState = { state in
+            observationStates.append(state)
+            print("DIAG state elapsed=\(ProcessInfo.processInfo.systemUptime-observationStart) state=\(state)")
+        }
         demo.onFrame = { frame, decoded in
             let tick = frames.count
+            lastProgress = ProcessInfo.processInfo.systemUptime
+            observationTimes.append(ProcessInfo.processInfo.systemUptime-observationStart)
+            if tick % 50 == 0 { print("DIAG callback tick=\(tick) elapsed=\(observationTimes.last!)") }
             frames.append((frame, decoded))
             guard failure == nil else { return }
+            guard frame.sequence == UInt64(tick + 1) else {
+                failure = "missing/reordered actual Demo callback at tick \(tick): sequence \(frame.sequence)"; return
+            }
             guard frame.canID == 0x123, frame.sourceAdapter == "demo", frame.sourceTransport == "mock" else {
                 failure = "non-Demo CAN provenance"; return
             }
@@ -76,13 +90,17 @@ func regularFiles(at root: URL) throws -> Set<String> {
             }
         }
         demo.start()
-        let deadline = Date().addingTimeInterval(40)
-        while frames.count < 301 && failure == nil && Date() < deadline {
+        // Relative Task.sleep is a minimum delay, not a 10 Hz wall-clock guarantee.
+        // Keep a 40-second no-progress watchdog; the driver still bounds build/run to 150 seconds.
+        while frames.count < 301 && failure == nil
+            && ProcessInfo.processInfo.systemUptime - lastProgress < 40 {
             try await Task.sleep(nanoseconds: 20_000_000)
         }
         demo.stop()
+        let observationGaps=zip(observationTimes.dropFirst(),observationTimes).map { $0 - $1 }
+        print("DIAG complete callbacks=\(frames.count) elapsed=\(ProcessInfo.processInfo.systemUptime-observationStart) first=\(observationTimes.first ?? -1) last=\(observationTimes.last ?? -1) maxGap=\(observationGaps.max() ?? -1) states=\(observationStates) lastSequence=\(frames.last?.0.sequence ?? 0) lastRaw=\(frames.last?.1.rawValue ?? 0)")
         if let failure { throw CheckFailure.failed(failure) }
-        try require(frames.count >= 301, "Demo did not reach its period boundary within 40 seconds")
+        try require(frames.count >= 301, "Demo made no callback progress for 40 seconds before its period boundary")
         try require(checkedTicks == expected.keys.sorted(), "missing independent callback fixtures")
         try require(!fm.fileExists(atPath: db.path), "Demo preview created a database")
         print("PASS: actual Demo callbacks match 9 independent initial/carry/period fixtures")
