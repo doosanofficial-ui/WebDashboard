@@ -3,6 +3,7 @@ import importlib
 import importlib.util
 import io
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -98,6 +99,44 @@ class CheckpointTests(unittest.TestCase):
         state.assert_called_once()
         self.assertTrue(point.attempted)
         self.assertNotIn('PRIVATE_TOKEN', json.dumps(point.evidence))
+
+    def test_recorded_hosted_clock_pair_keeps_the_scheduled_checkpoint(self):
+        # Replay job 119354402407 recorded this pair before its 180s timeout.
+        began, deadline = 370.61137425, 550.6113742499999
+        self.assertNotEqual(deadline - began, 180)
+        with patch.dict(os.environ, {'GITHUB_ACTIONS': 'true'}), \
+                patch.object(observation.sys, 'platform', 'darwin'), \
+                patch.object(observation.subprocess, 'Popen') as native:
+            point = observation.checkpoint_for(COMMAND, self.child, self.root, began, deadline, self.event)
+            self.assertIsInstance(point, observation.BootstatusCheckpoint)
+            self.assertEqual(point.scheduled, 520.6113742499999)
+            self.assertEqual(point.deadline, 530.6113742499999)
+            self.assertLess(point.deadline, deadline)
+            with patch.object(observation.time, 'monotonic', return_value=point.scheduled), \
+                    patch.object(observation, 'read_owned_state', return_value={'data': {'state': 'Booted'}}) as state:
+                point.observe_once()
+                point.observe_once()
+            state.assert_called_once_with(DEVICE, 530.6113742499999, self.event)
+            native.assert_not_called()
+        receipt = json.loads((self.root / 'bootstatus-inflight-observation.json').read_text())
+        self.assertEqual(receipt['simulator'], DEVICE)
+        self.assertEqual(receipt['scheduledMonotonic'], 520.6113742499999)
+        self.assertEqual(receipt['deadlineMonotonic'], 530.6113742499999)
+
+    def test_factory_rejects_adjacent_deadlines_and_nonfinite_clocks(self):
+        began, deadline = 370.61137425, 550.6113742499999
+        cases = [(began, math.nextafter(deadline, -math.inf)),
+                 (began, math.nextafter(deadline, math.inf)),
+                 (math.inf, math.inf), (-math.inf, -math.inf),
+                 (math.nan, deadline), (began, math.nan)]
+        for start, finish in cases:
+            with self.subTest(began=start, deadline=finish), \
+                    patch.dict(os.environ, {'GITHUB_ACTIONS': 'true'}), \
+                    patch.object(observation.sys, 'platform', 'darwin'), \
+                    patch.object(observation.subprocess, 'Popen') as native:
+                self.assertIsNone(observation.checkpoint_for(
+                    COMMAND, self.child, self.root, start, finish, self.event))
+                native.assert_not_called()
 
     def test_factory_restricts_observation_to_exact_hosted_macos_bootstatus_180(self):
         cases = [(COMMAND, 180, 'false', 'darwin'), (COMMAND, 180, 'true', 'linux'),

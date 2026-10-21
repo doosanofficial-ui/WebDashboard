@@ -4,6 +4,7 @@ No profiler, target signal, app data, raw output, arguments or environment dump.
 Numeric PID image queries are disabled without stable identity through completion.
 """
 import datetime
+import math
 import os
 from pathlib import Path
 import selectors
@@ -176,8 +177,10 @@ class BootstatusCheckpoint:
 def checkpoint_for(command, child, results, began, deadline, primary_complete):
     """No local/native opt-in or additional phase gets this checkpoint."""
     try:
+        # Match the caller's forward addition; subtracting rounded clocks can lose 180.
         if (os.environ.get('GITHUB_ACTIONS') != 'true' or sys.platform != 'darwin'
-                or os.name != 'posix' or deadline - began != 180 or len(command) != 5
+                or os.name != 'posix' or not math.isfinite(began) or not math.isfinite(deadline)
+                or deadline != began + 180 or len(command) != 5
                 or command[:3] != ['xcrun', 'simctl', 'bootstatus'] or command[4] != '-b'):
             return None
         simulator = str(uuid.UUID(command[3])).upper()
