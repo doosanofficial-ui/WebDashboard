@@ -67,7 +67,7 @@ final class DemoAdapterController {
                     let raw = UInt16(1_000 + (tick % 300) * 5)
                     let high = UInt8(raw >> 8)
                     let low = UInt8(raw & 0xFF)
-                    await transport.push(Data(String(format: "123 %02X %02X\r", high, low).utf8))
+                    await transport.push(Data(String(format: "123 02 %02X %02X\r", low, high).utf8))
                     tick += 1
                     try await Task.sleep(nanoseconds: 100_000_000)
                 }

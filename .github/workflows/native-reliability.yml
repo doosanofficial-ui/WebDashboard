@@ -57,6 +57,8 @@ jobs:
       - name: Require Xcode, iOS SDK and runtime 27.x
         run: python3 scripts/verify_ios_lifecycle.py --check-toolchain
       - run: swift test --package-path mobile-ios/TelemetryCore
+      - name: Verify actual Demo ramp and synthetic persistence
+        run: python3 -B scripts/verify_demo_adapter.py . "$RUNNER_TEMP/demo-adapter"
       - name: Verify telemetry coordinator source harness
         run: python3 scripts/verify_telemetry_model.py
       - name: Verify failure-atomic profile import control flow
