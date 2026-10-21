@@ -83,10 +83,14 @@ def _under_products(path, products):
 
 def _product_path(value, products, host=None):
     require(isinstance(value, str) and bool(value), 'Missing final product path')
+    # Check template tokens before inserting literal owned paths, which may contain "__".
+    unresolved = value.replace('__TESTROOT__', '')
+    if host is not None:
+        unresolved = unresolved.replace('__TESTHOST__', '')
+    require('__' not in unresolved, 'Unsupported product path placeholder')
     value = value.replace('__TESTROOT__', str(products))
     if host is not None:
         value = value.replace('__TESTHOST__', str(host))
-    require('__' not in value, 'Unsupported product path placeholder')
     path = Path(value)
     return _under_products(path if path.is_absolute() else products / path, products)
 

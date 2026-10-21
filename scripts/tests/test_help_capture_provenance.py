@@ -88,6 +88,37 @@ class HelpProductReceiptTests(unittest.TestCase):
         with patch.object(proof.time, 'time', return_value=before['startedAt'] + 1):
             return proof.finish_run(products, before, dict(source, sourceStableDuringRun=True), exported, result, TARGETS)
 
+    def test_literal_double_underscores_in_owned_products_do_not_become_placeholders(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'literal__owned__root'
+            products, source, *_ = self.fixture(root)
+            before = proof.prepare_run(products, source, SIMULATOR)
+            exported, result = self.attachments(root, before)
+            run = self.finish(root, products, source, before, exported, result)
+            proof.verify_capture_run(run, run['captures'], source['sourceInputs'], TARGETS, source['captureTestSHA256'])
+            self.assertEqual(len(run['captures']), 28)
+            rows = json.loads((exported / 'manifest.json').read_text())
+            receipt = exported / rows[0]['attachments'][2]['exportedFileName']
+            value = json.loads(receipt.read_text()); value['productsSHA256'] = 'e' * 64
+            receipt.write_text(json.dumps(value))
+            with self.assertRaisesRegex(ValueError, 'Mixed capture execution: productsSHA256'):
+                self.finish(root, products, source, before, exported, result)
+
+    def test_unresolved_original_product_tokens_still_fail_with_literal_root_underscores(self):
+        for field, value in (
+            ('TestHostPath', '__UNKNOWN__/TelemetryUITests-Runner.app'),
+            ('TestHostPath', '__TESTHOST__/TelemetryUITests-Runner.app'),
+            ('UITargetAppPath', '__TESTROOT__/__UNKNOWN__/Telemetry.app'),
+            ('TestBundlePath', '__TESTHOST__/__UNKNOWN__/TelemetryUITests.xctest'),
+        ):
+            with self.subTest(field=field, value=value), tempfile.TemporaryDirectory() as directory:
+                products, source, *_, path = self.fixture(Path(directory) / 'literal__owned__root')
+                data = plistlib.loads(path.read_bytes())
+                data['TestConfigurations'][0]['TestTargets'][0][field] = value
+                path.write_bytes(plistlib.dumps(data))
+                with self.assertRaisesRegex(ValueError, 'Unsupported product path placeholder'):
+                    proof.prepare_run(products, source, SIMULATOR)
+
     def test_generated_xctestrun_binds_all_final_products_and_executes_without_building(self):
         for version in (1, 2):
             with self.subTest(version=version), tempfile.TemporaryDirectory() as directory:

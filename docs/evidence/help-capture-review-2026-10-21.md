@@ -58,7 +58,7 @@ Each of the following 28 original PNGs was opened individually using view_image 
 
 ## Integration boundary
 
-This promotion replaces the 28 PNGs, their exact marker JSON and the manifest with this actual run. It does not change AppHelpView, the capture tests, validators or the original installed app. Full asset/native-contract and applicable Demo/Core/app-build validation are recorded separately before integration; this capture record alone is not an all-project/CI pass.
+The asset-replacement step replaces the 28 PNGs, their exact marker JSON and the manifest with this actual run. It does not change AppHelpView, the capture tests or the original installed app. The later parser-path correction below preserves the validation requirements. Full asset/native-contract and applicable Demo/Core/app-build validation are recorded separately before integration; this capture record alone is not an all-project/CI pass.
 
 ## Integration validation
 
@@ -81,3 +81,11 @@ The test incorrectly treated 300 relative minimum-100ms sleeps as a real-time th
 The same backgrounded host experiment passed with 301 consecutive callbacks in 44.4 seconds, all nine independent fixtures, 16 saved/reopened/replayed rows and ten unchanged synthetic sentinels; build/run completed in 61.4 seconds under the unchanged 150-second cap. Only test code changed; the production Demo/App source, capture source inventory and actual 28-image receipts remain unchanged. No activity flags, process-priority overrides of existing processes, global preferences or new Simulator actions were introduced. Full applicable gates are rechecked before synchronization.
 
 Remote hosted-lifecycle and Replay UI results remain separate from these Help/callback assertions. In the first remote lifecycle run, one unchanged long-title presentation method failed two OCR assertions amid image-provider/PNG finalization errors. A valid but blank JPEG and a valid title-bearing PNG were both directly opened; not all output images were missing or corrupt. The test and card source are identical to the base commit and do not invoke Demo. That evidence does not establish a baseline reproduction or a complete product/UI pass.
+
+## Follow-up: literal owned paths and template tokens
+
+A later exact-SHA native-contracts run reached all 394 tests and hit one setup error before the mixed-product fault was injected. The parser substituted a physical temporary products root into the known `__TESTROOT__` template, then rejected any remaining `__` as an unknown token. A literal double underscore in the generated filesystem path was therefore misclassified as template syntax; the exact random remote path spelling was not logged.
+
+A deterministic synthetic `literal__owned__root` reproduction failed at the same guard. The parser now checks for unsupported markers in the original template after removing only known tokens, before inserting trusted literal roots. The same unknown-token rejection remains, including known-plus-unknown combinations and `__TESTHOST__` without a host. Containment, roles, symlink/executable checks and every source/product/capture count, byte and digest requirement are unchanged. Historical capture receipts, producer provenance, PNGs, marker JSON and source inventories are not rewritten.
+
+Two new host contracts prove successful prepare/28-receipt verification under the literal path, followed by specific `Mixed capture execution: productsSHA256` rejection for tampering, plus specific `Unsupported product path placeholder` rejection with/without a host. The original failure is reproduced before the fix; the exact new contracts pass against the private candidate. The complete contract suite and unchanged actual bundled Help verification are then required before synchronization. No App/capture-test source changed, so no new UI capture or Simulator operation is required.
