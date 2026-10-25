@@ -45,8 +45,11 @@ class BootEventBuckets:
             } for index in range(bucket_count)]}
 
     def _index(self, received):
+        # Match the absolute deadline; subtraction can round its exact boundary.
+        if not self.requested <= received < self.requested + self.window:
+            return None
         elapsed = received - self.requested
-        return int(elapsed // 10) if 0 <= elapsed < self.window else None
+        return min(int(elapsed // 10), len(self.state['buckets']) - 1)
 
     @classmethod
     def _increment(cls, row, key):

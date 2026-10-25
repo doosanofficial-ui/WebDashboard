@@ -1,5 +1,6 @@
 """Finite slow-boot policy, using virtual time and no Apple/device calls."""
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -20,6 +21,19 @@ COMMAND = ['xcrun', 'simctl', 'bootstatus', DEVICE, '-b']
 
 
 class CIBootBudgetTests(unittest.TestCase):
+    def test_absolute_window_deadline_excludes_boundary_and_keeps_last_inside_bucket(self):
+        for start in (500.11111111, 900.123456789):
+            with self.subTest(start=start):
+                buckets = collector.BootEventBuckets(DEVICE, start, 660)
+                event = {'eventMessage': 'Owned event ' + DEVICE}
+                deadline = start + 660
+                buckets.record(buckets.prepare(event, math.nextafter(deadline, -math.inf)))
+                buckets.record(buckets.prepare(event, deadline))
+                state = buckets.snapshot()
+                self.assertEqual(state['outsideWindowEvents'], 1)
+                self.assertEqual(state['buckets'][65]['eventCount'], 1)
+                self.assertEqual(sum(row['eventCount'] for row in state['buckets']), 1)
+
     def trial(self, ready_after):
         with tempfile.TemporaryDirectory() as directory:
             results = Path(directory)
@@ -68,11 +82,12 @@ class CIBootBudgetTests(unittest.TestCase):
 
     def test_log_window_covers_boot60_plus_bootstatus600_and_stays_bounded(self):
         with tempfile.TemporaryDirectory() as directory, \
+                patch.object(collector.time, 'monotonic', return_value=500.11111111), \
                 patch.object(collector.threading.Thread, 'start'), \
                 patch.object(collector.threading.Thread, 'join'), \
                 patch.object(collector.threading.Thread, 'is_alive', return_value=False):
             log = collector.OwnedSimulatorBootLog(DEVICE, Path(directory))
-            self.assertEqual(log.deadline - log.requested, 660)
+            self.assertEqual(log.deadline, log.requested + 660)
             event = {'eventMessage': 'Owned event ' + DEVICE}
             for elapsed in (240, 599, 659.9, 660):
                 log.buckets.record(log.buckets.prepare(event, log.requested + elapsed))
