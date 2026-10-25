@@ -23,7 +23,7 @@ class WorkspaceCompletionBoundaryTests(unittest.TestCase):
         body_error = subprocess.CalledProcessError(65, ["synthetic", "test"])
         output_error = BrokenPipeError("synthetic final status output failure")
         publish_error = OSError("synthetic completed pending-file close failure")
-        events, visible_during_cleanup = [], []
+        events, visible_during_cleanup, install_errors = [], [], []
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             results = root / group
@@ -65,13 +65,27 @@ class WorkspaceCompletionBoundaryTests(unittest.TestCase):
                     return json.dumps({"runtimes": [{"identifier": "ios27", "version": "27.0"}]})
                 if command[1:3] == ["simctl", "create"]:
                     return device
+                if command[1:3] == ["simctl", "install"]:
+                    events.append("app-install")
+                    ready_after = 300 if mode == "install-slow" else 601 if mode == "install-timeout" else 0
+                    if ready_after > timeout:
+                        error = subprocess.TimeoutExpired(command, timeout, output=b"install still pending")
+                        install_errors.append(error)
+                        raise error
+                    if mode == "install-error":
+                        error = subprocess.CalledProcessError(9, command, output="synthetic install refusal")
+                        install_errors.append(error)
+                        raise error
                 if command[1:3] == ["simctl", "get_app_container"]:
+                    events.append("app-container")
                     return str(container)
                 if command[1:5] == ["xcresulttool", "get", "test-results", "summary"]:
                     return json.dumps({"totalTestCount": 1, "passedTests": 1, "failedTests": 0, "skippedTests": 0})
                 return ""
 
             def phase(command, log, receipt, timeout, **kwargs):
+                if command[-1] == "test":
+                    events.append("ui-test")
                 failed = mode == "body-and-cleanup-fail" and command[-1] == "test"
                 receipt.write_text(json.dumps({"launched": True, "exitCode": 65 if failed else 0, "timedOut": False}))
                 log.write_text("synthetic")
@@ -109,9 +123,10 @@ class WorkspaceCompletionBoundaryTests(unittest.TestCase):
                 observer.return_value.finalize.return_value = {"collectorCleaned": True}
                 for name, value in [("record_toolchain", {}), ("private_artifact", {"manifest": {}}),
                                     ("run_artifact", None), ("stage_sources", None), ("current_commit", "synthetic"),
-                                    ("install_fixture", None), ("select_ui_destination", ("ios27", "iphone")),
+                                    ("select_ui_destination", ("ios27", "iphone")),
                                     ("capture_simulator_bootstrap_failure", {})]:
                     stack.enter_context(patch.object(runner, name, return_value=value))
+                stack.enter_context(patch.object(runner, "install_fixture", side_effect=lambda *args: events.append("fixture-install")))
                 if mode == "seed-and-cleanup-fail":
                     stack.enter_context(patch.object(runner, "private_artifact", side_effect=seed_error))
                 stack.enter_context(patch.object(runner, "output", side_effect=output))
@@ -128,7 +143,9 @@ class WorkspaceCompletionBoundaryTests(unittest.TestCase):
                         caught = error
             expected = {"cleanup-fail": cleanup_error, "body-and-cleanup-fail": body_error,
                         "seed-and-cleanup-fail": seed_error,
-                        "output-fail": output_error, "publish-fail": publish_error}.get(mode)
+                        "output-fail": output_error, "publish-fail": publish_error,
+                        "install-timeout": install_errors[0] if install_errors else None,
+                        "install-error": install_errors[0] if install_errors else None}.get(mode)
             completion = results / "ui-completion.json"
             archived = list(results.glob("ui-completion.previous-*.json"))
             cli = subprocess.run([sys.executable, "-B", str(Path(runner.__file__)), "--verify-groups", str(root)],
@@ -142,7 +159,11 @@ class WorkspaceCompletionBoundaryTests(unittest.TestCase):
                     pass
             first_failure = results / "first-failure-observation.json"
             cleanup_failure = results / "workspace-cleanup-failure.json"
-            return {"firstFailureObservation": json.loads(first_failure.read_text()) if first_failure.exists() else None,
+            install_observation = results / "app-install-observation.json"
+            return {"installObservation": json.loads(install_observation.read_text()) if install_observation.exists() else None,
+                    "installErrorTimeout": getattr(caught, "timeout", None),
+                    "installErrorOutput": getattr(caught, "output", None),
+                    "firstFailureObservation": json.loads(first_failure.read_text()) if first_failure.exists() else None,
                     "workspaceCleanupFailure": json.loads(cleanup_failure.read_text()) if cleanup_failure.exists() else None,
                     "mode": mode, "events": events, "completionVisibleDuringWorkspaceCleanup": visible_during_cleanup,
                     "completionExists": completion.exists(), "publicAggregatePassed": public_pass,
@@ -159,6 +180,30 @@ class WorkspaceCompletionBoundaryTests(unittest.TestCase):
         self.assertNotEqual(result["cliExitCode"], 0, result)
         self.assertFalse(result["cliPassPrinted"], result)
         self.assertTrue(result["originalErrorPreserved"], result)
+
+    def test_install_ready_at_virtual300_seconds_reaches_identity_fixture_and_ui(self):
+        result = self.run_case("install-slow")
+        self.assertTrue(result["completionExists"] and result["publicAggregatePassed"], result)
+        self.assertEqual(result["installObservation"]["timeoutSeconds"], 600)
+        self.assertTrue(result["installObservation"]["returnedNormally"])
+        stages = ["app-install", "app-container", "fixture-install", "ui-test"]
+        self.assertEqual([name for name in result["events"] if name in stages], stages)
+
+    def test_install_past600_keeps_original_timeout_and_blocks_identity_fixture_ui(self):
+        result = self.run_case("install-timeout")
+        self.assert_rejected(result)
+        self.assertEqual(result["installErrorTimeout"], 600)
+        self.assertEqual(result["installErrorOutput"], b"install still pending")
+        self.assertEqual(result["installObservation"]["timeoutSeconds"], 600)
+        for stage in ("app-container", "fixture-install", "ui-test"):
+            self.assertNotIn(stage, result["events"])
+
+    def test_install_nonzero_keeps_original_error_and_blocks_identity_fixture_ui(self):
+        result = self.run_case("install-error")
+        self.assert_rejected(result)
+        self.assertEqual(result["errorType"], "CalledProcessError")
+        for stage in ("app-container", "fixture-install", "ui-test"):
+            self.assertNotIn(stage, result["events"])
 
     def test_workspace_cleanup_failure_cannot_publish_completion_or_pass_cli(self):
         self.assert_rejected(self.run_case("cleanup-fail"))

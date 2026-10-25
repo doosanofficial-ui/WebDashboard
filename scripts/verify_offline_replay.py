@@ -29,6 +29,9 @@ import bootstatus_observation
 from failure_observation import observe_first_failure
 
 
+APP_INSTALL_TIMEOUT_SECONDS = 600
+
+
 # Explicit, disjoint 10 + 1 + 14 + 4 + 1 + 1 selectors; route and each maximum-text language have their own budget.
 TEST_GROUPS = {'replay': ['TelemetryUITests/OfflineReplayUITests/testSessionReplayShowsAnalysisAndSynchronizedRecordedTime',
             'TelemetryUITests/OfflineReplayUITests/testRecordedSignalHistoryContainsOnlySelectedTimePrefix',
@@ -890,8 +893,8 @@ def main():
                            if help_run is not None else derived / "Build/Products/Debug-iphonesimulator/Telemetry.app")
             failure_phase = "app-install"
             failure_observation.observe_call(lambda: output(["xcrun", "simctl", "install", simulator,
-                    str(application)], timeout=120),
-                    results, "app-install", 120)
+                    str(application)], timeout=APP_INSTALL_TIMEOUT_SECONDS),
+                    results, "app-install", APP_INSTALL_TIMEOUT_SECONDS)
             failure_phase = "app-container"
             container = Path(failure_observation.simctl_output(["xcrun", "simctl", "get_app_container", simulator,
                                      "local.webdashboard.Telemetry", "data"], results, failure_phase, timeout=60).strip())
