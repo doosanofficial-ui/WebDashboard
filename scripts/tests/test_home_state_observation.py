@@ -81,5 +81,49 @@ print(String(data: try JSONSerialization.data(withJSONObject: result), encoding:
         self.assertEqual(final['boundaries'], initial['boundaries'])
 
 
+    def test_text_queries_preserve_single_delayed_getter_and_exact_values(self):
+        source = Path(__file__).resolve().parents[2] / 'mobile-ios/UITests/HomeStateObservation.swift'
+        with tempfile.TemporaryDirectory(prefix='replay-text-observation-') as directory:
+            root = Path(directory)
+            main = root / 'main.swift'
+            main.write_text('''import Foundation
+var now = 100.0
+var calls = 0
+var pending = ""
+let trace = HomeStateObservation(now: { now })
+let inputs = ["13.5 / 600.0 seconds", "13.5 / 600.0 seconds", "16.0 / 600.0 seconds", "16.0 / 600.0 seconds"]
+let delays = [12.0, 11.0, 2.0, 5.0]
+var values = [String]()
+for i in inputs.indices {
+    values.append(trace.readText(i == 0 ? "baseline" : "predicate") {
+        calls += 1
+        if i == 1 { pending = trace.json() }
+        now += delays[i]
+        return inputs[i]
+    })
+}
+print(String(data: try JSONSerialization.data(withJSONObject:
+    ["values": values, "calls": calls, "trace": trace.json(), "pending": pending]), encoding: .utf8)!)
+''', encoding='utf-8')
+            build = subprocess.run(['swiftc', '-module-cache-path', str(root / 'cache'),
+                                    str(source), str(main), '-o', str(root / 'observe')],
+                                   capture_output=True, text=True, timeout=45)
+            self.assertEqual(build.returncode, 0, build.stderr)
+            run = subprocess.run([str(root / 'observe')], capture_output=True, text=True, timeout=5)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            result = json.loads(run.stdout)
+        expected = ['13.5 / 600.0 seconds', '13.5 / 600.0 seconds',
+                    '16.0 / 600.0 seconds', '16.0 / 600.0 seconds']
+        self.assertEqual(result['calls'], 4)
+        self.assertEqual(result['values'], expected)
+        rows = json.loads(result['trace'])['stateQueries']
+        self.assertEqual([r['rawValue'] for r in rows], expected)
+        self.assertEqual([(r['requestedUptime'], r['returnedUptime']) for r in rows],
+                         [(100, 112), (112, 123), (123, 125), (125, 130)])
+        pending = json.loads(result['pending'])['stateQueries'][-1]
+        self.assertEqual(pending, {'label': 'predicate', 'requestedUptime': 112,
+                                   'returnedUptime': None, 'rawValue': None})
+
+
 if __name__ == '__main__':
     unittest.main()

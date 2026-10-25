@@ -53,6 +53,15 @@ final class HomeStateObservation {
         return state
     }
 
+    private struct ObservedText: RawRepresentable {
+        let rawValue: String
+    }
+
+    /// Preserve the original text read and its raw value without an extra accessibility query.
+    func readText(_ label: String, _ read: () -> String) -> String {
+        readState(label) { ObservedText(rawValue: read()) }.rawValue
+    }
+
     func json() -> String {
         lock.lock()
         let snapshot: [String: Any] = ["schemaVersion": 1, "boundaries": boundaries,

@@ -296,7 +296,8 @@ final class OfflineReplayUITests: XCTestCase {
         let slider = app.sliders["replay-time-slider"]
         XCTAssertTrue(slider.isHittable, app.debugDescription)
         let position = app.staticTexts["replay-position"]
-        let sampled = position.label.split(separator: " ")
+        let observation = HomeStateObservation()
+        let sampled = observation.readText("baseline-replay-position") { position.label }.split(separator: " ")
         XCTAssertEqual(sampled.count, 4, "Expected recorded position / duration in seconds")
         let seconds = try XCTUnwrap(Double(String(sampled[0])))
         let duration = try XCTUnwrap(Double(String(sampled[2])))
@@ -306,10 +307,22 @@ final class OfflineReplayUITests: XCTestCase {
         // Reproduce CI snapshot-to-touch latency while playback keeps running.
         // The sampled coordinate must still hit the thumb after 2.5 recorded seconds.
         let delayedTouch = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            let current = Double(position.label.split(separator: " ").first.map(String.init) ?? "") ?? -1
+            let raw = observation.readText("predicate-replay-position") { position.label }
+            let current = Double(raw.split(separator: " ").first.map(String.init) ?? "") ?? -1
             return current >= seconds + 2.5
         }, object: position)
-        XCTAssertEqual(XCTWaiter.wait(for: [delayedTouch], timeout: 10), .completed,
+        observation.mark(.waitRequested)
+        let delayedResult = XCTWaiter.wait(for: [delayedTouch], timeout: 10)
+        observation.mark(.waitReturned)
+        let envelope: [String: Any] = [
+            "baselineSeconds": seconds, "durationSeconds": duration,
+            "requiredAdvanceSeconds": 2.5, "waitBudgetSeconds": 10,
+            "waiterResult": delayedResult.rawValue,
+            "callObservation": try JSONSerialization.jsonObject(with: Data(observation.json().utf8))]
+        let timing = XCTAttachment(data: try JSONSerialization.data(withJSONObject: envelope, options: [.sortedKeys]),
+                                   uniformTypeIdentifier: "public.json")
+        timing.name = "DEMO-held-slider-time-observation"; timing.lifetime = .keepAlways; add(timing)
+        XCTAssertEqual(delayedResult, .completed,
             "Latency regression requires advancing playback before the held drag")
         thumb.press(forDuration: 2, thenDragTo: target, withVelocity: .slow, thenHoldForDuration: 3)
         let screenshot = XCTAttachment(screenshot: app.screenshot())
@@ -407,7 +420,8 @@ final class OfflineReplayUITests: XCTestCase {
         #else
         continueAfterFailure = false
         let app = XCUIApplication()
-        openFixtureSession(app, startedAt: 300)
+        // Keep Pause checks independent of the short recording's automatic end.
+        openFixtureSession(app, sessionID: "offline-slider-fixture")
         app.buttons["replay-saved-session"].tap()
         XCTAssertTrue(app.buttons["stop-replay-header"].waitForExistence(timeout: 5))
         func reveal(_ id: String) -> XCUIElement {
@@ -427,9 +441,14 @@ final class OfflineReplayUITests: XCTestCase {
         let speed = app.segmentedControls["replay-speed"]
         XCTAssertTrue(speed.waitForExistence(timeout: 5), app.debugDescription)
         speed.buttons["0.5×"].tap()
+        XCTAssertTrue(speed.buttons["0.5×"].isSelected, "Slow playback rate must be accepted")
         reveal("replay-play").tap()
         let position = app.staticTexts["replay-position"]
-        let advanced = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label != %@", "0.0 / 5.0 seconds"), object: position)
+        let advanced = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let fields = position.label.split(separator: " ")
+            guard fields.count == 4, let current = Double(fields[0]), let total = Double(fields[2]) else { return false }
+            return current > 0 && current < total
+        }, object: position)
         XCTAssertEqual(XCTWaiter.wait(for: [advanced], timeout: 5), .completed)
         reveal("replay-pause").tap()
         // Confirm the Pause action took effect before observing its accepted position.
@@ -437,7 +456,13 @@ final class OfflineReplayUITests: XCTestCase {
         XCTAssertFalse(app.buttons["replay-pause"].exists)
         XCTAssertTrue(app.buttons["replay-play"].isEnabled, "Pause must occur before automatic end")
         let paused = position.label
-        XCTAssertNotEqual(paused, "5.0 / 5.0 seconds", "Pause must retain a pre-end position")
+        let pausedFields = paused.split(separator: " ")
+        XCTAssertEqual(pausedFields.count, 4)
+        let pausedSeconds = try XCTUnwrap(Double(String(pausedFields[0])))
+        let pausedDuration = try XCTUnwrap(Double(String(pausedFields[2])))
+        XCTAssertEqual(pausedDuration, 600, "Pause checks require the existing long recording")
+        XCTAssertGreaterThan(pausedSeconds, 0)
+        XCTAssertLessThan(pausedSeconds, pausedDuration, "Pause must retain a pre-end position")
         let changed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label != %@", paused), object: position)
         changed.isInverted = true
         XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 1), .completed)
@@ -447,9 +472,24 @@ final class OfflineReplayUITests: XCTestCase {
         XCTAssertEqual(position.label, paused)
         reveal("replay-seek-start").tap()
         speed.buttons["0.5×"].tap()
+        XCTAssertTrue(speed.buttons["0.5×"].isSelected, "Slow playback rate must be accepted")
         reveal("replay-play").tap()
         XCTAssertTrue(app.buttons["replay-pause"].waitForExistence(timeout: 5))
         speed.buttons["2×"].tap() // Change rate during playback, not only while paused.
+        XCTAssertTrue(speed.buttons["2×"].isSelected, "Active playback must accept the changed rate")
+        XCTAssertTrue(app.buttons["replay-pause"].exists, "Rate change must occur during active playback")
+        app.buttons["stop-replay-header"].tap()
+        reveal("saved-session-picker").tap()
+        let shortFixture = app.buttons["saved-session-offline-seek-fixture"]
+        XCTAssertTrue(shortFixture.waitForExistence(timeout: 5))
+        shortFixture.tap()
+        app.buttons["replay-saved-session"].tap()
+        XCTAssertTrue(app.buttons["stop-replay-header"].waitForExistence(timeout: 5))
+        reveal("replay-seek-start").tap()
+        XCTAssertEqual(position.label, "0.0 / 5.0 seconds", "Automatic end still uses the original short recording")
+        speed.buttons["2×"].tap()
+        XCTAssertTrue(speed.buttons["2×"].isSelected, "Automatic end requires the selected fast rate")
+        reveal("replay-play").tap()
         XCTAssertTrue(app.staticTexts["5.0 / 5.0 seconds"].waitForExistence(timeout: 8))
         XCTAssertFalse(app.buttons["replay-pause"].exists)
         XCTAssertFalse(app.buttons["replay-play"].isEnabled)
