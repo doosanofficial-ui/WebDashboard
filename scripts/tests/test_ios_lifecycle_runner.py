@@ -180,14 +180,14 @@ class HostedCleanupControlFlowTests(unittest.TestCase):
                     return ""
                 if command[1:3] == ["simctl", "bootstatus"]:
                     self.assertEqual(command[-2], device)
-                    self.assertEqual(timeout, 180)
+                    self.assertEqual(timeout, 600)
                     if body == "boot":
                         raise boot_error
                     return ""
                 if command[0] == "xcodegen":
                     return ""
                 if command[1:5] == ["xcresulttool", "get", "test-results", "summary"]:
-                    self.assertEqual(timeout, 60)
+                    self.assertEqual(timeout, 180)
                     if reader_capture:
                         return original_output(command, timeout=timeout)
                     if body == "reader":
@@ -244,7 +244,7 @@ class HostedCleanupControlFlowTests(unittest.TestCase):
                 stack.enter_context(patch.object(runner, "record_toolchain", return_value={"xcode_version": "27.0"}))
                 stack.enter_context(patch.object(runner, "output", side_effect=output))
                 stack.enter_context(patch.object(runner, "read_test_summary_output", side_effect=lambda bundle, _results:
-                    output(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)], timeout=60)))
+                    output(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)], timeout=180)))
                 stack.enter_context(patch.object(runner.subprocess, "run", side_effect=run))
                 reader_process = stack.enter_context(patch.object(runner.subprocess, "check_output",
                     side_effect=reader_error if body == "reader" else None,
@@ -294,7 +294,7 @@ class HostedCleanupControlFlowTests(unittest.TestCase):
         observation = value["readerObservation"]
         self.assertEqual(observation.get("outputMetadata"), {
             "outputPresent": True, "outputBytes": 22, "stderrPresent": False, "stderrBytes": None})
-        self.assertEqual(observation["timeoutSeconds"], 60)
+        self.assertEqual(observation["timeoutSeconds"], 180)
         self.assertEqual(observation["errorType"], "TimeoutExpired")
         self.assertIsNone(observation["childExitCode"])
         self.assertGreaterEqual(observation["callReturnedMonotonic"], observation["callStartedMonotonic"])
@@ -341,7 +341,7 @@ class HostedCleanupControlFlowTests(unittest.TestCase):
                 self.assertIs(value["error"].stderr, stderr)
                 arguments, kwargs = value["readerProcessCall"]
                 self.assertEqual(arguments[0][:6], ["xcrun", "xcresulttool", "get", "test-results", "summary", "--path"])
-                self.assertEqual(kwargs, {"text": True, "stderr": subprocess.STDOUT, "timeout": 60})
+                self.assertEqual(kwargs, {"text": True, "stderr": subprocess.STDOUT, "timeout": 180})
                 self.assertEqual(value["readerObservation"].get("outputMetadata"), {
                     "outputPresent": payload is not None, "outputBytes": output_bytes,
                     "stderrPresent": stderr is not None, "stderrBytes": stderr_bytes})

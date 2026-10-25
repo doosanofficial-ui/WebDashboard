@@ -15,7 +15,7 @@ jobs:
     runs-on: xcode-27
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
-    timeout-minutes: 25
+    timeout-minutes: 34  # Preserve headroom for boot600s and summary180s.
     steps:
       - uses: actions/checkout@v7
       - name: Require Xcode, iOS SDK and runtime 27.x

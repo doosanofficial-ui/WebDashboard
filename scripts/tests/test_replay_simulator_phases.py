@@ -78,7 +78,7 @@ class SimulatorPhaseTests(unittest.TestCase):
             self.assertIn("Waiting on SpringBoard", (results / "simulator-bootstatus.log").read_text(),
                           "Bootstrap progress must survive a timeout")
             boot = json.loads((results / "simulator-bootstatus.json").read_text())
-            self.assertEqual(boot["timeoutSeconds"], 180)
+            self.assertEqual(boot["timeoutSeconds"], 600)
             if receipt_fails:
                 return
             cleanup = json.loads((results / "simulator-cleanup.json").read_text())

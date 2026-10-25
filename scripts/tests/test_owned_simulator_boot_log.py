@@ -119,7 +119,7 @@ class BootstrapStreamIntegrationTests(unittest.TestCase):
             self.assertTrue(events.exists(), 'Early owned events must be collected before blocked post-failure log show')
             self.assertIn('early owned ' + device, events.read_text())
             self.assertEqual([(c[2], t) for c, t in calls if c[:2] == ['xcrun', 'simctl'] and c[2] in ['boot', 'bootstatus']],
-                             [('boot', 60), ('bootstatus', 180)])
+                             [('boot', 60), ('bootstatus', 600)])
             self.assertTrue(any(c[:2] == ['/usr/bin/log', 'show'] and t == 10 for c, t in calls))
             receipt = json.loads((results / 'simulator-boot-stream.json').read_text())
             self.assertTrue(receipt['workerStopped'])

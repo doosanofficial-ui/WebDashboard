@@ -3,6 +3,7 @@ import copy
 from collections import deque
 import datetime
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -25,8 +26,9 @@ class BootEventBuckets:
         self.simulator = simulator.lower()
         self.requested = requested
         self.window = window
+        bucket_count = math.ceil(window / 10)
         self.state = {
-            'bucketSeconds': 10, 'bucketCount': 24, 'originMonotonic': requested,
+            'bucketSeconds': 10, 'bucketCount': bucket_count, 'originMonotonic': requested,
             'windowSeconds': window, 'subscriptionReady': None,
             'receiveTimestampKind': 'Complete-line processing observation; not kernel receive time',
             'scope': 'Owned UUID events only. Empty buckets and reader progress do not prove service health or readiness. Sender categories match reported paths, not independently verified executable identity',
@@ -40,7 +42,7 @@ class BootEventBuckets:
                 'senderEvents': dict.fromkeys(('rendererBootCallback', 'mcmMigration',
                     'remindersMigration', 'launchServices', 'otherOwned'), 0),
                 'drops': dict.fromkeys(('invalidJSON', 'foreignOrMalformed', 'oversizedLine'), 0)
-            } for index in range(24)]}
+            } for index in range(bucket_count)]}
 
     def _index(self, received):
         elapsed = received - self.requested
@@ -131,9 +133,9 @@ class BootEventBuckets:
 
 
 class OwnedSimulatorBootLog:
-    def __init__(self, simulator, results, window=240, byte_limit=2 * 1024 * 1024):
-        if not 0 < window <= 240 or not 0 < byte_limit <= 2 * 1024 * 1024:
-            raise ValueError('Boot event collection cannot exceed 240 seconds or 2MiB retained/staging payload')
+    def __init__(self, simulator, results, window=660, byte_limit=2 * 1024 * 1024):
+        if not 0 < window <= 660 or not 0 < byte_limit <= 2 * 1024 * 1024:
+            raise ValueError('Boot event collection cannot exceed 660 seconds or 2MiB retained/staging payload')
         self.simulator = str(uuid.UUID(simulator)).upper()
         self.results = Path(results)
         self.stop = threading.Event()
@@ -162,7 +164,7 @@ class OwnedSimulatorBootLog:
             'tailSavedBytes': 0, 'tailSavedEvents': 0, 'tailEvictedEvents': 0,
             'tailOversizedEvents': 0, 'tailPublishCount': 0, 'tailPublishFailed': False,
             'pipeClosed': True, 'leaderReaped': False, 'groupGoneFinal': None,
-            'errors': [], 'scope': 'Created UUID only; fixed head prefix then recent tail in receive order. savedBytes/events describe the head file; inputBytes is a lifetime counter, not a cap. Head+tail+atomic tail staging stays within requested raw byteLimit. Full receipt and both atomic staging files also fit retainedPayloadByteLimit=2MiB. 240s read window excludes synchronous file writes and cleanup waits; subscriber readiness is not guaranteed'
+            'errors': [], 'scope': 'Created UUID only; fixed head prefix then recent tail in receive order. savedBytes/events describe the head file; inputBytes is a lifetime counter, not a cap. Head+tail+atomic tail staging stays within requested raw byteLimit. Full receipt and both atomic staging files also fit retainedPayloadByteLimit=2MiB. 660s maximum read window excludes synchronous file writes and cleanup waits; subscriber readiness is not guaranteed'
         }
         self.worker = threading.Thread(target=self._collect, name='owned-simulator-boot-log', daemon=True)
         self.worker.start()
@@ -275,7 +277,7 @@ class OwnedSimulatorBootLog:
                 self._update(terminationReason='stopped-before-launch', groupGoneFinal=True)
                 return
             command = ['/usr/bin/log', 'stream', '--style', 'ndjson', '--level', 'info',
-                       '--timeout', '240', '--predicate', 'eventMessage CONTAINS[c] "' + self.simulator + '"']
+                       '--timeout', str(math.ceil(self.state['windowSeconds'])), '--predicate', 'eventMessage CONTAINS[c] "' + self.simulator + '"']
             self._update(command=command, launchPending=True)
             child = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                      stderr=subprocess.DEVNULL, start_new_session=True)

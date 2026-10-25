@@ -21,7 +21,7 @@ from verify_help_assets import expected_capture_targets
 from contextlib import contextmanager, nullcontext
 import export_dismissal_observation as export_audit
 
-from verify_ios_lifecycle import output, stage_sources, select_runtime_and_type, verify_summary, record_toolchain
+from verify_ios_lifecycle import output, stage_sources, select_runtime_and_type, verify_summary, record_toolchain, BOOTSTATUS_TIMEOUT_SECONDS
 from verify_replay_seed import private_artifact, run_artifact, install_fixture, current_commit
 from owned_simulator_boot_log import OwnedSimulatorBootLog
 import failure_observation
@@ -632,7 +632,7 @@ def collect_failed_test_results(bundle, results, deadline, clock=None):
 def prepare_simulator(simulator, results, boot_log=None):
     try:
         try:
-            for phase, timeout in (("boot", 60), ("bootstatus", 180)):
+            for phase, timeout in (("boot", 60), ("bootstatus", BOOTSTATUS_TIMEOUT_SECONDS)):
                 command = ["xcrun", "simctl", phase, simulator]
                 if phase == "bootstatus":
                     command.append("-b")

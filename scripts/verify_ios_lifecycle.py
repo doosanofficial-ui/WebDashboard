@@ -21,6 +21,8 @@ import failure_observation
 from failure_observation import observe_first_failure
 
 EXPECTED_TEST_COUNT = 92
+SUMMARY_READ_TIMEOUT_SECONDS = 180
+BOOTSTATUS_TIMEOUT_SECONDS = 600
 
 
 def stage_sources(root, destination):
@@ -97,7 +99,7 @@ def output(command, timeout=60):
 
 
 def read_test_summary_output(bundle, results):
-    """Retain reader output and process ownership under the original 60-second limit."""
+    """Retain reader output and ownership within a finite summary-only budget."""
     # Match failure_observation's late import to avoid module initialization cycles.
     # This result reader enables no Lifecycle boot observer or native inspection.
     from verify_offline_replay import run_owned_phase
@@ -106,7 +108,7 @@ def read_test_summary_output(bundle, results):
     if log.exists() or receipt.exists():
         raise FileExistsError("Result reader evidence already exists; use a new result directory")
     run_owned_phase(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)],
-                    log, receipt, 60, ensure_group_cleanup=True)
+                    log, receipt, SUMMARY_READ_TIMEOUT_SECONDS, ensure_group_cleanup=True)
     return log.read_text(encoding="utf-8")
 
 
@@ -143,8 +145,8 @@ def main():
         failure_observation.observe_call(lambda: output(["xcrun", "simctl", "boot", simulator]),
                                          results, failure_phase, 60)
         failure_phase = "hosted-bootstatus"
-        failure_observation.observe_call(lambda: output(["xcrun", "simctl", "bootstatus", simulator, "-b"], timeout=180),
-                                         results, failure_phase, 180)
+        failure_observation.observe_call(lambda: output(["xcrun", "simctl", "bootstatus", simulator, "-b"], timeout=BOOTSTATUS_TIMEOUT_SECONDS),
+                                         results, failure_phase, BOOTSTATUS_TIMEOUT_SECONDS)
         output(["xcodegen", "generate", "--spec", str(staged / "lifecycle-tests.yml")], timeout=120)
         bundle = results / "Lifecycle.xcresult"
         command = ["xcodebuild", "-project", str(staged / "Telemetry.xcodeproj"),
@@ -167,7 +169,7 @@ def main():
         failure_phase = "result-read"
         summary = json.loads(failure_observation.observe_call(
             lambda: read_test_summary_output(bundle, results),
-            results, failure_phase, 60, record_output_metadata=True))
+            results, failure_phase, SUMMARY_READ_TIMEOUT_SECONDS, record_output_metadata=True))
         (results / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
         verify_summary(summary, EXPECTED_TEST_COUNT)
     except BaseException as original_error:

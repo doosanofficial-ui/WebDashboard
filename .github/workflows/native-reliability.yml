@@ -114,7 +114,7 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
       SEED_MANIFEST_SHA256: ${{ needs.native-seed.outputs.seed_manifest_sha256 }}
     # Include isolated Simulator preparation/build plus the bounded 20-minute UI run.
-    timeout-minutes: 40
+    timeout-minutes: 47  # Preserve headroom for bootstatus600s.
     steps:
       - uses: actions/checkout@v7
       - name: Download exact-SHA qualified Seed
@@ -150,7 +150,7 @@ jobs:
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
       SEED_MANIFEST_SHA256: ${{ needs.native-seed.outputs.seed_manifest_sha256 }}
-    timeout-minutes: 40
+    timeout-minutes: 47  # Preserve headroom for bootstatus600s.
     steps:
       - uses: actions/checkout@v7
       - name: Download exact-SHA qualified Seed

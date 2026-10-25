@@ -177,10 +177,10 @@ class BootstatusCheckpoint:
 def checkpoint_for(command, child, results, began, deadline, primary_complete):
     """No local/native opt-in or additional phase gets this checkpoint."""
     try:
-        # Match the caller's forward addition; subtracting rounded clocks can lose 180.
+        # Keep the historical comparison's 180s and CI's 600s exact clock pairs.
         if (os.environ.get('GITHUB_ACTIONS') != 'true' or sys.platform != 'darwin'
                 or os.name != 'posix' or not math.isfinite(began) or not math.isfinite(deadline)
-                or deadline != began + 180 or len(command) != 5
+                or deadline not in (began + 180, began + 600) or len(command) != 5
                 or command[:3] != ['xcrun', 'simctl', 'bootstatus'] or command[4] != '-b'):
             return None
         simulator = str(uuid.UUID(command[3])).upper()

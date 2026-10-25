@@ -25,12 +25,12 @@ class ResultReaderTests(unittest.TestCase):
                 value = lifecycle.read_test_summary_output(bundle, results)
             return value, owner.call_args, bundle, results
 
-    def test_original_command_uses60_seconds_file_output_and_owned_group_cleanup(self):
+    def test_summary_command_uses180_seconds_file_output_and_owned_group_cleanup(self):
         payload = {'totalTestCount': 92, 'passedTests': 92, 'failedTests': 0, 'skippedTests': 0, 'result': 'Passed'}
         value, call, bundle, results = self.trial(json.dumps(payload))
         self.assertEqual(json.loads(value), payload)
         self.assertEqual(call.args[0], ['xcrun', 'xcresulttool', 'get', 'test-results', 'summary', '--path', str(bundle)])
-        self.assertEqual(call.args[1:4], (results / 'result-read-command.log', results / 'result-read-process.json', 60))
+        self.assertEqual(call.args[1:4], (results / 'result-read-command.log', results / 'result-read-process.json', 180))
         self.assertEqual(call.kwargs, {'ensure_group_cleanup': True})
 
     def test_nonzero_reader_cannot_pass_even_if_output_counts_are_green(self):

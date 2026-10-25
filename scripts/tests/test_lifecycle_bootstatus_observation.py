@@ -170,7 +170,7 @@ class LifecycleObserverIsolationRegressionTests(unittest.TestCase):
         self.assertTrue(value['probeReaped']); self.assertTrue(value['workspaceRemoved']); self.assertTrue(value['unrelatedPreserved'])
         self.assertNotIn('HOSTED XCTEST PASS', value['stdout'])
         boot = [call for call in value['nativeCalls'] if call[0] == COMMAND]
-        self.assertEqual(boot, [(COMMAND, 180)])
+        self.assertEqual(boot, [(COMMAND, 600)])
         cleanup = [call for call in value['nativeCalls'] if call[0][1:3] in (['simctl', 'shutdown'], ['simctl', 'delete'])]
         self.assertEqual([call[1]['timeout'] for call in cleanup], [60, 60])
         self.assertEqual([call[1]['check'] for call in cleanup], [False, True])
@@ -198,7 +198,7 @@ class LifecycleObserverIsolationRegressionTests(unittest.TestCase):
         self.assertEqual(value['observerStarts'], 0); self.assertEqual(value['popenAttempts'], [])
         self.assertEqual(value['journals'], []); self.assertEqual(value['liveObserversAfter'], 0)
         self.assertTrue(value['probeReaped']); self.assertTrue(value['ownedRemoved']); self.assertTrue(value['workspaceRemoved'])
-        self.assertEqual([call[1] for call in value['nativeCalls'] if call[0] == COMMAND], [180])
+        self.assertEqual([call[1] for call in value['nativeCalls'] if call[0] == COMMAND], [600])
         xcode = [call for call in value['nativeCalls'] if call[0][0] == 'xcodebuild']
         self.assertEqual(len(xcode), 1); self.assertEqual(xcode[0][1]['timeout'], 900)
         self.assertEqual(value['events'], ['primary-return', 'shutdown', 'delete', 'workspace'])
