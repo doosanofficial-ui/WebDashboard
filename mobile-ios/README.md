@@ -195,9 +195,11 @@ Saved snapshots are bounded to 200,000 rows and larger/open sessions fail visibl
 instead of being silently truncated. Current recording export retains its
 existing drain-before-export behavior.
 
-`Replay snapshot` restores the recorded final values and GPS into Signals and
-the existing custom Dashboard widgets. This is NOT live acquisition and NOT
-continuous playback/seeking. Original timestamps/provenance remain in exports;
+`Open Replay` initially restores the recorded final values and GPS into Signals
+and the existing custom Dashboard widgets. To play from the beginning, scroll
+to Recorded time and tap Start, then Play. Playback supports pause, speed changes
+and seeking; seeking pauses playback. These controls use recorded time without
+starting live acquisition. Original timestamps/provenance remain in exports;
 display freshness is evaluated at the recorded reference time. GPS means recorded
 GPS, never the current position. Recording, MARK, GPS start, connection and upload
 are blocked until `Stop Replay`; stopping does not automatically reconnect.

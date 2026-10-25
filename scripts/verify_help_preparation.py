@@ -18,7 +18,8 @@ HELP_SOURCE = "mobile-ios/App/AppHelpView.swift"
 LANGUAGE_SOURCE = "mobile-ios/App/AppLocalization.swift"
 CAPTURE_SOURCE = "mobile-ios/UITests/LocalizationHelpUITests.swift"
 CAPTURE_BODY_SHA256 = "8061fcc04f3f18379678bae35c063182d1d3503b1b258a1c0f6e30d3fdfd0a2d"
-HELP_SOURCE_SHA256 = "1b8074581edfb62f746c8c9d7b9a6c46dd96724b0fec998671526d87e49be828"
+# Reviewed Replay copy now directs END-position readers to Recorded time > Start.
+HELP_SOURCE_SHA256 = "245564cfac9be2b859c2f34a44e4f6716559fe296093d258cf9bc66fccc1720c"
 LANGUAGE_PREFIX_SHA256 = "26c84edc11934f388e62b8d2bb27eadc8d6f1b35651507af3f5991506f4aa55c"
 
 
