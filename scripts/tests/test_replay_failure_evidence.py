@@ -92,7 +92,7 @@ class SharedFailureBudgetTests(unittest.TestCase):
         calls = []
 
         def phase(command, log, receipt, timeout, **kwargs):
-            calls.append((command, timeout))
+            calls.append((command, timeout, kwargs))
             receipt.write_text(json.dumps({"exitCode": 0, "groupExistsAfterCleanup": False}))
             return {"exitCode": 0}
 
@@ -107,9 +107,17 @@ class SharedFailureBudgetTests(unittest.TestCase):
                 RuntimeError("cleanup"), results, device, "cleanup",
                 run_phase=phase, deadline=200, clock=lambda: 100)
             self.assertEqual((results / "first-failure-observation.json").read_bytes(), original)
+            status = json.loads((results / "failure-diagnostic-status.json").read_text())
         self.assertEqual(len(calls), 1)
-        self.assertEqual(calls[0][1], 7)
+        self.assertEqual(calls[0][1], 10)  #7 seconds of observation plus3 of finite worker cleanup.
         self.assertEqual(float(calls[0][0][-1]), 107)
+        self.assertEqual(json.loads(original)['diagnosticBudgetSeconds'], 7)
+        self.assertEqual(json.loads(original)['diagnosticDeadlineMonotonic'], 107)
+        self.assertEqual(json.loads(original)['errorType'], 'OSError')
+        self.assertEqual(status['observationBudgetSeconds'], 7)
+        self.assertEqual(status['workerCleanupReserveSeconds'], 3)
+        self.assertEqual(status['workerTimeoutSeconds'], 10)
+        self.assertEqual(calls[0][2], {'ensure_group_cleanup': True, 'group_cleanup_timeout': 1})
 
     def test_expired_observer_budget_latches_failure_without_launching_worker(self):
         with tempfile.TemporaryDirectory() as directory, \

@@ -150,7 +150,10 @@ jobs:
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
       SEED_MANIFEST_SHA256: ${{ needs.native-seed.outputs.seed_manifest_sha256 }}
-    timeout-minutes: 57  # Same required container180s path; preserve existing headroom.
+    # SE runner sequential limits4560s (including build900), plus workflow toolchain240,
+    # contracts600, preparation180, upload180 and observation/process-cleanup240 =6000s.
+    # Reserves are allocations; launch/filesystem/scheduling wall time is not a proven bound.
+    timeout-minutes: 100
     steps:
       - uses: actions/checkout@v7
       - name: Download exact-SHA qualified Seed

@@ -13,6 +13,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import verify_offline_replay as runner
+import verify_ios_lifecycle as lifecycle
 from test_native_ui_scheduling import job_block, job_setting
 
 
@@ -49,9 +50,11 @@ class LayoutRunnerBudgetTests(unittest.TestCase):
         "TelemetryUITests/SmallViewportStatusUIRegression/testStatusAndEditingHelpRemainAccessibleAtMaximumText",
     ]
 
-    def run_selection(self, selection, container_error=None):
+    def run_selection(self, selection, container_error=None, build_ready_after=None,
+                      successful=False, measure_full_budget=False):
         calls = []
         container_calls = []
+        sequential_budgets, build_failures = [], []
         primary = container_error or subprocess.CalledProcessError(65, ["xcodebuild", "synthetic-ui-test"])
         with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
             root = Path(directory)
@@ -59,17 +62,31 @@ class LayoutRunnerBudgetTests(unittest.TestCase):
             device = "11111111-1111-4111-8111-111111111111"
 
             def output(command, timeout=60):
+                sequential_budgets.append(timeout)
+                if command == ["xcodebuild", "-version"]:
+                    return "Xcode 27.0\nBuild version 27A266a\n"
+                if "--show-sdk-version" in command:
+                    return "27.0\n"
+                if command == ["xcode-select", "-p"]:
+                    return "/Applications/Xcode_27.0.app/Contents/Developer\n"
                 if command[1:4] == ["simctl", "list", "runtimes"]:
                     return json.dumps({"runtimes": [{"identifier": "ios27", "version": "27.0"}]})
                 if command[1:3] == ["simctl", "create"]:
                     return device
                 if command[1:3] == ["simctl", "get_app_container"]:
                     return str(root / "Containers/Data/Application/synthetic")
+                if command[1:5] == ["xcresulttool", "get", "test-results", "summary"]:
+                    return json.dumps({"totalTestCount": 2, "passedTests": 2, "failedTests": 0, "skippedTests": 0})
                 return ""
 
             def phase(command, log, receipt, timeout, **kwargs):
                 calls.append((command, log.name, timeout))
-                if log.name == "test.log":
+                sequential_budgets.append(timeout)
+                if log.name == "build.log" and build_ready_after is not None and build_ready_after > timeout:
+                    error = subprocess.TimeoutExpired(command, timeout, output=b"late build progress")
+                    build_failures.append(error)
+                    raise error
+                if log.name == "test.log" and not successful:
                     raise primary
                 return {}
 
@@ -77,7 +94,8 @@ class LayoutRunnerBudgetTests(unittest.TestCase):
                 container_calls.append((command, phase, timeout))
                 if container_error is not None:
                     raise container_error
-                return output(command)
+                sequential_budgets.append(timeout)
+                return str(root / "Containers/Data/Application/synthetic")
 
             stack.enter_context(patch.object(sys, "argv", ["verify_offline_replay.py", *selection,
                 "--seed-artifact", directory, "--seed-manifest-sha256", "0" * 64,
@@ -85,15 +103,21 @@ class LayoutRunnerBudgetTests(unittest.TestCase):
             boundaries = {}
             for name in ("run_artifact", "stage_sources", "prepare_simulator", "install_fixture",
                          "observe_first_failure", "collect_failed_test_results", "capture_simulator_bootstrap_failure"):
+                if measure_full_budget and name == "prepare_simulator":
+                    continue
                 boundaries[name] = stack.enter_context(patch.object(runner, name))
+            boundaries['run_artifact'].side_effect = lambda seed, *args: sequential_budgets.append(seed['remainingSeconds'])
             observer = stack.enter_context(patch.object(runner, "OwnedSimulatorBootLog"))
             observer.return_value.finalize.return_value = {"collectorCleaned": True}
-            stack.enter_context(patch.object(runner, "cleanup_simulator", return_value=True))
-            stack.enter_context(patch.object(runner, "record_toolchain", return_value={}))
-            stack.enter_context(patch.object(runner, "private_artifact", return_value={"manifest": {}}))
+            if not measure_full_budget:
+                stack.enter_context(patch.object(runner, "cleanup_simulator", return_value=True))
+                stack.enter_context(patch.object(runner, "record_toolchain", return_value={}))
+            stack.enter_context(patch.object(runner, "private_artifact", return_value={"manifest": {}, "remainingSeconds": 240}))
             stack.enter_context(patch.object(runner, "current_commit", return_value="synthetic"))
             stack.enter_context(patch.object(runner, "select_ui_destination", return_value=("ios27", "iphone")))
             stack.enter_context(patch.object(runner, "output", side_effect=output))
+            if measure_full_budget:
+                stack.enter_context(patch.object(lifecycle, "output", side_effect=output))
             stack.enter_context(patch.object(runner.failure_observation, "simctl_output",
                 side_effect=container_output))
             stack.enter_context(patch.object(runner, "run_owned_phase", side_effect=phase))
@@ -106,18 +130,50 @@ class LayoutRunnerBudgetTests(unittest.TestCase):
                 "xctestrun": "Synthetic.xctestrun", "simulatorUUID": device}))
             # Product bytes are an external fixture; keep the actual test command builder.
             stack.enter_context(patch.object(runner.help_provenance, "_unchanged_products"))
-            with redirect_stdout(io.StringIO()), self.assertRaises(type(primary)) as caught:
+            expected_failure = self.assertRaises((type(primary), subprocess.TimeoutExpired)) if not successful else nullcontext()
+            with redirect_stdout(io.StringIO()), expected_failure as caught:
                 runner.main()
-            self.assertIs(caught.exception, primary, "Extra budget must not turn a native assertion failure into success")
+            if not successful:
+                self.assertIs(caught.exception, build_failures[0] if build_failures else primary,
+                              "Extra budget must preserve the original failure object")
             selection_file = results / "selection.json"
             selected = json.loads(selection_file.read_text()) if selection_file.exists() else None
             fixture = boundaries["install_fixture"]
             details = {"containerCalls": container_calls, "fixtureCalls": fixture.call_count,
                 "fixtureDestination": str(fixture.call_args.args[1]) if fixture.call_args else None,
-                "expectedFixtureDestination": str(root / "Containers/Data/Application/synthetic/Library/Application Support/Telemetry")}
+                "expectedFixtureDestination": str(root / "Containers/Data/Application/synthetic/Library/Application Support/Telemetry"),
+                "sequentialBudgets": sequential_budgets, "buildFailures": build_failures}
         ui = next((call for call in calls if call[1] == "test.log"), None)
-        self.assertEqual(next(call[2] for call in calls if call[1] == "build.log"), 600)
+        self.assertEqual(next(call[2] for call in calls if call[1] == "build.log"),
+                         900 if selection == ["--se-viewport"] else 600)
         return ui, selected, details
+
+    def test_se_build_can_finish_at_virtual750_without_changing_ui_budget(self):
+        ui, selected, details = self.run_selection(["--se-viewport"], build_ready_after=750)
+        self.assertEqual(details['buildFailures'], [])
+        self.assertEqual(ui[2], 1200)
+        self.assertEqual(selected['tests'], runner.SE_VIEWPORT_TESTS)
+
+    def test_se_build_past900_preserves_timeout_without_install_or_ui(self):
+        ui, _, details = self.run_selection(["--se-viewport"], build_ready_after=901)
+        self.assertIsNone(ui)
+        self.assertEqual(details['containerCalls'], [])
+        self.assertEqual(details['fixtureCalls'], 0)
+        self.assertEqual(details['buildFailures'][0].timeout, 900)
+        self.assertEqual(details['buildFailures'][0].output, b'late build progress')
+
+    def test_se_job_covers_real_sequential_handoffs_and_explicit_reserves(self):
+        _, _, details = self.run_selection(["--se-viewport"], successful=True, measure_full_budget=True)
+        # Actual runner calls:4 toolchain,Seed,catalog/create,boot/bootstatus,
+        # XcodeGen,build/install/container,UI,summary/attachments,shutdown/delete.
+        self.assertEqual(details['sequentialBudgets'],
+                         [60, 60, 60, 60, 240, 60, 60, 60, 600, 120, 900, 600, 180, 1200, 60, 120, 60, 60])
+        self.assertEqual(sum(details['sequentialBudgets']), 4560)
+        reserves = {'workflowToolchain': 240, 'nativeContracts': 600, 'preparation': 180,
+                    'upload': 180, 'observationAndProcessCleanup': 240}
+        workflow = Path(__file__).resolve().parents[2] / '.github/workflows/native-reliability.yml'
+        minutes = workflow_timeout(job_block(workflow.read_text(), 'native-se-viewport'), 'se')
+        self.assertGreaterEqual(minutes * 60, sum(details['sequentialBudgets']) + sum(reserves.values()))
 
     def test_actual_layout_command_gets_1800_seconds_and_other_selections_keep_1200(self):
         cases = [(["--group", "layout"], 1800, 14)]
@@ -170,7 +226,7 @@ class LayoutRunnerBudgetTests(unittest.TestCase):
                 with self.subTest(workflow=filename, group=group):
                     self.assertEqual(workflow_timeout(block, group), expected)
         se = job_block((root / ".github/workflows/native-reliability.yml").read_text(), "native-se-viewport")
-        self.assertEqual(workflow_timeout(se, "layout"), 57)
+        self.assertEqual(workflow_timeout(se, "layout"), 100)
 
 
 if __name__ == "__main__":

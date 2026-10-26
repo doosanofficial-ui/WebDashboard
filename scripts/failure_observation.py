@@ -38,7 +38,110 @@ _worker_checkpoint('module-imports-complete')
 
 DIAGNOSTIC_BUDGET_SECONDS = 20
 PROBE_BUDGET_SECONDS = 3
+PROBE_STOP_WAIT_SECONDS = 1
+PROBE_FINAL_REAP_SECONDS = 2
+DIAGNOSTIC_GROUP_CONFIRMATION_SECONDS = 1
 MAX_PROBE_OUTPUT_BYTES = 2 * 1024 * 1024
+MAX_UI_LOG_BYTES = 2 * 1024 * 1024
+MAX_UI_LOG_LINE_CHARACTERS = 1024
+
+
+def observe_ui_test_log(log, destination):
+    """Read existing log boundaries only; no query, retry, capture or test verdict.
+
+    XCTest's Start Test text has no timezone. Adjacent t= rows bracket log
+    emission, not query duration or the time at which an underlying fault began.
+    The log does not expose the Help step/loop iteration; keep them unknown.
+    """
+    import hashlib
+    value = {'schemaVersion': 1, 'sourceSHA256': None, 'bytesRead': 0, 'incomplete': False, 'cases': [],
+             'lineCharacterLimit': MAX_UI_LOG_LINE_CHARACTERS, 'oversizedLineCount': 0,
+             'scope': 'Existing XCTest log only; clock timezone, exact failure time and Help step/iteration unknown; no UI acceptance'}
+    try:
+        with log.open('rb') as stream:
+            raw = stream.read(MAX_UI_LOG_BYTES + 1)
+        value.update(bytesRead=len(raw), incomplete=len(raw) > MAX_UI_LOG_BYTES)
+        if not value['incomplete']:
+            value['sourceSHA256'] = hashlib.sha256(raw).hexdigest()
+        else:
+            value['sourcePrefixSHA256'] = hashlib.sha256(raw).hexdigest()
+        case = None
+        previous_time = pending_event = None
+        pending_failures = []
+        events = 0
+        for number, line in enumerate(raw[:MAX_UI_LOG_BYTES].decode('utf-8').splitlines(), 1):
+            if len(line) > MAX_UI_LOG_LINE_CHARACTERS:
+                value['incomplete'] = True
+                value['oversizedLineCount'] += 1
+                previous_time = pending_event = None
+                pending_failures = []  # Missing rows cannot establish an adjacent time boundary.
+                continue  # Bound every regex before processing an untrusted row.
+            boundary = re.fullmatch(r"Test Case '-\[(TelemetryUITests\.\w+) (test\w+)\]' (started\.|(passed|failed) \(([0-9.]+) seconds\)\.)", line)
+            if boundary:
+                identifier = boundary[1].replace('.', '/') + '/' + boundary[2]
+                if boundary[3] == 'started.':
+                    if len(value['cases']) >= 64:
+                        value['incomplete'] = True
+                        break
+                    case = {'case': identifier, 'startedLine': number, 'startTest': None, 'outcome': 'unknown',
+                            'durationSeconds': None, 'events': [], 'failures': []}
+                    value['cases'].append(case)
+                    previous_time = pending_event = None
+                    pending_failures = []
+                elif case is not None and case['case'] == identifier:
+                    duration = float(boundary[5])
+                    case.update(outcome=boundary[4], durationSeconds=duration if math.isfinite(duration) else None,
+                                finishedLine=number)
+                    case = None
+                continue
+            if case is None:
+                continue
+            timed = re.fullmatch(r'\s*t =\s*([0-9]+(?:\.[0-9]+)?)s\s+(.+)', line)
+            if timed:
+                relative, action = float(timed[1]), timed[2].strip()
+                if not math.isfinite(relative):
+                    continue
+                if pending_event is not None:
+                    pending_event['nextLogBoundary'] = {'line': number, 'relativeSeconds': relative}
+                    pending_event = None
+                for failure in pending_failures:
+                    failure['logBracketRelativeSeconds'][1] = relative
+                pending_failures = []
+                previous_time = relative
+                anchor = re.fullmatch(r'Start Test at ([0-9-]+ [0-9:.]+)', action)
+                if anchor:
+                    case['startTest'] = {'line': number, 'timestamp': anchor[1],
+                                         'relativeSeconds': relative, 'timezone': None}
+                image = re.search(r'"help-image-(setup|live|signals|sessions|replay|editor)"', action)
+                kind = ('app-launch' if action == 'Launch local.webdashboard.Telemetry' else
+                        'help-image-exists' if image and action.startswith('Checking existence of ') else
+                        'help-image-find' if image and action.startswith('Find the ') else None)
+                if kind:
+                    if events >= 512:
+                        value['incomplete'] = True
+                        continue
+                    retry = re.search(r'\(retry ([0-9]+)\)$', action)
+                    pending_event = {'line': number, 'kind': kind, 'relativeSeconds': relative,
+                        'nextLogBoundary': None, 'guide': image[1] if image else None,
+                        'step': None, 'iteration': None, 'existingXCTestRetry': int(retry[1]) if retry else None}
+                    case['events'].append(pending_event)
+                    events += 1
+            issue = re.search(r'(\w+\.swift):([0-9]+): error: -\[(TelemetryUITests\.\w+) (test\w+)\] :(.*)', line)
+            if issue and issue[3].replace('.', '/') + '/' + issue[4] == case['case']:
+                if len(case['failures']) >= 32:
+                    value['incomplete'] = True
+                    continue
+                kind = ('ui-query-timeout' if 'Timed out while evaluating UI query' in issue[5] else
+                        'application-missing-pid' if 'does not have a process ID' in issue[5] else 'xctest-failure')
+                failure = {'line': number, 'kind': kind, 'file': issue[1], 'sourceLine': int(issue[2]),
+                           'failureOccurredAt': None, 'logBracketRelativeSeconds': [previous_time, None]}
+                case['failures'].append(failure)
+                pending_failures.append(failure)
+        return safe_write(destination, value)
+    except Exception as error:
+        value.update(incomplete=True, errorType=type(error).__name__)
+        safe_write(destination, value)
+        return False
 
 
 def resources():
@@ -420,7 +523,7 @@ def parse_probe(name, raw, simulator):
     return {}  # Neutral or unknown probes never publish their output.
 
 
-def run_probe(name, command, timeout, simulator):
+def run_probe(name, command, timeout, simulator, owned_children=None):
     began = time.monotonic()
     value = {'name': name, 'startedMonotonic': began, 'timeoutSeconds': timeout,
              'childExitCode': None, 'childReaped': False, 'kernelExitTimestamp': None}
@@ -431,6 +534,8 @@ def run_probe(name, command, timeout, simulator):
             raise subprocess.TimeoutExpired(command, timeout)
         value['launchRequestedMonotonic'] = time.monotonic()
         child = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        if owned_children is not None:
+            owned_children.append((child, value))  # Retain the direct child until wait confirms its reap.
         value['launchReturnedMonotonic'] = time.monotonic()
         remaining = timeout - (time.monotonic() - began)
         if remaining <= 0:
@@ -466,7 +571,7 @@ def run_probe(name, command, timeout, simulator):
         if child is not None:
             try:
                 child.kill()
-                child.wait(timeout=1)
+                child.wait(timeout=PROBE_STOP_WAIT_SECONDS)
                 value.update(childExitCode=child.returncode, childReaped=True,
                              forcedStop=True, completionObservedMonotonic=time.monotonic())
             except Exception as cleanup_error:
@@ -474,6 +579,8 @@ def run_probe(name, command, timeout, simulator):
     finally:
         if child is not None and child.stdout is not None:
             child.stdout.close()
+        if owned_children is not None and value['childReaped']:
+            owned_children.remove((child, value))
     value['elapsedSeconds'] = time.monotonic() - began
     return value
 
@@ -500,6 +607,7 @@ def replace_worker_journal(path, value):
 
 
 def worker(results, simulator, deadline):
+    owned_children = []
     probes = [('neutral-process', [sys.executable, '-c', 'pass'])]
     if simulator:
         probes.append(('owned-simulator-state', ['xcrun', 'simctl', 'list', 'devices', simulator, '--json']))
@@ -559,16 +667,40 @@ def worker(results, simulator, deadline):
                 value['deadlineReached'] = True
                 break
             probe = observe_stage(name,
-                lambda: run_probe(name, command, min(PROBE_BUDGET_SECONDS, deadline - time.monotonic()), simulator))
+                lambda: run_probe(name, command, min(PROBE_BUDGET_SECONDS, deadline - time.monotonic()), simulator,
+                                  owned_children))
             if probe is None:
                 break
             value['probes'].append(probe)
+            if owned_children:
+                probe['unreapedChildObserved'] = True
+                value['stoppedReason'] = 'unreaped-probe-child'
             publish()
+            if owned_children:
+                break  # Do not create more children while ownership of this one remains unresolved.
         value['finishedMonotonic'] = time.monotonic()
         publish()
-        return 0 if all(p.get('childReaped') or p.get('errorType') == 'FileNotFoundError' for p in value['probes']) else 1
+        return 0 if not owned_children and all(p.get('childReaped') or p.get('errorType') == 'FileNotFoundError'
+                                               for p in value['probes']) else 1
     except JournalWriteError:
         return 2
+    finally:
+        if owned_children:
+            child, probe = owned_children[0]
+            cleanup = value['probeCleanup'] = {'timeoutSeconds': PROBE_FINAL_REAP_SECONDS,
+                'isAdditionalToObservationBudget': True, 'childReaped': False,
+                'startedMonotonic': time.monotonic()}
+            try:
+                child.wait(timeout=PROBE_FINAL_REAP_SECONDS)  # No repeated signal or new process query.
+                cleanup.update(childReaped=True, childExitCode=child.returncode)
+                probe.update(childReaped=True, childExitCode=child.returncode,
+                             completionObservedMonotonic=time.monotonic())
+                owned_children.clear()
+            except Exception as error:
+                cleanup['errorType'] = type(error).__name__
+            cleanup['finishedMonotonic'] = time.monotonic()
+            value['finishedMonotonic'] = time.monotonic()
+            replace_worker_journal(destination, value)  # Never replace a prior worker failure.
 
 
 def observe_first_failure(error, results, simulator, phase, run_phase=None, snapshot=None, deadline=None, clock=None, collect_diagnostics=True):
@@ -609,10 +741,14 @@ def observe_first_failure(error, results, simulator, phase, run_phase=None, snap
             command = [sys.executable, str(Path(__file__).resolve()), '--worker', str(results),
                        '--simulator', simulator or '-', '--deadline', str(deadline)]
             status['diagnosisRequestedMonotonic'] = time.monotonic()
+            cleanup_budget = PROBE_STOP_WAIT_SECONDS + PROBE_FINAL_REAP_SECONDS
+            status.update(observationBudgetSeconds=budget, workerCleanupReserveSeconds=cleanup_budget,
+                          workerTimeoutSeconds=budget + cleanup_budget,
+                          cleanupIsAdditionalToObservationBudget=True)
             try:
                 recorded = run_phase(command, results / 'failure-diagnostic-worker.log',
-                    results / 'failure-diagnostic-worker.json', budget,
-                    ensure_group_cleanup=True)
+                    results / 'failure-diagnostic-worker.json', budget + cleanup_budget,
+                    ensure_group_cleanup=True, group_cleanup_timeout=DIAGNOSTIC_GROUP_CONFIRMATION_SECONDS)
                 status['success'] = bool(recorded and recorded.get('exitCode') == 0)
             except Exception as diagnostic_error:
                 status['errorType'] = type(diagnostic_error).__name__
@@ -622,7 +758,8 @@ def observe_first_failure(error, results, simulator, phase, run_phase=None, snap
                 status['worker'] = {key: recorded.get(key) for key in (
                     'exitCode', 'timedOut', 'launched', 'launchRequestedElapsedSeconds',
                     'launchReturnedElapsedSeconds', 'elapsedSeconds', 'completionWaiterStopped',
-                    'groupTermSent', 'groupKillSent', 'groupStillExistsAfterLeaderWait', 'groupExistsAfterCleanup')}
+                    'groupTermSent', 'groupKillSent', 'groupStillExistsAfterLeaderWait', 'groupExistsAfterCleanup',
+                    'groupCleanupConfirmationBudgetSeconds', 'groupCleanupConfirmationElapsedSeconds')}
                 final_group = recorded.get('groupExistsAfterCleanup')
                 if type(final_group) is bool:
                     status['ownedGroupCleanupResolved'] = not final_group

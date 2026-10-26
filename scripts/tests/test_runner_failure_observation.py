@@ -68,7 +68,7 @@ class FirstFailureObservationTests(unittest.TestCase):
                 observe(OSError('later cleanup failure'), folder, '11111111-1111-4111-8111-111111111111', 'cleanup', run_phase=execute)
             self.assertEqual((folder/'first-failure-observation.json').read_bytes(), before)
             self.assertEqual(execute.call_count, 1)
-            self.assertEqual(execute.call_args.args[3], 20)
+            self.assertEqual(execute.call_args.args[3], 23)  #20 observation +1 stop wait +2 final reap.
             value = json.loads(before)
             self.assertEqual(value['errorType'], 'TimeoutExpired')
             self.assertEqual(value['diagnosticBudgetSeconds'], 20)

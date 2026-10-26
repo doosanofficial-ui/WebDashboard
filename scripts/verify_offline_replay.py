@@ -31,6 +31,7 @@ from failure_observation import observe_first_failure
 
 APP_INSTALL_TIMEOUT_SECONDS = 600
 APP_CONTAINER_TIMEOUT_SECONDS = 180  # communicate wait; launch/recording/cleanup are additional.
+SE_APP_BUILD_TIMEOUT_SECONDS = 900  # Finite SE-only candidate after late progress at the600-second stop.
 
 
 # Explicit, disjoint 10 + 1 + 14 + 4 + 1 + 1 selectors; route and each maximum-text language have their own budget.
@@ -882,7 +883,7 @@ def main():
             if export_audit_enabled:
                 base.append(export_fixture.SWIFT_CONDITION)
             run_owned_phase(base + ["build-for-testing" if help_capture_enabled else "build"], results / "build.log",
-                            results / "build-process.json", 600)
+                            results / "build-process.json", SE_APP_BUILD_TIMEOUT_SECONDS if args.se_viewport else 600)
             help_run = None
             if help_capture_enabled:
                 # These final app/XCTest/runner products are installed/tested as-is.
@@ -909,9 +910,15 @@ def main():
                        if help_run is not None else base + ["-resultBundlePath", str(bundle)] + selected_tests + ["test"])
             (results / "command.json").write_text(json.dumps(command, indent=2))
             failure_phase = "ui-test"
-            with export_audit.RunnerHeartbeat(results / "runner-heartbeat.json") if export_audit_enabled else nullcontext():
-                run_owned_phase(command, results / "test.log", results / "test-process.json",
-                                1800 if args.group == "layout" else 1200)
+            try:
+                with export_audit.RunnerHeartbeat(results / "runner-heartbeat.json") if export_audit_enabled else nullcontext():
+                    run_owned_phase(command, results / "test.log", results / "test-process.json",
+                                    1800 if args.group == "layout" else 1200)
+            finally:
+                try:
+                    failure_observation.observe_ui_test_log(results / "test.log", results / "ui-test-log-observation.json")
+                except Exception:
+                    pass  # Optional log parsing cannot replace the original UI result or cleanup.
             failure_phase = "result-read"
             summary = json.loads(output(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)]))
             (results / "summary.json").write_text(json.dumps(summary, indent=2))
