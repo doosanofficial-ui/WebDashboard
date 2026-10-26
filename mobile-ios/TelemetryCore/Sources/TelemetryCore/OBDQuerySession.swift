@@ -38,6 +38,12 @@ public enum OBDQueryOutcome: Equatable, Sendable {
     case failure(queryID: String, error: OBDQuerySessionError)
 }
 
+public enum OBDQuerySupport: Equatable, Sendable {
+    case unknown
+    case supported
+    case unsupported
+}
+
 /// Owns one diagnostic transport connection. It never starts passive monitor
 /// mode and must not be used concurrently with ELM327Session on the same link.
 public actor OBDQuerySession {
@@ -49,8 +55,21 @@ public actor OBDQuerySession {
     private let transport: any CANTransport
     private let sourceAdapter: String
     private let sourceTransport: String
+    private struct PendingResponse {
+        let id: UUID
+        let generation: UUID
+        let continuation: CheckedContinuation<String, Error>
+    }
+
+    private var generation = UUID()
+    private var startupTask: Task<Void, Error>?
+    private var startupGeneration: UUID?
+    private var shutdownTask: Task<Void, Never>?
+    private var shutdownID: UUID?
+    private var stopRequested = false
+    private var writeTasks: [UUID: Task<Void, Never>] = [:]
     private var readerTask: Task<Void, Never>?
-    private var responseWaiter: CheckedContinuation<String, Error>?
+    private var responseWaiter: PendingResponse?
     private var responseBuffer = Data()
     private var sequence: UInt64 = 0
 
@@ -65,64 +84,96 @@ public actor OBDQuerySession {
     }
 
     public func start() async throws {
-        guard state == .disconnected else { throw OBDQuerySessionError.invalidState }
+        guard state == .disconnected, startupTask == nil, shutdownTask == nil else {
+            throw OBDQuerySessionError.invalidState
+        }
+        let currentGeneration = UUID()
+        generation = currentGeneration
         state = .connecting
         lastError = nil
-        do {
-            try await connectWithTimeout()
-            state = .initializing
-            let incoming = await transport.incoming()
-            readerTask = Task { [weak self] in
-                do {
-                    for try await chunk in incoming {
-                        await self?.ingest(chunk)
-                    }
-                    await self?.transitionToRecovery(.disconnected)
-                } catch is CancellationError {
-                    return
-                } catch {
-                    await self?.transitionToRecovery(.transport)
-                }
+        let pending = Task { try await initialize(generation: currentGeneration) }
+        startupTask = pending
+        startupGeneration = currentGeneration
+        defer {
+            if startupGeneration == currentGeneration {
+                startupTask = nil
+                startupGeneration = nil
             }
-            try await issue("AT H1\r")
-            // Queries contain service/PID/DID only: ELM327 must insert the PCI
-            // byte. H1 preserves raw CAN headers/PCI on received responses.
-            try await issue("AT CAF1\r")
-            state = .ready
+        }
+        do {
+            try await withTaskCancellationHandler {
+                try await pending.value
+            } onCancel: {
+                pending.cancel()
+            }
         } catch is CancellationError {
-            await stop()
+            if generation == currentGeneration {
+                await stop()
+            } else if startupGeneration == currentGeneration, let shutdownTask {
+                await shutdownTask.value
+            }
             throw CancellationError()
         } catch let error as OBDQuerySessionError {
-            await failStart(error)
+            await failStart(error, generation: currentGeneration)
             throw error
         } catch {
-            await failStart(.transport)
+            await failStart(.transport, generation: currentGeneration)
             throw OBDQuerySessionError.transport
         }
     }
 
+    // The owned startup task only returns errors. Its caller performs cleanup,
+    // so shutdown can await startup without startup awaiting its own shutdown.
+    private func initialize(generation: UUID) async throws {
+        try await connectWithTimeout()
+        try requireActive(generation: generation)
+        state = .initializing
+        let incoming = await transport.incoming()
+        try requireActive(generation: generation)
+        readerTask = Task { [weak self] in
+            do {
+                for try await chunk in incoming {
+                    guard !Task.isCancelled else { return }
+                    await self?.ingest(chunk, generation: generation)
+                }
+                await self?.transitionToRecovery(.disconnected, generation: generation)
+            } catch is CancellationError {
+                return
+            } catch {
+                await self?.transitionToRecovery(.transport, generation: generation)
+            }
+        }
+        try await issue("AT H1\r", generation: generation)
+        // Queries contain service/PID/DID only: ELM327 must insert the PCI
+        // byte. H1 preserves raw CAN headers/PCI on received responses.
+        try await issue("AT CAF1\r", generation: generation)
+        try requireActive(generation: generation)
+        state = .ready
+    }
+
     public func stop() async {
+        if let shutdownTask {
+            stopRequested = true
+            await shutdownTask.value
+            return
+        }
         guard state != .disconnected else { return }
-        responseWaiter?.resume(throwing: OBDQuerySessionError.disconnected)
-        responseWaiter = nil
-        readerTask?.cancel()
-        readerTask = nil
-        await transport.close()
-        responseBuffer.removeAll(keepingCapacity: false)
-        state = .disconnected
+        await beginShutdown(finalState: .disconnected, error: .disconnected).value
     }
 
     public func query(_ query: OBDQueryDefinition) async throws -> OBDQueryResult {
-        guard state == .ready else { throw OBDQuerySessionError.invalidState }
+        guard state == .ready, shutdownTask == nil else { throw OBDQuerySessionError.invalidState }
+        let currentGeneration = generation
         state = .querying
         defer {
-            if state == .querying { state = .ready }
+            if generation == currentGeneration, state == .querying { state = .ready }
         }
 
         do {
-            try await issue("AT SH \(formatIdentifier(query.requestCANID, extended: query.isExtended))\r")
-            try await issue("AT CRA \(formatIdentifier(query.responseCANID, extended: query.isExtended))\r")
-            let text = try await exchange(Data(query.requestString.utf8), timeout: query.timeout)
+            try await issue("AT SH \(formatIdentifier(query.requestCANID, extended: query.isExtended))\r", generation: currentGeneration)
+            try await issue("AT CRA \(formatIdentifier(query.responseCANID, extended: query.isExtended))\r", generation: currentGeneration)
+            let text = try await exchange(Data(query.requestString.utf8), timeout: query.timeout, generation: currentGeneration)
+            try requireActive(generation: currentGeneration)
             let normalized = text.uppercased().replacingOccurrences(of: " ", with: "")
             if normalized.contains("BUFFERFULL") { throw OBDQuerySessionError.bufferFull }
             if normalized == "?" { throw OBDQuerySessionError.unsupportedCommand }
@@ -153,19 +204,19 @@ public actor OBDQuerySession {
             return OBDQueryResult(queryID: query.id, response: response, signals: decoded)
         } catch let error as OBDQuerySessionError {
             if isRecoverableSessionFailure(error) {
-                transitionToRecovery(error)
+                transitionToRecovery(error, generation: currentGeneration)
             }
             throw error
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            transitionToRecovery(.transport)
+            transitionToRecovery(.transport, generation: currentGeneration)
             throw OBDQuerySessionError.transport
         }
     }
 
-    private func issue(_ command: String) async throws {
-        let response = try await exchange(Data(command.utf8), timeout: 1)
+    private func issue(_ command: String, generation: UUID) async throws {
+        let response = try await exchange(Data(command.utf8), timeout: 1, generation: generation)
         let normalized = response.uppercased().replacingOccurrences(of: " ", with: "")
         if normalized.contains("BUFFERFULL") { throw OBDQuerySessionError.bufferFull }
         if normalized.contains("?") || !normalized.contains("OK") {
@@ -173,34 +224,58 @@ public actor OBDQuerySession {
         }
     }
 
-    private func exchange(_ data: Data, timeout: Double) async throws -> String {
+    private func exchange(_ data: Data, timeout: Double, generation: UUID) async throws -> String {
+        try requireActive(generation: generation)
         guard responseWaiter == nil else { throw OBDQuerySessionError.invalidState }
+        let exchangeID = UUID()
         let timeoutNanoseconds = UInt64(max(0.1, min(timeout, 30)) * 1_000_000_000)
         let timeoutTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: timeoutNanoseconds)
             guard !Task.isCancelled else { return }
-            await self?.failPending(.timeout)
+            await self?.failPending(.timeout, exchangeID: exchangeID, generation: generation)
         }
         defer { timeoutTask.cancel() }
         return try await withTaskCancellationHandler(operation: {
             try await withCheckedThrowingContinuation { continuation in
-                responseWaiter = continuation
-                if Task.isCancelled {
-                    responseWaiter = nil
+                guard self.generation == generation, shutdownTask == nil, !Task.isCancelled else {
                     continuation.resume(throwing: OBDQuerySessionError.disconnected)
                     return
                 }
-                Task { [weak self, transport] in
+                responseWaiter = PendingResponse(id: exchangeID, generation: generation, continuation: continuation)
+                let writing = Task { [weak self, transport] in
                     do {
+                        guard await self?.canWrite(exchangeID: exchangeID, generation: generation) == true else {
+                            throw CancellationError()
+                        }
+                        try Task.checkCancellation()
                         try await transport.write(data)
+                    } catch is CancellationError {
+                        await self?.failPending(.disconnected, exchangeID: exchangeID, generation: generation)
                     } catch {
-                        await self?.failPending(.transport)
+                        await self?.failPending(.transport, exchangeID: exchangeID, generation: generation)
                     }
+                    await self?.finishWrite(exchangeID)
                 }
+                writeTasks[exchangeID] = writing
             }
         }, onCancel: { [weak self] in
-            Task { await self?.failPending(.disconnected) }
+            Task { await self?.failPending(.disconnected, exchangeID: exchangeID, generation: generation) }
         })
+    }
+
+    private func requireActive(generation: UUID) throws {
+        try Task.checkCancellation()
+        guard self.generation == generation, shutdownTask == nil, state != .disconnected else {
+            throw OBDQuerySessionError.disconnected
+        }
+    }
+
+    private func canWrite(exchangeID: UUID, generation: UUID) -> Bool {
+        self.generation == generation && shutdownTask == nil && responseWaiter?.id == exchangeID
+    }
+
+    private func finishWrite(_ exchangeID: UUID) {
+        writeTasks.removeValue(forKey: exchangeID)
     }
 
     private func connectWithTimeout() async throws {
@@ -216,15 +291,15 @@ public actor OBDQuerySession {
         }
     }
 
-    private func ingest(_ chunk: Data) {
-        guard state != .disconnected else { return }
+    private func ingest(_ chunk: Data, generation: UUID) {
+        guard self.generation == generation, shutdownTask == nil, state != .disconnected else { return }
         guard chunk.allSatisfy(Self.isELMByte) else {
-            transitionToRecovery(.transport)
+            transitionToRecovery(.transport, generation: generation)
             return
         }
         responseBuffer.append(chunk)
         guard responseBuffer.count <= 4096 else {
-            transitionToRecovery(.bufferFull)
+            transitionToRecovery(.bufferFull, generation: generation)
             return
         }
         while let prompt = responseBuffer.firstIndex(of: 62) {
@@ -233,32 +308,81 @@ public actor OBDQuerySession {
             guard !response.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
             guard let responseWaiter else { continue }
             self.responseWaiter = nil
-            responseWaiter.resume(returning: response)
+            responseWaiter.continuation.resume(returning: response)
         }
     }
 
-    private func failPending(_ error: OBDQuerySessionError) {
+    private func failPending(_ error: OBDQuerySessionError, exchangeID: UUID? = nil, generation: UUID? = nil) {
         guard let responseWaiter else { return }
+        if let exchangeID, responseWaiter.id != exchangeID { return }
+        if let generation, self.generation != generation || responseWaiter.generation != generation { return }
         self.responseWaiter = nil
-        responseWaiter.resume(throwing: error)
+        responseWaiter.continuation.resume(throwing: error)
     }
 
-    private func failStart(_ error: OBDQuerySessionError) async {
+    private func failStart(_ error: OBDQuerySessionError, generation: UUID) async {
+        guard self.generation == generation else {
+            // The reader may already have begun this startup's cleanup. Join
+            // it outside the initialization task before returning its error.
+            if startupGeneration == generation, let shutdownTask {
+                await shutdownTask.value
+            }
+            return
+        }
         lastError = error
-        await transport.close()
-        readerTask?.cancel()
-        readerTask = nil
-        responseWaiter = nil
-        state = .error
+        await beginShutdown(finalState: .error, error: error).value
     }
 
-    private func transitionToRecovery(_ error: OBDQuerySessionError) {
-        guard state != .disconnected && state != .recovering else { return }
+    private func transitionToRecovery(_ error: OBDQuerySessionError, generation: UUID) {
+        guard self.generation == generation, state != .disconnected, state != .recovering else { return }
+        let finalState: OBDQuerySessionState = state == .initializing || state == .connecting ? .error : .recovering
         lastError = error
         state = .recovering
+        _ = beginShutdown(finalState: finalState, error: error)
+    }
+
+    /// Owns every close and joins all work that could still use the transport.
+    /// A concurrent Stop joins this same task; its return cannot expose a new
+    /// connection to a close or write left over from the previous run.
+    private func beginShutdown(finalState: OBDQuerySessionState, error: OBDQuerySessionError) -> Task<Void, Never> {
+        if let shutdownTask {
+            if finalState == .disconnected { stopRequested = true }
+            return shutdownTask
+        }
+        let id = UUID()
+        shutdownID = id
+        generation = UUID()
+        stopRequested = finalState == .disconnected
+        let startup = startupTask
+        let reader = readerTask
+        let writes = Array(writeTasks.values)
+        startup?.cancel()
+        reader?.cancel()
+        for write in writes { write.cancel() }
         failPending(error)
-        readerTask?.cancel()
-        Task { [transport] in await transport.close() }
+        let drain = Task { [weak self, transport] in
+            // Close first so a transport waiting in connect/write can unwind.
+            await transport.close()
+            _ = await startup?.result
+            await reader?.value
+            for write in writes { await write.value }
+            await self?.finishShutdown(id: id, finalState: finalState)
+        }
+        shutdownTask = drain
+        return drain
+    }
+
+    private func finishShutdown(id: UUID, finalState: OBDQuerySessionState) {
+        guard shutdownID == id else { return }
+        startupTask = nil
+        startupGeneration = nil
+        readerTask = nil
+        writeTasks.removeAll()
+        responseBuffer.removeAll(keepingCapacity: false)
+        state = stopRequested ? .disconnected : finalState
+        stopRequested = false
+        shutdownID = nil
+        shutdownTask = nil
     }
 
     private func isRecoverableSessionFailure(_ error: OBDQuerySessionError) -> Bool {
@@ -284,17 +408,58 @@ public actor OBDQuerySession {
 /// one optional manufacturer query is emitted as data and does not stop the
 /// remaining candidates.
 public actor OBDQueryScheduler {
+    private struct Target: Hashable {
+        let requestCANID: UInt32
+        let responseCANID: UInt32
+        let isExtended: Bool
+
+        init(_ query: OBDQueryDefinition) {
+            requestCANID = query.requestCANID
+            responseCANID = query.responseCANID
+            isExtended = query.isExtended
+        }
+    }
+
     private let session: OBDQuerySession
     private var task: Task<Void, Never>?
+    private var shutdown: Task<Void, Never>?
     private var continuation: AsyncStream<OBDQueryOutcome>.Continuation?
+    private var supportedPIDPages: [Target: [UInt8: UInt32]] = [:]
+    private var generation = UUID()
+    private var isStarting = false
 
     public init(session: OBDQuerySession) {
         self.session = session
     }
 
+    /// Only a directly observed, same-target Mode 01 page proves support.
+    /// Unknown queries retain normal polling/error handling, including queries
+    /// before a bitmap in an imported profile. No discovery queries are added.
+    public func support(for query: OBDQueryDefinition) -> OBDQuerySupport {
+        guard query.service == .mode01, let pid = UInt8(query.command, radix: 16), pid > 0 else {
+            return .unknown
+        }
+        let page = UInt8(((Int(pid) - 1) / 32) * 32)
+        guard let mask = supportedPIDPages[Target(query)]?[page] else { return .unknown }
+        let bit = UInt32(1) << (32 - (Int(pid) - Int(page)))
+        return mask & bit == 0 ? .unsupported : .supported
+    }
+
     public func start(queries: [OBDQueryDefinition]) async throws -> AsyncStream<OBDQueryOutcome> {
-        guard !queries.isEmpty, task == nil else { throw OBDQuerySessionError.invalidState }
+        guard !queries.isEmpty, task == nil, shutdown == nil, !isStarting else {
+            throw OBDQuerySessionError.invalidState
+        }
+        let currentGeneration = UUID()
+        isStarting = true
+        defer {
+            if generation == currentGeneration { isStarting = false }
+        }
+        generation = currentGeneration
+        supportedPIDPages.removeAll()
         try await session.start()
+        guard generation == currentGeneration else {
+            throw OBDQuerySessionError.disconnected
+        }
         let pair = AsyncStream<OBDQueryOutcome>.makeStream()
         continuation = pair.continuation
         task = Task { [weak self, session] in
@@ -302,17 +467,23 @@ public actor OBDQueryScheduler {
             while !Task.isCancelled && !terminate {
                 for query in queries {
                     guard !Task.isCancelled else { break }
+                    guard await self?.generation == currentGeneration else { terminate = true; break }
+                    // Explicitly configured bitmap queries always remain eligible
+                    // for refresh, even when an earlier continuation bit is clear.
+                    if Self.bitmapPage(for: query) == nil {
+                        if await self?.support(for: query) == .unsupported { continue }
+                    }
                     do {
                         let result = try await session.query(query)
-                        await self?.yield(.success(result))
+                        await self?.yield(.success(result), for: query, generation: currentGeneration)
                     } catch let error as OBDQuerySessionError {
-                        await self?.yield(.failure(queryID: query.id, error: error))
+                        await self?.yield(.failure(queryID: query.id, error: error), for: query, generation: currentGeneration)
                         terminate = Self.shouldTerminate(after: error)
                         if terminate { break }
                     } catch is CancellationError {
                         break
                     } catch {
-                        await self?.yield(.failure(queryID: query.id, error: .transport))
+                        await self?.yield(.failure(queryID: query.id, error: .transport), for: query, generation: currentGeneration)
                     }
                     do {
                         try await Task.sleep(nanoseconds: UInt64(query.pollInterval * 1_000_000_000))
@@ -321,25 +492,61 @@ public actor OBDQueryScheduler {
                     }
                 }
             }
-            await self?.finishStream()
+            await self?.finishStream(generation: currentGeneration)
         }
         return pair.stream
     }
 
     public func stop() async {
-        task?.cancel()
-        task = nil
+        if let shutdown { await shutdown.value; return }
+        let currentGeneration = UUID()
+        generation = currentGeneration
+        let pending = task
+        pending?.cancel()
+        supportedPIDPages.removeAll()
         finishStream()
-        await session.stop()
+        let drain = Task { [weak self, session] in
+            await session.stop()
+            await pending?.value
+            await self?.finishStop(generation: currentGeneration)
+        }
+        shutdown = drain
+        await drain.value
     }
 
-    private func yield(_ outcome: OBDQueryOutcome) {
+    private func finishStop(generation: UUID) {
+        guard self.generation == generation else { return }
+        task = nil
+        isStarting = false
+        shutdown = nil
+    }
+
+    private func yield(_ outcome: OBDQueryOutcome, for query: OBDQueryDefinition, generation: UUID) {
+        guard self.generation == generation else { return }
+        if let page = Self.bitmapPage(for: query) {
+            let mask: UInt32?
+            if case .success(let result) = outcome, result.response.payload.count == 4 {
+                mask = result.response.payload.reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
+            } else {
+                // Failed or malformed refreshes restore unknown; NO DATA is not
+                // evidence that a standard PID or manufacturer DID is unsupported.
+                mask = nil
+            }
+            supportedPIDPages[Target(query), default: [:]][page] = mask
+        }
         continuation?.yield(outcome)
     }
 
-    private func finishStream() {
+    private func finishStream(generation: UUID? = nil) {
+        if let generation, self.generation != generation { return }
         continuation?.finish()
         continuation = nil
+    }
+
+    private static func bitmapPage(for query: OBDQueryDefinition) -> UInt8? {
+        guard query.service == .mode01, let pid = UInt8(query.command, radix: 16),
+              pid.isMultiple(of: 32) else { return nil }
+        return pid
     }
 
     private static func shouldTerminate(after error: OBDQuerySessionError) -> Bool {
