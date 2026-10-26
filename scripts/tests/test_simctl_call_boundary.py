@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from unittest.mock import patch
@@ -57,10 +58,7 @@ class SimctlCallBoundaryTests(unittest.TestCase):
             self.assertLessEqual(receipt['launchRequestedMonotonic'], receipt['launchReturnedMonotonic'])
             self.assertLessEqual(receipt['launchReturnedMonotonic'], receipt['communicateStartedMonotonic'])
             self.assertIsNone(receipt['kernelExitTimestamp'])
-            if isinstance(error, subprocess.TimeoutExpired):
-                self.assertTrue(events)
-            else:
-                self.assertEqual(events, [], 'Timely/known exit must not launch optional native sampling')
+            self.assertEqual(events, [], 'Timeout cleanup and known exits must not launch optional native sampling')
             return value, error, receipt
 
     def test_original_success_output_returned_without_recording_container_path(self):
@@ -86,6 +84,74 @@ class SimctlCallBoundaryTests(unittest.TestCase):
         self.assertIsNone(receipt['firstFailure']['childExitCodeBeforeStop'])
         self.assertLessEqual(receipt['firstFailure']['observedMonotonic'], receipt['killRequestedMonotonic'])
         self.assertIsNotNone(receipt['childExitCode'])
+
+    def test_container_timeout_kills_and_reaps_without_entering_native_sampling(self):
+        command = ['xcrun', 'simctl', 'get_app_container', DEVICE,
+                   'local.webdashboard.Telemetry', 'data']
+        terminated = threading.Event()
+        events, children, original_errors = [], [], []
+        real_popen = subprocess.Popen
+
+        def launch(argv, **kwargs):
+            self.assertEqual(argv, command)
+            child = real_popen([sys.executable, '-B', '-c', 'import time;time.sleep(5)'], **kwargs)
+            children.append(child)
+            original_kill, original_wait, original_communicate = child.kill, child.wait, child.communicate
+
+            def kill():
+                events.append('kill')
+                original_kill()
+                terminated.set()
+
+            def wait(*args, **options):
+                events.append('wait')
+                return original_wait(*args, **options)
+
+            def communicate(*args, **options):
+                try:
+                    return original_communicate(*args, **options)
+                except subprocess.TimeoutExpired as error:
+                    original_errors.append(error)
+                    raise
+
+            child.kill, child.wait, child.communicate = kill, wait, communicate
+            return child
+
+        def slow_native(*args):
+            events.append('native')
+            terminated.wait(.7)
+            return {'executable': 'synthetic-simctl'}
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            try:
+                with patch.object(observation.subprocess, 'Popen', side_effect=launch), \
+                        patch.object(observation, 'owned_boundary', side_effect=slow_native) as native, \
+                        patch.object(observation, 'resources', return_value={}) as resources:
+                    with self.assertRaises(subprocess.TimeoutExpired) as caught:
+                        observation.simctl_output(command, root, 'app-container', .12)
+                native.assert_not_called()
+                resources.assert_not_called()
+                self.assertEqual(events.count('kill'), 1)
+                self.assertIn('wait', events[events.index('kill') + 1:])
+                self.assertTrue(terminated.is_set())
+                self.assertIsNotNone(children[0].returncode)
+                self.assertIs(caught.exception, original_errors[0])
+                self.assertEqual(caught.exception.timeout, .12)
+                receipt = json.loads((root / 'app-container-observation.json').read_text())
+                first = receipt['firstFailure']
+                self.assertIsNone(first['childExitCodeBeforeStop'])
+                self.assertIsNone(first['resources'])
+                boundary = first['ownedBoundary']
+                self.assertEqual((boundary['pid'], boundary['simulator']), (children[0].pid, DEVICE))
+                self.assertIsNone(boundary['executable'])
+                self.assertIs(boundary['executableObserved'], False)
+                self.assertTrue(boundary['skipped'])
+            finally:
+                for child in children:
+                    if child.returncode is None:
+                        child.kill()
+                    child.wait(timeout=3)
 
     def test_bootstatus_timeout_records_cached_identity_without_native_sampling(self):
         self.assertTrue(callable(getattr(observation, 'owned_boundary', None)), 'Native PID path observation is missing')

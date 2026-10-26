@@ -96,9 +96,33 @@ final class DashboardEditingUITests: XCTestCase {
         let active = widget("fixture-0", app); XCTAssertTrue(active.waitForExistence(timeout: 5))
         let before = active.value as? String
         let start = active.coordinate(withNormalizedOffset: .init(dx: 0.3, dy: 0.2))
-        start.press(forDuration: 0.2, thenDragTo: start.withOffset(.init(dx: active.frame.width / 2 + 4, dy: 0)), withVelocity: .slow, thenHoldForDuration: 0.2)
-        XCTAssertTrue(app.buttons["undo-dashboard-layout"].isEnabled)
-        XCTAssertNotEqual(active.value as? String, before)
+        let frame = active.frame
+        let offset = CGVector(dx: frame.width / 2 + 4, dy: 0)
+        let end = start.withOffset(offset)
+        start.press(forDuration: 0.2, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.2)
+        let undoEnabled = app.buttons["undo-dashboard-layout"].isEnabled
+        let moved = active.value as? String
+        // Reuse the original frame; these derived points add no pre-gesture AX query.
+        let derivedStart = CGPoint(x: frame.minX + frame.width * 0.3, y: frame.minY + frame.height * 0.2)
+        let observation: [String: Any] = [
+            "schemaVersion": 1, "test": "testLandscapeMoveUsesCurrentMeasuredGeometry",
+            "coordinateSource": "Derived from original frame; gesture coordinates remain element-relative",
+            "frame": ["x": frame.minX, "y": frame.minY, "width": frame.width, "height": frame.height],
+            "startNormalized": ["dx": 0.3, "dy": 0.2], "dragOffset": ["dx": offset.dx, "dy": offset.dy],
+            "derivedStart": ["x": derivedStart.x, "y": derivedStart.y],
+            "derivedEnd": ["x": derivedStart.x + offset.dx, "y": derivedStart.y + offset.dy],
+            "valueBefore": before.map { $0 as Any } ?? NSNull(), "undoEnabled": undoEnabled,
+            "valueAfter": moved.map { $0 as Any } ?? NSNull()
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: observation, options: [.sortedKeys]),
+           let json = String(data: data, encoding: .utf8) {
+            print("LANDSCAPE_LAYOUT_OBSERVATION " + json)
+            let attachment = XCTAttachment(data: data, uniformTypeIdentifier: "public.json")
+            attachment.name = "SYNTHETIC-magnetic-landscape-geometry"
+            attachment.lifetime = .keepAlways; add(attachment)
+        }
+        XCTAssertTrue(undoEnabled)
+        XCTAssertNotEqual(moved, before)
         capture(app, "magnetic-landscape-release")
         app.buttons["undo-dashboard-layout"].tap(); XCTAssertEqual(active.value as? String, before)
     }

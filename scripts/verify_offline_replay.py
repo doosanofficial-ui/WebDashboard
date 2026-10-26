@@ -30,6 +30,7 @@ from failure_observation import observe_first_failure
 
 
 APP_INSTALL_TIMEOUT_SECONDS = 600
+APP_CONTAINER_TIMEOUT_SECONDS = 180  # communicate wait; launch/recording/cleanup are additional.
 
 
 # Explicit, disjoint 10 + 1 + 14 + 4 + 1 + 1 selectors; route and each maximum-text language have their own budget.
@@ -897,7 +898,8 @@ def main():
                     results, "app-install", APP_INSTALL_TIMEOUT_SECONDS)
             failure_phase = "app-container"
             container = Path(failure_observation.simctl_output(["xcrun", "simctl", "get_app_container", simulator,
-                                     "local.webdashboard.Telemetry", "data"], results, failure_phase, timeout=60).strip())
+                                     "local.webdashboard.Telemetry", "data"], results, failure_phase,
+                                     timeout=APP_CONTAINER_TIMEOUT_SECONDS).strip())
             failure_phase = "fixture-install"
             install_fixture(fixture, container / "Library/Application Support/Telemetry")
             if export_audit_enabled:
@@ -908,7 +910,8 @@ def main():
             (results / "command.json").write_text(json.dumps(command, indent=2))
             failure_phase = "ui-test"
             with export_audit.RunnerHeartbeat(results / "runner-heartbeat.json") if export_audit_enabled else nullcontext():
-                run_owned_phase(command, results / "test.log", results / "test-process.json", 1200)
+                run_owned_phase(command, results / "test.log", results / "test-process.json",
+                                1800 if args.group == "layout" else 1200)
             failure_phase = "result-read"
             summary = json.loads(output(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)]))
             (results / "summary.json").write_text(json.dumps(summary, indent=2))

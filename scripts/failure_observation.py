@@ -245,8 +245,16 @@ def simctl_output(command, results, phase, timeout=60):
     child = None
     def note(error, source):
         try:
-            value['firstFailure'] = failure_snapshot(error, child.returncode, source)
-            value['firstFailure']['ownedBoundary'] = child_boundary(child, simulator)
+            timed_out = isinstance(error, subprocess.TimeoutExpired)
+            value['firstFailure'] = failure_snapshot(error, child.returncode, source,
+                                                     sample_resources=not timed_out)
+            if timed_out:
+                # Never delay kill/reap for a native PID lookup after timeout.
+                value['firstFailure']['ownedBoundary'] = {'pid': child.pid, 'simulator': simulator,
+                    'kernelExecTimestamp': None, 'executable': None, 'executableObserved': False,
+                    'skipped': 'Owned cleanup takes priority after Timeout'}
+            else:
+                value['firstFailure']['ownedBoundary'] = child_boundary(child, simulator)
         except Exception:
             pass  # Original exception and cleanup always take priority.
     try:

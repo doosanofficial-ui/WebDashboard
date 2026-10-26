@@ -161,7 +161,10 @@ class ReplayGroupTests(unittest.TestCase):
         for group in ['replay', 'replay-route', 'layout', 'help', 'help-max-en', 'help-max-ko']:
             self.assertIn('name: offline-replay-' + group + '-${{ github.sha }}', workflow)
             self.assertIn('path: ui-results/' + group, workflow)
-        self.assertIn('timeout-minutes: 55', workflow)
+        from test_layout_runner_budget import workflow_timeout
+        from test_native_ui_scheduling import job_block
+        self.assertEqual(workflow_timeout(job_block(workflow, 'native-replay-ui'), 'layout'), 67)
+        self.assertEqual(workflow_timeout(job_block(workflow, 'native-replay-ui'), 'replay'), 57)
         self.assertIn("if [ \"$UI_GROUP_RESULT\" != \"success\" ]", workflow)
 
     def test_missing_skipped_or_duplicated_route_cannot_pass_aggregate(self):
