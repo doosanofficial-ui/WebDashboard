@@ -51,10 +51,13 @@ class LayoutRunnerBudgetTests(unittest.TestCase):
     ]
 
     def run_selection(self, selection, container_error=None, build_ready_after=None,
-                      successful=False, measure_full_budget=False):
+                      successful=False, measure_full_budget=False, summary_count=None):
         calls = []
         container_calls = []
         sequential_budgets, build_failures = [], []
+        group = selection[selection.index("--group") + 1] if "--group" in selection else None
+        summary_count = summary_count if summary_count is not None else (
+            len(runner.TEST_GROUPS[group]) if group is not None else 2)
         primary = container_error or subprocess.CalledProcessError(65, ["xcodebuild", "synthetic-ui-test"])
         with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
             root = Path(directory)
@@ -76,7 +79,8 @@ class LayoutRunnerBudgetTests(unittest.TestCase):
                 if command[1:3] == ["simctl", "get_app_container"]:
                     return str(root / "Containers/Data/Application/synthetic")
                 if command[1:5] == ["xcresulttool", "get", "test-results", "summary"]:
-                    return json.dumps({"totalTestCount": 2, "passedTests": 2, "failedTests": 0, "skippedTests": 0})
+                    return json.dumps({"totalTestCount": summary_count, "passedTests": summary_count,
+                                       "failedTests": 0, "skippedTests": 0})
                 return ""
 
             def phase(command, log, receipt, timeout, **kwargs):
@@ -106,6 +110,13 @@ class LayoutRunnerBudgetTests(unittest.TestCase):
                 if measure_full_budget and name == "prepare_simulator":
                     continue
                 boundaries[name] = stack.enter_context(patch.object(runner, name))
+            def stage_synthetic_sources(source, staged):
+                app = staged / "App"
+                app.mkdir(parents=True, exist_ok=True)
+                (app / "AppHelpView.swift").write_bytes(
+                    (source / "mobile-ios/App/AppHelpView.swift").read_bytes())
+            if "stage_sources" in boundaries:
+                boundaries["stage_sources"].side_effect = stage_synthetic_sources
             boundaries['run_artifact'].side_effect = lambda seed, *args: sequential_budgets.append(seed['remainingSeconds'])
             observer = stack.enter_context(patch.object(runner, "OwnedSimulatorBootLog"))
             observer.return_value.finalize.return_value = {"collectorCleaned": True}
@@ -128,6 +139,9 @@ class LayoutRunnerBudgetTests(unittest.TestCase):
             stack.enter_context(patch.object(runner.help_provenance, "prepare_run", return_value={
                 "productsBefore": {"application": {"path": "Synthetic.app"}},
                 "xctestrun": "Synthetic.xctestrun", "simulatorUUID": device}))
+            stack.enter_context(patch.object(runner.help_sources, "finish_capture",
+                return_value={"sourceStableDuringRun": True}))
+            stack.enter_context(patch.object(runner.help_provenance, "finish_run", return_value={}))
             # Product bytes are an external fixture; keep the actual test command builder.
             stack.enter_context(patch.object(runner.help_provenance, "_unchanged_products"))
             expected_failure = self.assertRaises((type(primary), subprocess.TimeoutExpired)) if not successful else nullcontext()
@@ -142,7 +156,8 @@ class LayoutRunnerBudgetTests(unittest.TestCase):
             details = {"containerCalls": container_calls, "fixtureCalls": fixture.call_count,
                 "fixtureDestination": str(fixture.call_args.args[1]) if fixture.call_args else None,
                 "expectedFixtureDestination": str(root / "Containers/Data/Application/synthetic/Library/Application Support/Telemetry"),
-                "sequentialBudgets": sequential_budgets, "buildFailures": build_failures}
+                "sequentialBudgets": sequential_budgets, "buildFailures": build_failures,
+                "summaryCount": summary_count}
         ui = next((call for call in calls if call[1] == "test.log"), None)
         self.assertEqual(next(call[2] for call in calls if call[1] == "build.log"),
                          900 if selection == ["--se-viewport"] else 600)
@@ -174,6 +189,41 @@ class LayoutRunnerBudgetTests(unittest.TestCase):
         workflow = Path(__file__).resolve().parents[2] / '.github/workflows/native-reliability.yml'
         minutes = workflow_timeout(job_block(workflow.read_text(), 'native-se-viewport'), 'se')
         self.assertGreaterEqual(minutes * 60, sum(details['sequentialBudgets']) + sum(reserves.values()))
+
+    def test_non_se_group_handoffs_fit_each_workflow_allocation(self):
+        actual_seconds = {}
+        for group, tests in runner.TEST_GROUPS.items():
+            with self.subTest(group=group):
+                ui, selected, details = self.run_selection(["--group", group], successful=True,
+                    measure_full_budget=True, summary_count=len(tests))
+                ui_timeout = 1800 if group == "layout" else 1200
+                expected_handoffs = [60, 60, 60, 60, 240, 60, 60, 60, 600, 120,
+                                     600, 600, 180, ui_timeout, 60, 120]
+                if group == "replay":
+                    expected_handoffs.append(5)
+                expected_handoffs.extend([60, 60])
+                self.assertEqual(details["sequentialBudgets"], expected_handoffs)
+                self.assertEqual(details["summaryCount"], len(tests))
+                self.assertEqual(selected, {"group": group, "tests": tests})
+                selectors = [item for item in ui[0] if item.startswith("-only-testing:")]
+                self.assertEqual(selectors, ["-only-testing:" + test for test in tests])
+                actual_seconds[group] = sum(details["sequentialBudgets"])
+
+        root = Path(__file__).resolve().parents[2]
+        reliability = job_block((root / ".github/workflows/native-reliability.yml").read_text(),
+                                "native-replay-ui")
+        selected = job_block((root / ".github/workflows/native-selected-ui.yml").read_text(),
+                             "selected-ui")
+        for group, seconds in actual_seconds.items():
+            reliability_minutes = workflow_timeout(reliability, group)
+            reliability_reserve = 840 + 60  # Common job work plus this workflow's partition test.
+            self.assertGreaterEqual(reliability_minutes * 60, seconds + reliability_reserve)
+            reliability_ceiling = {"replay": 87, "layout": 96}.get(group, 86)
+            self.assertEqual(reliability_minutes, reliability_ceiling)
+            if group in {"replay-route", "layout", "help", "help-max-en", "help-max-ko"}:
+                selected_minutes = workflow_timeout(selected, group)
+                self.assertGreaterEqual(selected_minutes * 60, seconds + 840)
+                self.assertEqual(selected_minutes, 95 if group == "layout" else 85)
 
     def test_actual_layout_command_gets_1800_seconds_and_other_selections_keep_1200(self):
         cases = [(["--group", "layout"], 1800, 14)]
@@ -221,8 +271,12 @@ class LayoutRunnerBudgetTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         for filename, job in [("native-reliability.yml", "native-replay-ui"), ("native-selected-ui.yml", "selected-ui")]:
             block = job_block((root / ".github/workflows" / filename).read_text(), job)
-            for group, expected in [("layout", 67), ("replay", 57), ("replay-route", 57),
-                                    ("help", 57), ("help-max-en", 57), ("help-max-ko", 57)]:
+            expected_values = ({"layout": 96, "replay": 87, "replay-route": 86,
+                                "help": 86, "help-max-en": 86, "help-max-ko": 86}
+                               if filename == "native-reliability.yml" else
+                               {"layout": 95, "replay": 85, "replay-route": 85,
+                                "help": 85, "help-max-en": 85, "help-max-ko": 85})
+            for group, expected in expected_values.items():
                 with self.subTest(workflow=filename, group=group):
                     self.assertEqual(workflow_timeout(block, group), expected)
         se = job_block((root / ".github/workflows/native-reliability.yml").read_text(), "native-se-viewport")

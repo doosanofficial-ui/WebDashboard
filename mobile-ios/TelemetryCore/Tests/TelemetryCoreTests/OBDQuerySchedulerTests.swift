@@ -56,6 +56,10 @@ final class OBDQuerySchedulerTests: XCTestCase {
             guard case .success(let result) = outcome else { return false }
             return result.queryID == "obd-mode01-coolant"
         }, "An unsupported PID must not invent a measurement")
+        XCTAssertFalse(outcomes.contains { outcome in
+            guard case .failure(let queryID, _) = outcome else { return false }
+            return queryID == "obd-mode01-coolant"
+        }, "A bitmap-skipped PID must not invent a diagnostic failure")
     }
 
     // Catches treating an all-zero bitmap as absent, which would keep polling

@@ -179,6 +179,9 @@ final class TelemetryModel: NSObject {
         diagnosticAdapter.onResult = { [weak self] result in
             self?.handleDiagnosticResult(result)
         }
+        diagnosticAdapter.onQueryFailure = { [weak self] failure, state in
+            self?.handleDiagnosticFailure(failure, state: state)
+        }
         bleDiscovery.onUpdate = { [weak self] devices, status in
             self?.bleDevices = devices
             self?.bleDiscoveryStatus = status
@@ -606,6 +609,14 @@ final class TelemetryModel: NSObject {
         adapterStatus = state
         let event = AdapterRuntimeEvent(state: state).rawValue
         record(.system(name: event, timestamp: Date().timeIntervalSince1970,
+                       monotonicNanos: DispatchTime.now().uptimeNanoseconds))
+        publishCarPlayProjection()
+    }
+
+    private func handleDiagnosticFailure(_ failure: DiagnosticQueryFailure, state: String) {
+        guard runMode != .replay else { return }
+        adapterStatus = state
+        record(.system(name: failure.recordingName, timestamp: Date().timeIntervalSince1970,
                        monotonicNanos: DispatchTime.now().uptimeNanoseconds))
         publishCarPlayProjection()
     }

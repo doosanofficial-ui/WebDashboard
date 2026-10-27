@@ -79,11 +79,12 @@ public actor OBDMeasurementPipeline {
                 lastError = "diagnostic recorder failure"
             }
         case .failure(let queryID, let error):
-            lastError = "diagnostic query \(queryID) failed: \(errorCode(error))"
+            let failure = DiagnosticQueryFailure(queryID: queryID, error: error)
+            lastError = "diagnostic query \(queryID) failed: \(failure.errorCode)"
             if let recorder {
                 let timestamp = Date().timeIntervalSince1970
                 try? await recorder.append(.system(
-                    name: "diagnostic_query_failed:\(queryID):\(errorCode(error))",
+                    name: failure.recordingName,
                     timestamp: timestamp,
                     monotonicNanos: DispatchTime.now().uptimeNanoseconds
                 ))
@@ -91,20 +92,4 @@ public actor OBDMeasurementPipeline {
         }
     }
 
-    private func errorCode(_ error: OBDQuerySessionError) -> String {
-        switch error {
-        case .invalidState: return "invalid_state"
-        case .transport: return "transport"
-        case .timeout: return "timeout"
-        case .unsupportedCommand: return "unsupported_command"
-        case .bufferFull: return "buffer_full"
-        case .disconnected: return "disconnected"
-        case .response(.noData): return "no_data"
-        case .response(.bufferFull): return "buffer_full"
-        case .response(.negativeResponse(let code)): return String(format: "negative_response_%02X", code)
-        case .response: return "malformed_response"
-        case .decode(.payloadTooShort): return "payload_too_short"
-        case .decode(.valueOutOfRange): return "value_out_of_range"
-        }
-    }
 }

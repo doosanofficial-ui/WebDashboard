@@ -5,6 +5,7 @@ import TelemetryCore
 final class DiagnosticAdapterController {
     var onState: ((String) -> Void)?
     var onResult: ((OBDQueryResult) -> Void)?
+    var onQueryFailure: ((DiagnosticQueryFailure, String) -> Void)?
 
     private var task: Task<Void, Never>?
     private var scheduler: OBDQueryScheduler?
@@ -42,7 +43,12 @@ final class DiagnosticAdapterController {
                         case .success(let result):
                             self.onResult?(result)
                         case .failure(let queryID, let error):
-                            self.onState?("Diagnostic \(queryID): \(Self.errorText(error))")
+                            let state = "Diagnostic \(queryID): \(Self.errorText(error))"
+                            if let onQueryFailure = self.onQueryFailure {
+                                onQueryFailure(DiagnosticQueryFailure(queryID: queryID, error: error), state)
+                            } else {
+                                self.onState?(state)
+                            }
                         }
                     }
                     await scheduler.stop()

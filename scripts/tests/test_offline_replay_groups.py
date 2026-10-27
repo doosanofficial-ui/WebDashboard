@@ -163,8 +163,8 @@ class ReplayGroupTests(unittest.TestCase):
             self.assertIn('path: ui-results/' + group, workflow)
         from test_layout_runner_budget import workflow_timeout
         from test_native_ui_scheduling import job_block
-        self.assertEqual(workflow_timeout(job_block(workflow, 'native-replay-ui'), 'layout'), 67)
-        self.assertEqual(workflow_timeout(job_block(workflow, 'native-replay-ui'), 'replay'), 57)
+        self.assertEqual(workflow_timeout(job_block(workflow, 'native-replay-ui'), 'layout'), 96)
+        self.assertEqual(workflow_timeout(job_block(workflow, 'native-replay-ui'), 'replay'), 87)
         self.assertIn("if [ \"$UI_GROUP_RESULT\" != \"success\" ]", workflow)
 
     def test_missing_skipped_or_duplicated_route_cannot_pass_aggregate(self):

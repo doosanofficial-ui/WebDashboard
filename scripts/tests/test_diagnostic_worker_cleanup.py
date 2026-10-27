@@ -11,6 +11,8 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time as real_time
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -158,7 +160,13 @@ class DiagnosticWorkerCleanupTests(unittest.TestCase):
 class DiagnosticSupervisorCleanupTests(unittest.TestCase):
     def trial(self, group_state):
         child = ProbeChild([0, 0, 0])
-        signals, probes, calls = [], [], []
+        signals, probes, calls, real_delay_requests = [], [], [], []
+        virtual_now = [0.0]
+
+        def advance_virtual_time(seconds):
+            virtual_now[0] += seconds
+
+        virtual_time = SimpleNamespace(monotonic=lambda: virtual_now[0], sleep=advance_virtual_time)
 
         def group(pid, number):
             self.assertEqual(pid, child.pid, 'No other process group may be signalled or queried')
@@ -168,6 +176,9 @@ class DiagnosticSupervisorCleanupTests(unittest.TestCase):
             probes.append(number)
             if group_state == 'error':
                 raise PermissionError(1, 'fixture group query denied')
+            if group_state == 'delayed' and len(probes) == 3:
+                real_time.sleep(.06)
+                real_delay_requests.append(.06)
             if group_state == 'delayed' and len(probes) >= 4:
                 raise ProcessLookupError(3, 'owned group is gone')
 
@@ -182,7 +193,8 @@ class DiagnosticSupervisorCleanupTests(unittest.TestCase):
                     patch.object(observation, 'DIAGNOSTIC_GROUP_CONFIRMATION_SECONDS', .05, create=True), \
                     patch('verify_replay_seed.owned_progress', return_value={}), \
                     patch.object(replay.subprocess, 'Popen', return_value=child), \
-                    patch.object(replay.os, 'killpg', side_effect=group):
+                    patch.object(replay.os, 'killpg', side_effect=group), \
+                    patch.object(replay, 'time', virtual_time):
                 observation.observe_first_failure(original, folder, None, 'app-build', run_phase=phase,
                                                   clock=lambda: 10.0)
             first = (folder / 'first-failure-observation.json').read_bytes()
@@ -198,24 +210,26 @@ class DiagnosticSupervisorCleanupTests(unittest.TestCase):
         self.assertEqual(float(command[-1]), 30.0, 'Observation deadline must remain20 seconds')
         self.assertEqual(timeout, 23, 'One1-second stop wait and one2-second final reap are separate cleanup')
         self.assertEqual(kwargs['group_cleanup_timeout'], .05)
-        return status, receipt, len(probes)
+        return status, receipt, len(probes), real_delay_requests, virtual_now[0]
 
     def test_delayed_group_disappearance_is_confirmed_within_explicit_budget(self):
-        status, receipt, count = self.trial('delayed')
+        status, receipt, count, delay_requests, _ = self.trial('delayed')
+        self.assertEqual(delay_requests, [.06])
         self.assertGreaterEqual(count, 4)
         self.assertIs(receipt['groupExistsAfterCleanup'], False)
         self.assertTrue(status['ownedGroupCleanupResolved'])
         self.assertTrue(status['success'])
+        self.assertAlmostEqual(receipt['groupCleanupConfirmationElapsedSeconds'], .02, places=9)
 
     def test_persistent_group_never_becomes_success_after_confirmation_budget(self):
-        status, receipt, count = self.trial('persistent')
+        status, receipt, count, _, _ = self.trial('persistent')
         self.assertGreater(count, 2)
         self.assertIs(receipt['groupExistsAfterCleanup'], True)
         self.assertFalse(status['ownedGroupCleanupResolved'])
         self.assertFalse(status['success'])
 
     def test_group_query_error_remains_unknown_and_preserves_primary_failure(self):
-        status, receipt, _ = self.trial('error')
+        status, receipt, _, _, _ = self.trial('error')
         self.assertIsNone(receipt['groupExistsAfterCleanup'])
         self.assertIsNone(status['ownedGroupCleanupResolved'])
         self.assertFalse(status['success'])

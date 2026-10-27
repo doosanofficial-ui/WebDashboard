@@ -52,7 +52,8 @@ jobs:
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
       SEED_MANIFEST_SHA256: ${{ needs.seed.outputs.seed_manifest_sha256 }}
-    timeout-minutes: ${{ matrix.group == 'layout' && 67 || 57 }}  # Boot/build/install600s each, container180s, UI and existing headroom.
+    # Runner sequence: normal4260s, Layout4860s; common job reserve840s.
+    timeout-minutes: ${{ matrix.group == 'layout' && 95 || 85 }}
     steps:
       - uses: actions/checkout@v7
       - name: Download this run's exact-SHA qualified Seed
