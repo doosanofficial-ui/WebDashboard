@@ -36,9 +36,26 @@ final class OfflineReplayUITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(quickTime.frame.minY, app.navigationBars.firstMatch.frame.maxY)
         XCTAssertLessThanOrEqual(quickTime.frame.maxY, app.tabBars.firstMatch.frame.minY)
         let input = app.textFields["replay-seek-seconds"]
-        XCTAssertTrue(revealHistoryElement(input, in: app)); input.tap(); input.typeText("2")
-        app.buttons["replay-seek-go"].tap()
+        XCTAssertTrue(revealHistoryElement(input, in: app))
+        XCTAssertTrue(input.isHittable, app.debugDescription)
+        input.tap()
+        if let existing = input.value as? String, existing != "Seconds" {
+            input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: existing.count))
+        }
+        input.typeText("2")
+        XCTAssertEqual(input.value as? String, "2", "Seek input must be accepted exactly before Go")
+        let go = app.buttons["replay-seek-go"]
+        XCTAssertTrue(go.isHittable, app.debugDescription)
+        XCTAssertTrue(go.isEnabled)
+        go.tap()
+        let cursor = app.staticTexts["replay-position"]
+        let cursorAccepted = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            cursor.exists && cursor.label == "2.0 / 5.0 seconds"
+        }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [cursorAccepted], timeout: 5), .completed,
+            "The nearby recorded-time cursor must accept the seek before analysis lookup")
         let position = app.staticTexts["replay-analysis-time"]
+        XCTAssertTrue(revealHistoryElement(position, in: app, missingDirection: .above), app.debugDescription)
         let accepted = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             position.exists && position.label.hasPrefix("2.0 / ")
         }, object: app)
@@ -59,7 +76,10 @@ final class OfflineReplayUITests: XCTestCase {
         XCTAssertTrue(app.buttons["stop-replay-header"].isEnabled)
     }
 
-    private func revealHistoryElement(_ element: XCUIElement, in app: XCUIApplication, upperHalf: Bool = false) -> Bool {
+    private enum HistoryRevealDirection { case above, below }
+
+    private func revealHistoryElement(_ element: XCUIElement, in app: XCUIApplication, upperHalf: Bool = false,
+                                      missingDirection: HistoryRevealDirection = .below) -> Bool {
         for attempt in 0...24 {
             let top = app.navigationBars.firstMatch.frame.maxY + 8
             var bottom = app.tabBars.firstMatch.frame.minY - 8
@@ -75,7 +95,7 @@ final class OfflineReplayUITests: XCTestCase {
             if attempt == 24 { return false }
             let preferred = upperHalf ? top + min(60, (bottom - top) / 4) : (top + bottom) / 2
             let desired = min(max(preferred, top + rect.height / 2 + 4), visibleBottom - rect.height / 2 - 4)
-            let delta = exists ? rect.midY - desired : (bottom - top) / 3
+            let delta = exists ? rect.midY - desired : (bottom - top) / 3 * (missingDirection == .above ? -1 : 1)
             // AX5 content can span many screens. Use the available viewport rather
             // than spending the fixed gesture budget on one-third-screen drags.
             let viewportHeight = bottom - top
