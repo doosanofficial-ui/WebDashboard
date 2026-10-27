@@ -40,8 +40,27 @@ public enum MeasurementReplay {
         public let value: Double
         public let unit: String
         public let source: RecordedSignalSource
+        public let recordedQuality: SignalQuality?
         public let sourceSegment: Int
         public let measurement: PersistedMeasurement
+
+        init(
+            elapsedSeconds: Double,
+            value: Double,
+            unit: String,
+            source: RecordedSignalSource,
+            recordedQuality: SignalQuality? = nil,
+            sourceSegment: Int,
+            measurement: PersistedMeasurement
+        ) {
+            self.elapsedSeconds = elapsedSeconds
+            self.value = value
+            self.unit = unit
+            self.source = source
+            self.recordedQuality = recordedQuality
+            self.sourceSegment = sourceSegment
+            self.measurement = measurement
+        }
     }
     public struct SignalHistory: Sendable {
         public let samples: [RecordedSignalPoint]
@@ -103,6 +122,13 @@ public enum MeasurementReplay {
         }
     }
 
+    public struct SystemHistory: Sendable {
+        public let samples: [PersistedMeasurement]
+        public let totalRowsInPrefix: Int
+        public let endSeconds: Double
+        public var truncated: Bool { samples.count < totalRowsInPrefix }
+    }
+
     private struct SystemPayload: Decodable { let name: String }
 
     /// An immutable, fully validated closed recording. Seeking restores only
@@ -119,6 +145,25 @@ public enum MeasurementReplay {
         private let frameOffsets: [UInt32]
         private let diagnosticOffsets: [UInt32]
         private let markOffsets: [UInt32]
+        private let systemOffsets: [UInt32]
+
+        /// Shared original origin, before the display timeline's rollback clamp.
+        public var recordedMonotonicOrigin: UInt64? { export.measurements.first?.receivedAtMonotonicNanos }
+
+        public func systemHistory(at seconds: Double, maximumSamples: Int = 600) throws -> SystemHistory {
+            guard seconds.isFinite, (1...600).contains(maximumSamples) else {
+                throw MeasurementReplayError.invalidExport
+            }
+            try Task.checkCancellation()
+            let end = min(duration, max(0, seconds))
+            var low = 0, high = systemOffsets.count
+            while low < high {
+                let mid = low + (high - low) / 2
+                if elapsed[Int(systemOffsets[mid])] <= end { low = mid + 1 } else { high = mid }
+            }
+            let rows = systemOffsets[max(0, low - maximumSamples)..<low].map { export.measurements[Int($0)] }
+            return SystemHistory(samples: rows, totalRowsInPrefix: low, endSeconds: end)
+        }
 
         fileprivate init(export: MeasurementExport, signalTimeouts: [String: Double]) throws {
             guard export.measurements.count <= 200_000 else { throw MeasurementReplayError.rowLimitExceeded }
@@ -150,10 +195,11 @@ public enum MeasurementReplay {
                 default: break
                 }
             }
-            var frames: [UInt32] = [], diagnostics: [UInt32] = [], marks: [UInt32] = []
+            var frames: [UInt32] = [], diagnostics: [UInt32] = [], marks: [UInt32] = [], systems: [UInt32] = []
             frames.reserveCapacity(frameCount)
             diagnostics.reserveCapacity(diagnosticCount)
             marks.reserveCapacity(systemCount)
+            systems.reserveCapacity(systemCount)
             var index: [String: [RecordedSignalPoint]] = [:]
             var locations: [RecordedLocationPoint] = []
             var locationSegment = 0
@@ -162,11 +208,14 @@ public enum MeasurementReplay {
                 if offset % 256 == 0 { try Task.checkCancellation() }
                 guard let rowOffset = UInt32(exactly: offset) else { throw MeasurementReplayError.rowLimitExceeded }
                 let id: String, value: Double, unit: String, source: RecordedSignalSource
+                let recordedQuality: SignalQuality?
                 switch try MeasurementReplay.decode(row) {
                 case .signal(let sample):
                     id = sample.signalID; value = sample.value; unit = sample.unit; source = .init(kind: sample.source.rawValue, adapter: nil, transport: nil)
+                    recordedQuality = sample.recordedQuality
                 case .diagnosticSignal(let sample):
                     id = sample.signalID; value = sample.value; unit = sample.unit; source = .init(kind: "diagnostic", adapter: sample.sourceAdapter, transport: sample.sourceTransport)
+                    recordedQuality = sample.recordedQuality
                 case .location(let location):
                     if let previousLocationSource, previousLocationSource != location.source { locationSegment += 1 }
                     let point = RecordedLocationPoint(elapsedSeconds: elapsed[offset], location: location,
@@ -178,19 +227,27 @@ public enum MeasurementReplay {
                 case .can: frames.append(rowOffset); continue
                 case .diagnosticResponse: diagnostics.append(rowOffset); continue
                 case .system(let name, _, _):
+                    systems.append(rowOffset)
                     if name == "MARK" { marks.append(rowOffset) }
+                    continue
+                case .diagnosticAudit, .diagnosticSelection:
+                    // SYSTEM decode intentionally retains the legacy name-only
+                    // projection. Typed detail is read from the original row.
+                    systems.append(rowOffset)
                     continue
                 }
                 let previous = index[id]?.last
                 let segment = (previous?.sourceSegment ?? 0) + (previous != nil && previous?.source != source ? 1 : 0)
                 index[id, default: []].append(RecordedSignalPoint(elapsedSeconds: elapsed[offset],
-                    value: value, unit: unit, source: source, sourceSegment: segment, measurement: row))
+                    value: value, unit: unit, source: source, recordedQuality: recordedQuality,
+                    sourceSegment: segment, measurement: row))
             }
             signalIndex = index
             locationIndex = locations
             frameOffsets = frames
             diagnosticOffsets = diagnostics
             markOffsets = marks
+            systemOffsets = systems
         }
 
         /// Selected-time prefix, bounded per signal. Never substitutes zero for

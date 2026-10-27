@@ -42,6 +42,31 @@ validation and is not a released product. App Store/CarPlay approval is not impl
 
 ## OBD work in progress
 
+### Local diagnostic and recorded-data tools
+
+- Signals → Diagnostic workspace stores a local vehicle/profile label and an
+  explicit read-only query selection. Without a selection, existing profile
+  defaults remain in effect; an explicitly empty selection collects no queries.
+  Dashboard pages and display filters do not alter this policy or raw recording.
+- ECU capability inspection separates profile definitions, historical support
+  evidence, and current availability. Saved evidence does not imply a current
+  connection or a successful physical-vehicle observation.
+- Recorded diagnostic history preserves attempts, transport write observations,
+  cancellation and terminal results as versioned SYSTEM rows. Replay uses only
+  the accepted recorded prefix and discloses incomplete recording history.
+  A transport write return does not prove ECU receipt.
+- Replay can compare two selected recorded signals on a common time cursor with
+  separate units and gaps. Changing the comparison does not query a vehicle.
+- Replay energy estimates use explicitly selected V/A signals and a current-sign
+  convention. Only qualified intervals between observed recorded samples are
+  integrated; missing quality in legacy rows stays unknown. The result describes
+  the selected recorded window, not a continuous vehicle energy measurement.
+
+These tools use local settings and existing SQLite/JSON/CSV records. They do not
+enable server delivery, write vehicle settings, or establish real-device/adapter
+compatibility. Synthetic tests, Simulator UI checks and physical evidence are
+separate validation scopes.
+
 The user owns a NANICAR ELM327-BT4N (12V) and a Hyundai Santa Fe MX5 HEV.
 `TelemetryCore/ELM327.swift` provides a pure, hardware-independent prompt framer and
 headerless Mode 01 decoder for capabilities, RPM, speed and coolant temperature.

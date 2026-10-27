@@ -16,6 +16,10 @@ struct SessionsView: View {
     @State private var seekError: String?
     @FocusState private var seekFieldFocused: Bool
     @State private var exportRequest = MeasurementExportRequest()
+    // Keep explicit choices when lazy/disclosure content is recreated.
+    @State private var selectedVoltageSignalID: String?
+    @State private var selectedCurrentSignalID: String?
+    @State private var selectedCurrentSignConventionRawValue: String?
 
     var body: some View {
         let request = exportRequest.request
@@ -37,6 +41,28 @@ struct SessionsView: View {
                             savedSessionCard
                         }
                         exportCard
+                        if model.runMode == .replay {
+                            NavigationLink(AppLocalization.text("Diagnostic request history")) {
+                                DiagnosticHistoryView(model: model)
+                            }
+                            .accessibilityIdentifier("session-diagnostic-history")
+                            DisclosureGroup(AppLocalization.text("Recorded energy summary")) {
+                                ReplayEnergyView(replayController: model.replayController,
+                                    recordedMonotonicOrigin: model.replayController.recordedMonotonicOrigin,
+                                    recordedVoltageSignalIDs: energySignalIDs(unit: "V"),
+                                    recordedCurrentSignalIDs: energySignalIDs(unit: "A"),
+                                    selectedVoltageSignalID: $selectedVoltageSignalID,
+                                    selectedCurrentSignalID: $selectedCurrentSignalID,
+                                    selectedCurrentSignConventionRawValue: $selectedCurrentSignConventionRawValue,
+                                    maxGapSeconds: 2, maxSampleSkewSeconds: 0.1,
+                                    labels: AppLanguageStore.shared.language == .korean ? .korean : .english)
+                            }
+                            .accessibilityIdentifier("session-replay-energy")
+                        } else if model.diagnosticAudit.captureIsIncomplete {
+                            Text(AppLocalization.text("Diagnostic audit is incomplete"))
+                                .foregroundStyle(TelemetryTheme.warning)
+                                .accessibilityIdentifier("session-diagnostic-audit-incomplete")
+                        }
                     }
                     .padding(.horizontal, TelemetryTheme.Spacing.medium)
                     .padding(.vertical, TelemetryTheme.Spacing.small)
@@ -78,6 +104,16 @@ struct SessionsView: View {
             .onDisappear { exportRequest.cancel() }
 
         }
+        .onChange(of: model.replayController.sessionID) { _, _ in
+            selectedVoltageSignalID = nil
+            selectedCurrentSignalID = nil
+            selectedCurrentSignConventionRawValue = nil
+        }
+    }
+
+    private func energySignalIDs(unit: String) -> [String] {
+        guard !model.replayController.loading, let snapshot = model.replayController.snapshot else { return [] }
+        return snapshot.signals.filter { $0.unit == unit }.map(\.signalID).sorted()
     }
 
     // Eager header allows hosted rendering of the actual Replay warning region.

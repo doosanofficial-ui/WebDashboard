@@ -39,6 +39,16 @@ final class ReplayController {
         return try? timeline.locationHistory(at: position)
     }
 
+    var recordedMonotonicOrigin: UInt64? {
+        guard snapshot != nil, !loading else { return nil }
+        return timeline?.recordedMonotonicOrigin
+    }
+
+    func recordedSystemHistory() -> MeasurementReplay.SystemHistory? {
+        guard let timeline, snapshot != nil, !loading else { return nil }
+        return try? timeline.systemHistory(at: position)
+    }
+
     func load(sessionID: String, loader: @escaping () async throws -> MeasurementExport) async throws -> MeasurementReplay.Snapshot? {
         stop()
         let token = generation

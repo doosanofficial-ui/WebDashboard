@@ -6,6 +6,13 @@ struct RecordedSignalHistoryView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let title: String
     let history: MeasurementReplay.SignalHistory?
+    let comparisonObservations: Bool
+
+    init(title: String, history: MeasurementReplay.SignalHistory?, comparisonObservations: Bool = false) {
+        self.title = title
+        self.history = history
+        self.comparisonObservations = comparisonObservations
+    }
 
     var body: some View {
         let units = Set(history?.samples.map(\.unit) ?? [])
@@ -13,15 +20,14 @@ struct RecordedSignalHistoryView: View {
             if units.count > 1 {
                 Text(AppLocalization.text("Recorded units changed · separate scales required")).font(.caption)
             } else if let history, !history.samples.isEmpty {
-                Chart(history.samples) { point in
-                    LineMark(x: .value("Recorded seconds", point.elapsedSeconds), y: .value("Value", point.value),
-                             series: .value("Recorded source segment", point.sourceSegment))
-                        .foregroundStyle(TelemetryTheme.accent)
-                    PointMark(x: .value("Recorded seconds", point.elapsedSeconds), y: .value("Value", point.value))
-                        .foregroundStyle(TelemetryTheme.accent)
+                if comparisonObservations {
+                    historyChart(history)
+                        .chartXAxis(.automatic).chartYAxis(.automatic)
+                        .chartXAxisLabel(AppLocalization.text("Recorded seconds"))
+                        .chartYAxisLabel(units.first.flatMap { $0.isEmpty ? nil : $0 } ?? AppLocalization.text("no unit"))
+                } else {
+                    historyChart(history).chartXAxis(.hidden).chartYAxis(.hidden)
                 }
-                .chartXScale(domain: history.startSeconds...(history.endSeconds > history.startSeconds ? history.endSeconds : history.startSeconds + 1))
-                .chartXAxis(.hidden).chartYAxis(.hidden)
             } else {
                 Text(AppLocalization.text("No recorded samples in this window")).font(.caption)
             }
@@ -42,11 +48,30 @@ struct RecordedSignalHistoryView: View {
                 if let history {
                     Text(AppLocalization.text("\(history.samples.count) displayed of \(history.totalSamplesInWindow) original samples in this window"))
                     if history.truncated { Text(AppLocalization.text("Latest 600 original samples are shown")) }
-                    if Set(history.samples.map(\.source)).count > 1 { Text(AppLocalization.text("Recorded sources changed · lines separated")) }
-                    Text(AppLocalization.text("Lines connect recorded observations. Original measurement times and units are preserved."))
+                    if Set(history.samples.map(\.source)).count > 1 {
+                        Text(AppLocalization.text(comparisonObservations ? "Recorded sources retained" : "Recorded sources changed · lines separated"))
+                    }
+                    if comparisonObservations {
+                        Text(AppLocalization.text("Recorded observations only. Gaps are not filled or interpolated."))
+                    } else {
+                        Text(AppLocalization.text("Lines connect recorded observations. Original measurement times and units are preserved."))
+                    }
                 }
             }
         }
+    }
+
+    private func historyChart(_ history: MeasurementReplay.SignalHistory) -> some View {
+        Chart(history.samples) { point in
+            if !comparisonObservations {
+                LineMark(x: .value("Recorded seconds", point.elapsedSeconds), y: .value("Value", point.value),
+                         series: .value("Recorded source segment", point.sourceSegment))
+                    .foregroundStyle(TelemetryTheme.accent)
+            }
+            PointMark(x: .value("Recorded seconds", point.elapsedSeconds), y: .value("Value", point.value))
+                .foregroundStyle(TelemetryTheme.accent)
+        }
+        .chartXScale(domain: history.startSeconds...(history.endSeconds > history.startSeconds ? history.endSeconds : history.startSeconds + 1))
     }
 
     private var summaryLayout: AnyLayout {

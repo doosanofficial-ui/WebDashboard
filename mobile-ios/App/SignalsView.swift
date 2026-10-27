@@ -20,6 +20,15 @@ struct SignalsView: View {
                         filterBar()
                         signalCatalog(at: displayDate)
                         rawCANCard()
+                        NavigationLink {
+                            DiagnosticWorkspaceView(state: model.diagnosticWorkspace, profile: model.adapterProfile,
+                                allowsEditing: model.runMode != .replay, onApply: model.applyDiagnosticSelection)
+                        } label: {
+                            Label(AppLocalization.text("Diagnostic workspace"), systemImage: "list.bullet.rectangle")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .telemetrySurface(.raised, padding: TelemetryTheme.Spacing.small)
+                        }
+                        .accessibilityIdentifier("signals-diagnostic-workspace")
                         developerControls()
                     }
                     .padding(.horizontal, TelemetryTheme.Spacing.medium)

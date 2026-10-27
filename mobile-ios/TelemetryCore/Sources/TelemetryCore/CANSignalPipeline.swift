@@ -10,6 +10,15 @@ public struct DecodedCANSignal: Equatable, Sendable {
     public let sample: DecodedSignalSample
 
     public init(definition: SignalDefinition, frame: CANFrame, decoded: DecodedSignal) {
+        self.init(definition: definition, frame: frame, decoded: decoded, recordedQuality: nil)
+    }
+
+    init(
+        definition: SignalDefinition,
+        frame: CANFrame,
+        decoded: DecodedSignal,
+        recordedQuality: SignalQuality?
+    ) {
         self.definition = definition
         self.decoded = decoded
         self.sample = DecodedSignalSample(
@@ -20,7 +29,8 @@ public struct DecodedCANSignal: Equatable, Sendable {
             unit: definition.unit,
             frameSequence: frame.sequence,
             receivedAtEpoch: frame.receivedAtEpoch,
-            receivedAtMonotonicNanos: frame.receivedAtMonotonicNanos
+            receivedAtMonotonicNanos: frame.receivedAtMonotonicNanos,
+            recordedQuality: recordedQuality
         )
     }
 }
@@ -44,7 +54,12 @@ public struct CANSignalPipeline: Sendable {
             guard let decoded = try? SignalDecoder.decode(frame, definition: definition) else {
                 return nil
             }
-            return DecodedCANSignal(definition: definition, frame: frame, decoded: decoded)
+            return DecodedCANSignal(
+                definition: definition,
+                frame: frame,
+                decoded: decoded,
+                recordedQuality: .valid
+            )
         }
     }
 }

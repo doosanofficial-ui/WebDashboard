@@ -3,6 +3,102 @@ import XCTest
 @testable import TelemetryCore
 
 final class OBDQuerySchedulerTests: XCTestCase {
+    func testOverlappingObservedIDRequiresExactScheduledDefinition() async throws {
+        let query = try SantaFeMX5HybridQueryCatalog.initialQueries()[0]
+        var value = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(query)) as? [String: Any])
+        value["responseCANID"] = 0x7E9
+        let different = try JSONDecoder().decode(OBDQueryDefinition.self, from: JSONSerialization.data(withJSONObject: value))
+        let transport = ScriptedDiagnosticTransport(replies: standardReplies)
+        let scheduler = OBDQueryScheduler(session: OBDQuerySession(transport: transport),
+            observedQueries: [different], onObservation: { _ in })
+        do { _ = try await scheduler.start(queries: [query]); XCTFail("Same ID cannot attribute another ECU's definition") }
+        catch let error as OBDQuerySessionError { XCTAssertEqual(error, .invalidState) }
+        await scheduler.stop()
+        let connects = await transport.numberOfConnects()
+        XCTAssertEqual(connects, 0)
+    }
+    func testDisabledObserverKeepsLegacyDuplicatePollingList() async throws {
+        let query = try fastQuery(SantaFeMX5HybridQueryCatalog.initialQueries()[0])
+        let checkpoint = expectation(description: "legacy second request")
+        let transport = ScriptedDiagnosticTransport(replies: standardReplies,
+            hold: "0100\r", occurrence: 2, checkpoint: checkpoint)
+        let scheduler = OBDQueryScheduler(session: OBDQuerySession(transport: transport))
+        let stream = try await scheduler.start(queries: [query, query])
+        let consumer = Task { for await _ in stream {} }
+        await fulfillment(of: [checkpoint], timeout: 2)
+        await scheduler.stop(); await consumer.value
+        let writes = await transport.writes()
+        XCTAssertEqual(writes.filter { $0 == query.requestString }.count, 2)
+    }
+
+    func testDuplicateObserverIdentityIsRejectedBeforeTransportConnect() async throws {
+        let query = try SantaFeMX5HybridQueryCatalog.initialQueries()[0]
+        let transport = ScriptedDiagnosticTransport(replies: standardReplies)
+        let scheduler = OBDQueryScheduler(session: OBDQuerySession(transport: transport),
+            observedQueries: [query, query], onObservation: { _ in })
+        do { _ = try await scheduler.start(queries: [query]); XCTFail("Duplicate observation identity") }
+        catch let error as OBDQuerySessionError { XCTAssertEqual(error, .invalidState) }
+        let connects = await transport.numberOfConnects()
+        let writes = await transport.writes()
+        XCTAssertEqual(connects, 0)
+        XCTAssertTrue(writes.isEmpty)
+    }
+    func testObservationFreezesExactSupportAndDoesNotAcquireWatchedQueries() async throws {
+        let queries = try SantaFeMX5HybridQueryCatalog.initialQueries().map(fastQuery)
+        let checkpoint = expectation(description: "second bitmap held")
+        let transport = ScriptedDiagnosticTransport(replies: standardReplies,
+            hold: "0100\r", occurrence: 2, checkpoint: checkpoint)
+        let observations = SchedulerObservationLog()
+        let scheduler = OBDQueryScheduler(session: OBDQuerySession(transport: transport),
+            observedQueries: queries, onObservation: { observations.append($0) })
+        let stream = try await scheduler.start(queries: [queries[0]])
+        let consumer = Task { for await _ in stream {} }
+        await fulfillment(of: [checkpoint], timeout: 2)
+        await scheduler.stop()
+        await consumer.value
+        let saved = try XCTUnwrap(observations.values().first)
+        XCTAssertEqual(saved.ordinal, 1)
+        XCTAssertEqual(saved.supportByQueryID[queries[2].id], .unsupported)
+        XCTAssertEqual(saved.supportByQueryID[queries[1].id], .supported)
+        XCTAssertEqual(saved.supportByQueryID[queries[4].id], .unknown)
+        XCTAssertEqual(saved.freshSupportQueryIDs, Set(queries[1...3].map(\.id)))
+        if case .success(let result) = saved.outcome {
+            XCTAssertEqual(saved.timestamp, result.response.receivedAtEpoch)
+        } else { XCTFail("Expected first bitmap success") }
+        let afterStop = await scheduler.support(for: queries[2])
+        XCTAssertEqual(afterStop, .unknown)
+        XCTAssertEqual(saved.supportByQueryID[queries[2].id], .unsupported,
+                       "A later cache reset cannot rewrite the frozen receipt")
+        let writes = await transport.writes()
+        XCTAssertFalse(writes.contains(queries[2].requestString))
+        XCTAssertFalse(writes.contains(queries[4].requestString))
+    }
+
+    func testFailedBitmapObservationHasNoNewSupportEvidenceAndSharesOutcomeOrder() async throws {
+        let queries = try SantaFeMX5HybridQueryCatalog.initialQueries().map(fastQuery)
+        let checkpoint = expectation(description: "third bitmap held")
+        let transport = ScriptedDiagnosticTransport(replies: standardReplies,
+            hold: "0100\r", occurrence: 3, checkpoint: checkpoint,
+            subsequentReplies: ["0100\r": "NO DATA\r>"])
+        let observations = SchedulerObservationLog()
+        let scheduler = OBDQueryScheduler(session: OBDQuerySession(transport: transport),
+            observedQueries: queries, onObservation: { observations.append($0) })
+        let stream = try await scheduler.start(queries: [queries[0]])
+        let consumer = Task { for await _ in stream {} }
+        await fulfillment(of: [checkpoint], timeout: 2)
+        await scheduler.stop()
+        await consumer.value
+        let saved = observations.values()
+        XCTAssertGreaterThanOrEqual(saved.count, 2)
+        guard saved.count >= 2 else { return }
+        XCTAssertEqual(saved[0].ordinal, 1)
+        XCTAssertEqual(saved[1].ordinal, 2)
+        XCTAssertEqual(saved[1].outcome, .failure(queryID: queries[0].id, error: .response(.noData)))
+        XCTAssertEqual(saved[1].supportByQueryID[queries[2].id], .unknown)
+        XCTAssertTrue(saved[1].freshSupportQueryIDs.isEmpty)
+        XCTAssertEqual(saved[0].supportByQueryID[queries[2].id], .unsupported)
+    }
+
     // Catches polling a standard PID after its same-target bitmap excludes it.
     // Supported RPM/speed and the manufacturer DID must still reach the wire.
     func testValidBitmapSkipsUnsupportedPIDAcrossPollingCycles() async throws {
@@ -688,7 +784,15 @@ private actor CompletionSignal {
 /// Replaces only the external adapter. Production session setup, address
 /// selection, prompt parsing, response validation, decoding, and scheduling run.
 /// A held request creates a bounded handshake without using sleeps as an oracle.
+private final class SchedulerObservationLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var observations: [OBDQueryObservation] = []
+    func append(_ value: OBDQueryObservation) { lock.lock(); defer { lock.unlock() }; observations.append(value) }
+    func values() -> [OBDQueryObservation] { lock.lock(); defer { lock.unlock() }; return observations }
+}
+
 private actor ScriptedDiagnosticTransport: CANTransport {
+    func numberOfConnects() -> Int { connectCount }
     private var stream: AsyncThrowingStream<Data, Error>?
     private var continuation: AsyncThrowingStream<Data, Error>.Continuation?
     private let replies: [String: String]

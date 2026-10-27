@@ -1,0 +1,13 @@
+# Parallel-feature Help source captures
+
+After the native UI test exposed energy-selection loss on seeking, selection ownership moved to the Sessions parent and reset remains tied to a session change. The existing English and Korean capture XTests passed 2/2 on the existing iPhone 17 / iOS 27 Simulator. Run `C636103E-349F-44F3-9F59-8FE81496E3E0` used a separate `local.webdashboard.Telemetry.Parallel20261027` app and runner. The exact input was base `a790f685ffe8a5937a6535129a3bc4c7db4086d3` plus source overlay SHA-256 `edb6289eda7ad5c4a890df63bf9ec159eb641eaa37231bb7d62ad18db4714b11`, not a new committed revision.
+
+All 28 original PNGs were opened directly. Their language, guide target and visible state matched the capture receipts: editor corner/configuration, Live start/edit/MARK, Sessions open/export/start, Replay play/seek, Setup profile/developer, and Signals values/filter/response. Marker JSON and PNG bytes were copied unchanged from the same successful result bundle; the complete source/bytes/anchors/product provenance gate passed. Existing capture tests and rejection checks were not weakened.
+
+The Mac full screen and Simulator originals were separately opened before and during execution. The exact target was visible without a blocking popup. Mac full-screen files contain private background windows and remain local. Simulator evidence contains synthetic fixtures only. These source screenshots do not establish rebuilt Help-overlay, maximum-text, landscape, or new-feature UI acceptance.
+
+The original product's 67 files and all 11 data files remained exact. Existing Help and P2 products, persistent files and core preferences remained exact. P2 acquired one OS-managed SplashBoard snapshot when backgrounded; this is recorded separately from user-data preservation. No protected app was installed, launched, terminated or restored by the capture procedure. No physical device, vehicle acquisition, new permission, credential or server delivery was used.
+
+The manifest preserves the original run's `captureCertified: false` and `visualReviewRequired: true` fields. Direct pixel review is recorded separately; those immutable run fields are not rewritten into a new success claim. A later build must include the promoted resources, and the five added features require their own local UI tests.
+
+The earlier successful source-capture run `9452E544-9952-4AAA-9482-F5ACD0235FF8` and its assets remain in the local evidence archive. This replacement uses the new actual run; no marker or source hash was substituted without new capture. The disposable app’s previous 53-row feature fixture and sidecars were backed up before admitting the unchanged 26-row Help fixture. Original and other protected app inventories remained exact in this run.

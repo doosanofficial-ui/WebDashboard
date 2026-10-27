@@ -44,6 +44,16 @@ public enum OBDQuerySupport: Equatable, Sendable {
     case unsupported
 }
 
+/// An immutable observation made in the scheduler actor, immediately after its
+/// support cache changes. Watching a query never adds it to the polling list.
+public struct OBDQueryObservation: Equatable, Sendable {
+    public let outcome: OBDQueryOutcome
+    public let ordinal: UInt64
+    public let supportByQueryID: [String: OBDQuerySupport]
+    public let freshSupportQueryIDs: Set<String>
+    public let timestamp: TimeInterval
+}
+
 /// Owns one diagnostic transport connection. It never starts passive monitor
 /// mode and must not be used concurrently with ELM327Session on the same link.
 public actor OBDQuerySession {
@@ -51,10 +61,15 @@ public actor OBDQuerySession {
 
     public private(set) var state: OBDQuerySessionState = .disconnected
     public private(set) var lastError: OBDQuerySessionError?
+    public private(set) var lastAuditError: DiagnosticAuditError?
 
     private let transport: any CANTransport
     private let sourceAdapter: String
     private let sourceTransport: String
+    private let auditContext: DiagnosticAuditContext?
+    private let onAudit: (@Sendable (DiagnosticAuditEvent) async -> Void)?
+    private let onAuditError: (@Sendable (DiagnosticAuditError) async -> Void)?
+    private var auditLedger: DiagnosticAuditLedger?
     private struct PendingResponse {
         let id: UUID
         let generation: UUID
@@ -76,15 +91,25 @@ public actor OBDQuerySession {
     public init(
         transport: any CANTransport,
         sourceAdapter: String = "elm327",
-        sourceTransport: String = "unknown"
+        sourceTransport: String = "unknown",
+        auditContext: DiagnosticAuditContext? = nil,
+        onAudit: (@Sendable (DiagnosticAuditEvent) async -> Void)? = nil,
+        onAuditError: (@Sendable (DiagnosticAuditError) async -> Void)? = nil
     ) {
         self.transport = transport
         self.sourceAdapter = sourceAdapter
         self.sourceTransport = sourceTransport
+        self.auditContext = auditContext
+        self.onAudit = onAudit
+        self.onAuditError = onAuditError
+        if let auditContext, onAudit != nil {
+            auditLedger = DiagnosticAuditLedger(scope: .acquisition(connectionID: auditContext.connectionID))
+        }
     }
 
     public func start() async throws {
-        guard state == .disconnected, startupTask == nil, shutdownTask == nil else {
+        guard state == .disconnected, startupTask == nil, shutdownTask == nil,
+              auditLedger?.isClosed != true else {
             throw OBDQuerySessionError.invalidState
         }
         let currentGeneration = UUID()
@@ -154,25 +179,36 @@ public actor OBDQuerySession {
     public func stop() async {
         if let shutdownTask {
             stopRequested = true
+            await closeAuditConnection()
             await shutdownTask.value
             return
         }
         guard state != .disconnected else { return }
-        await beginShutdown(finalState: .disconnected, error: .disconnected).value
+        let closing = beginShutdown(finalState: .disconnected, error: .disconnected)
+        await closeAuditConnection()
+        await closing.value
     }
 
     public func query(_ query: OBDQueryDefinition) async throws -> OBDQueryResult {
         guard state == .ready, shutdownTask == nil else { throw OBDQuerySessionError.invalidState }
         let currentGeneration = generation
+        let attemptID = UUID()
         state = .querying
         defer {
             if generation == currentGeneration, state == .querying { state = .ready }
         }
 
         do {
+            if let auditContext {
+                await appendAudit { try $0.queued(query: query, context: auditContext, at: Self.auditNow(), attemptID: attemptID) }
+                try requireActive(generation: currentGeneration)
+                await appendAudit { try $0.started(attemptID: attemptID, at: Self.auditNow()) }
+                try requireActive(generation: currentGeneration)
+            }
             try await issue("AT SH \(formatIdentifier(query.requestCANID, extended: query.isExtended))\r", generation: currentGeneration)
             try await issue("AT CRA \(formatIdentifier(query.responseCANID, extended: query.isExtended))\r", generation: currentGeneration)
-            let text = try await exchange(Data(query.requestString.utf8), timeout: query.timeout, generation: currentGeneration)
+            let text = try await exchange(Data(query.requestString.utf8), timeout: query.timeout,
+                                          generation: currentGeneration, auditAttemptID: attemptID)
             try requireActive(generation: currentGeneration)
             let normalized = text.uppercased().replacingOccurrences(of: " ", with: "")
             if normalized.contains("BUFFERFULL") { throw OBDQuerySessionError.bufferFull }
@@ -201,16 +237,25 @@ public actor OBDQuerySession {
                     throw OBDQuerySessionError.decode(error)
                 }
             }
+            await appendAudit { ledger in
+                guard ledger.snapshot().contains(where: { $0.attemptID == attemptID && !$0.isTerminal }) else { return nil }
+                return try ledger.succeeded(attemptID: attemptID, responseSequence: response.sequence,
+                    responseReceivedAt: DiagnosticAuditTimestamp(epochSeconds: response.receivedAtEpoch,
+                        monotonicNanoseconds: response.receivedAtMonotonicNanos), at: Self.auditNow())
+            }
             return OBDQueryResult(queryID: query.id, response: response, signals: decoded)
         } catch let error as OBDQuerySessionError {
             if isRecoverableSessionFailure(error) {
                 transitionToRecovery(error, generation: currentGeneration)
             }
+            await finishAuditAttempt(attemptID, error: error, cancelled: Task.isCancelled)
             throw error
         } catch is CancellationError {
+            await finishAuditAttempt(attemptID, error: .disconnected, cancelled: true)
             throw CancellationError()
         } catch {
             transitionToRecovery(.transport, generation: currentGeneration)
+            await finishAuditAttempt(attemptID, error: .transport, cancelled: Task.isCancelled)
             throw OBDQuerySessionError.transport
         }
     }
@@ -224,7 +269,8 @@ public actor OBDQuerySession {
         }
     }
 
-    private func exchange(_ data: Data, timeout: Double, generation: UUID) async throws -> String {
+    private func exchange(_ data: Data, timeout: Double, generation: UUID,
+                          auditAttemptID: UUID? = nil) async throws -> String {
         try requireActive(generation: generation)
         guard responseWaiter == nil else { throw OBDQuerySessionError.invalidState }
         let exchangeID = UUID()
@@ -248,11 +294,25 @@ public actor OBDQuerySession {
                             throw CancellationError()
                         }
                         try Task.checkCancellation()
+                        if let auditAttemptID {
+                            await self?.appendAudit { try $0.transportWriteStarted(attemptID: auditAttemptID, at: Self.auditNow()) }
+                            // An async sink can admit Stop. Never send after
+                            // that suspension without rechecking ownership.
+                            guard await self?.canWrite(exchangeID: exchangeID, generation: generation) == true else {
+                                throw CancellationError()
+                            }
+                            try Task.checkCancellation()
+                        }
                         try await transport.write(data)
+                        if let auditAttemptID {
+                            await self?.appendAudit { try $0.transportWriteCompleted(attemptID: auditAttemptID, at: Self.auditNow()) }
+                        }
                     } catch is CancellationError {
                         await self?.failPending(.disconnected, exchangeID: exchangeID, generation: generation)
+                        await self?.auditWriteFailed(auditAttemptID, code: "cancelled")
                     } catch {
                         await self?.failPending(.transport, exchangeID: exchangeID, generation: generation)
+                        await self?.auditWriteFailed(auditAttemptID, code: "transport")
                     }
                     await self?.finishWrite(exchangeID)
                 }
@@ -276,6 +336,60 @@ public actor OBDQuerySession {
 
     private func finishWrite(_ exchangeID: UUID) {
         writeTasks.removeValue(forKey: exchangeID)
+    }
+
+    private static func auditNow() throws -> DiagnosticAuditTimestamp {
+        try DiagnosticAuditTimestamp(epochSeconds: Date().timeIntervalSince1970,
+                                     monotonicNanoseconds: DispatchTime.now().uptimeNanoseconds)
+    }
+
+    private func appendAudit(_ update: (inout DiagnosticAuditLedger) throws -> DiagnosticAuditEvent?) async {
+        guard var ledger = auditLedger else { return }
+        do {
+            let event = try update(&ledger)
+            auditLedger = ledger // publish before any actor reentrancy
+            if let event { await onAudit?(event) }
+        } catch let error as DiagnosticAuditError {
+            lastAuditError = error
+            await onAuditError?(error)
+        } catch { // The pure ledger and timestamp constructor use only this error type.
+            lastAuditError = .invalidTimestamp
+            await onAuditError?(.invalidTimestamp)
+        }
+    }
+
+    private func auditWriteFailed(_ id: UUID?, code: String) async {
+        guard let id else { return }
+        await appendAudit { ledger in
+            guard let attempt = ledger.snapshot().first(where: { $0.attemptID == id }),
+                  attempt.currentWriteDisposition == .inFlight else { return nil }
+            return try ledger.transportWriteFailed(attemptID: id, reasonCode: code, at: Self.auditNow())
+        }
+    }
+
+    private func finishAuditAttempt(_ id: UUID, error: OBDQuerySessionError, cancelled: Bool) async {
+        await appendAudit { ledger in
+            guard ledger.snapshot().contains(where: { $0.attemptID == id && !$0.isTerminal }) else { return nil }
+            let code = DiagnosticQueryFailure(queryID: "", error: error).errorCode
+            return try cancelled
+                ? ledger.cancelled(attemptID: id, reasonCode: code, at: Self.auditNow())
+                : ledger.failed(attemptID: id, reasonCode: code, at: Self.auditNow())
+        }
+    }
+
+    private func closeAuditConnection() async {
+        guard let context = auditContext, var ledger = auditLedger, !ledger.isClosed else { return }
+        do {
+            let events = try ledger.stopConnection(context.connectionID, at: Self.auditNow())
+            auditLedger = ledger
+            for event in events { await onAudit?(event) }
+        } catch let error as DiagnosticAuditError {
+            lastAuditError = error
+            await onAuditError?(error)
+        } catch {
+            lastAuditError = .invalidTimestamp
+            await onAuditError?(.invalidTimestamp)
+        }
     }
 
     private func connectWithTimeout() async throws {
@@ -421,6 +535,10 @@ public actor OBDQueryScheduler {
     }
 
     private let session: OBDQuerySession
+    private let observedQueries: [OBDQueryDefinition]?
+    private let onObservation: (@Sendable (OBDQueryObservation) -> Void)?
+    private var watchedQueries: [OBDQueryDefinition] = []
+    private var observationOrdinal: UInt64 = 0
     private var task: Task<Void, Never>?
     private var shutdown: Task<Void, Never>?
     private var continuation: AsyncStream<OBDQueryOutcome>.Continuation?
@@ -428,8 +546,12 @@ public actor OBDQueryScheduler {
     private var generation = UUID()
     private var isStarting = false
 
-    public init(session: OBDQuerySession) {
+    public init(session: OBDQuerySession,
+                observedQueries: [OBDQueryDefinition]? = nil,
+                onObservation: (@Sendable (OBDQueryObservation) -> Void)? = nil) {
         self.session = session
+        self.observedQueries = observedQueries
+        self.onObservation = onObservation
     }
 
     /// Only a directly observed, same-target Mode 01 page proves support.
@@ -449,6 +571,13 @@ public actor OBDQueryScheduler {
         guard !queries.isEmpty, task == nil, shutdown == nil, !isStarting else {
             throw OBDQuerySessionError.invalidState
         }
+        let watched = onObservation == nil ? [] : observedQueries ?? queries
+        guard Set(watched.map(\.id)).count == watched.count,
+              queries.allSatisfy({ query in
+                  watched.first(where: { $0.id == query.id }).map { $0 == query } ?? true
+              }) else {
+            throw OBDQuerySessionError.invalidState
+        }
         let currentGeneration = UUID()
         isStarting = true
         defer {
@@ -456,6 +585,8 @@ public actor OBDQueryScheduler {
         }
         generation = currentGeneration
         supportedPIDPages.removeAll()
+        watchedQueries = watched
+        observationOrdinal = 0
         try await session.start()
         guard generation == currentGeneration else {
             throw OBDQuerySessionError.disconnected
@@ -523,6 +654,7 @@ public actor OBDQueryScheduler {
 
     private func yield(_ outcome: OBDQueryOutcome, for query: OBDQueryDefinition, generation: UUID) {
         guard self.generation == generation else { return }
+        var freshSupportQueryIDs = Set<String>()
         if let page = Self.bitmapPage(for: query) {
             let mask: UInt32?
             if case .success(let result) = outcome, result.response.payload.count == 4 {
@@ -533,6 +665,25 @@ public actor OBDQueryScheduler {
                 mask = nil
             }
             supportedPIDPages[Target(query), default: [:]][page] = mask
+            if mask != nil {
+                freshSupportQueryIDs = Set(watchedQueries.compactMap { watched in
+                    guard Target(watched) == Target(query), watched.service == .mode01,
+                          let pid = UInt8(watched.command, radix: 16), pid > 0,
+                          UInt8(((Int(pid) - 1) / 32) * 32) == page else { return nil }
+                    return watched.id
+                })
+            }
+        }
+        if let onObservation {
+            observationOrdinal += 1
+            let timestamp: TimeInterval
+            if case .success(let result) = outcome { timestamp = result.response.receivedAtEpoch }
+            else { timestamp = Date().timeIntervalSince1970 }
+            // No suspension between mutation, snapshot and enqueue: consumers
+            // cannot accidentally attribute a later bitmap to this result.
+            onObservation(OBDQueryObservation(outcome: outcome, ordinal: observationOrdinal,
+                supportByQueryID: Dictionary(uniqueKeysWithValues: watchedQueries.map { ($0.id, support(for: $0)) }),
+                freshSupportQueryIDs: freshSupportQueryIDs, timestamp: timestamp))
         }
         continuation?.yield(outcome)
     }

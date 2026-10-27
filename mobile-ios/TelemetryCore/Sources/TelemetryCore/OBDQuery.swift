@@ -506,9 +506,10 @@ public struct DecodedOBDSignal: Codable, Equatable, Sendable {
     public let sequence: UInt64
     public let sourceAdapter: String
     public let sourceTransport: String
+    public let recordedQuality: SignalQuality?
 
     init(signal: OBDSignalDefinition, rawValue: UInt64, signedRawValue: Int64?, value: Double,
-         enumName: String?, response: OBDResponse) {
+         enumName: String?, response: OBDResponse, recordedQuality: SignalQuality? = nil) {
         self.signalID = signal.id
         self.name = signal.name
         self.rawValue = rawValue
@@ -523,6 +524,7 @@ public struct DecodedOBDSignal: Codable, Equatable, Sendable {
         self.sequence = response.sequence
         self.sourceAdapter = response.sourceAdapter
         self.sourceTransport = response.sourceTransport
+        self.recordedQuality = recordedQuality
     }
 }
 
@@ -564,7 +566,8 @@ public enum OBDSignalDecoder {
         if let minimum = signal.minimum, value < minimum { throw OBDSignalDecodeError.valueOutOfRange }
         if let maximum = signal.maximum, value > maximum { throw OBDSignalDecodeError.valueOutOfRange }
         return DecodedOBDSignal(signal: signal, rawValue: raw, signedRawValue: signedRawValue,
-                                value: value, enumName: signal.enumMap[raw], response: response)
+                                value: value, enumName: signal.enumMap[raw], response: response,
+                                recordedQuality: .valid)
     }
 
     private static func mask(for bitLength: Int) -> UInt64 {

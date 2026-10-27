@@ -31,6 +31,7 @@ public struct DecodedSignalSample: Codable, Equatable, Sendable {
     public let receivedAtEpoch: Double
     public let receivedAtMonotonicNanos: UInt64
     public let source: TelemetrySource
+    public let recordedQuality: SignalQuality?
 
     public init(
         signalID: String,
@@ -43,6 +44,32 @@ public struct DecodedSignalSample: Codable, Equatable, Sendable {
         receivedAtMonotonicNanos: UInt64,
         source: TelemetrySource = .rawCAN
     ) {
+        self.init(
+            signalID: signalID,
+            value: value,
+            rawValue: rawValue,
+            enumName: enumName,
+            unit: unit,
+            frameSequence: frameSequence,
+            receivedAtEpoch: receivedAtEpoch,
+            receivedAtMonotonicNanos: receivedAtMonotonicNanos,
+            source: source,
+            recordedQuality: nil
+        )
+    }
+
+    init(
+        signalID: String,
+        value: Double,
+        rawValue: UInt64,
+        enumName: String?,
+        unit: String,
+        frameSequence: UInt64,
+        receivedAtEpoch: Double,
+        receivedAtMonotonicNanos: UInt64,
+        source: TelemetrySource = .rawCAN,
+        recordedQuality: SignalQuality?
+    ) {
         self.signalID = signalID
         self.value = value
         self.rawValue = rawValue
@@ -52,11 +79,12 @@ public struct DecodedSignalSample: Codable, Equatable, Sendable {
         self.receivedAtEpoch = receivedAtEpoch
         self.receivedAtMonotonicNanos = receivedAtMonotonicNanos
         self.source = source
+        self.recordedQuality = recordedQuality
     }
 
     private enum CodingKeys: String, CodingKey {
         case signalID, value, rawValue, enumName, unit, frameSequence
-        case receivedAtEpoch, receivedAtMonotonicNanos, source
+        case receivedAtEpoch, receivedAtMonotonicNanos, source, recordedQuality
     }
 
     public init(from decoder: Decoder) throws {
@@ -70,7 +98,8 @@ public struct DecodedSignalSample: Codable, Equatable, Sendable {
             frameSequence: try values.decode(UInt64.self, forKey: .frameSequence),
             receivedAtEpoch: try values.decode(Double.self, forKey: .receivedAtEpoch),
             receivedAtMonotonicNanos: try values.decode(UInt64.self, forKey: .receivedAtMonotonicNanos),
-            source: try values.decodeIfPresent(TelemetrySource.self, forKey: .source) ?? .rawCAN
+            source: try values.decodeIfPresent(TelemetrySource.self, forKey: .source) ?? .rawCAN,
+            recordedQuality: try values.decodeIfPresent(SignalQuality.self, forKey: .recordedQuality)
         )
     }
 }
@@ -182,6 +211,8 @@ public enum MeasurementEvent: Equatable, Sendable {
     case diagnosticSignal(DecodedOBDSignal)
     case location(LocationSample)
     case system(name: String, timestamp: Double, monotonicNanos: UInt64)
+    case diagnosticAudit(DiagnosticAuditEvent)
+    case diagnosticSelection(SignalAcquisitionSelectionChange, timestamp: Double, monotonicNanos: UInt64)
 }
 
 public actor TelemetryStore {
@@ -288,7 +319,7 @@ public actor TelemetryStore {
             case .diagnosticResponse(let response): lastDiagnosticResponse = response
             case .diagnosticSignal(let signal): ingest(diagnostic: signal)
             case .location(let sample): ingest(location: sample)
-            case .system: lastSystemEvent = event
+            case .system, .diagnosticAudit, .diagnosticSelection: lastSystemEvent = event
             }
         }
     }

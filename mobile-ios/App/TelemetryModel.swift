@@ -37,6 +37,8 @@ final class TelemetryModel: NSObject {
     var replayTimestamp: Double?
     var replaySignalUnits: [String: String] = [:]
     let replayController = ReplayController()
+    let diagnosticWorkspace = DiagnosticWorkspaceState()
+    let diagnosticAudit = DiagnosticAuditRecordingState()
     var replaySignalQuality: [String: SignalQuality] = [:]
     var replaySignalFreshness: [String: MeasurementReplay.SignalFreshness] = [:]
     @ObservationIgnored private var replayGeneration = UUID()
@@ -182,6 +184,34 @@ final class TelemetryModel: NSObject {
         diagnosticAdapter.onQueryFailure = { [weak self] failure, state in
             self?.handleDiagnosticFailure(failure, state: state)
         }
+        diagnosticAdapter.onAcquiringChanged = { [weak self] acquiring in
+            self?.diagnosticWorkspace.setAcquiring(acquiring)
+        }
+        diagnosticAdapter.onConnection = { [weak self] id, profile in
+            self?.diagnosticWorkspace.beganConnection(id, profile: profile)
+        }
+        diagnosticAdapter.onObservation = { [weak self] id, receipt in
+            let queryID: String
+            switch receipt.outcome {
+            case .success(let result): queryID = result.queryID
+            case .failure(let id, _): queryID = id
+            }
+            self?.diagnosticWorkspace.observe(.init(connectionID: id, queryID: queryID,
+                outcome: receipt.outcome, supportByQueryID: receipt.supportByQueryID,
+                freshSupportQueryIDs: receipt.freshSupportQueryIDs, origin: .vehicleSession,
+                timestamp: receipt.timestamp, sequence: receipt.ordinal))
+        }
+        diagnosticAdapter.onObservationUnavailable = { [weak self] id in
+            self?.diagnosticWorkspace.invalidateObservations(connectionID: id)
+        }
+        diagnosticAdapter.onAudit = { [weak self] event in
+            guard let self else { return }
+            self.record(contentsOf: self.diagnosticAudit.receive(event))
+        }
+        diagnosticAdapter.onAuditError = { [weak self] receipt in
+            guard let self else { return }
+            self.record(contentsOf: self.diagnosticAudit.failed(receipt))
+        }
         bleDiscovery.onUpdate = { [weak self] devices, status in
             self?.bleDevices = devices
             self?.bleDiscoveryStatus = status
@@ -199,6 +229,8 @@ final class TelemetryModel: NSObject {
                 adapterProfile = savedProfile
                 adapterProfileStatus = "Profile loaded: \(savedProfile.name)"
             }
+            diagnosticWorkspace.configure(at: root.appendingPathComponent("diagnostic-settings.json"))
+            try? diagnosticWorkspace.preview(profile: adapterProfile)
             let databaseURL = root.appendingPathComponent("measurements.sqlite3")
             measurementDBURL = databaseURL
             let recovered = try MeasurementRecorder.recoverUnfinishedSessions(
@@ -454,8 +486,25 @@ final class TelemetryModel: NSObject {
             liveAdapter.start(profile: adapterProfile)
         } else {
             liveAdapter.stop()
-            diagnosticAdapter.start(profile: adapterProfile)
+            do {
+                let queries = try diagnosticWorkspace.selectedQueries(profile: adapterProfile)
+                diagnosticAdapter.start(profile: adapterProfile, queries: queries,
+                    localContextID: diagnosticWorkspace.settings.selectedContextID)
+            } catch {
+                adapterStatus = "Diagnostic query selection needs review"
+            }
         }
+    }
+
+    func applyDiagnosticSelection(_ change: SignalAcquisitionSelectionChange) throws {
+        guard runMode != .replay, let profile = adapterProfile else {
+            throw DiagnosticWorkspaceDocumentError.staleSelection
+        }
+        // Validate against the current model, not the profile captured when a
+        // selection sheet opened. Successful persistence precedes publication.
+        try diagnosticWorkspace.apply(change, profile: profile)
+        record(.diagnosticSelection(change, timestamp: Date().timeIntervalSince1970,
+                                    monotonicNanos: DispatchTime.now().uptimeNanoseconds))
     }
 
     func stopLiveAdapter() {
@@ -885,7 +934,7 @@ final class TelemetryModel: NSObject {
     }
 
     private func record(contentsOf events: [MeasurementEvent]) {
-        guard localRecordingEnabled, let writer = recordingWriteQueue else { return }
+        guard !events.isEmpty, localRecordingEnabled, let writer = recordingWriteQueue else { return }
         do {
             // Admission happens now, not inside a later Task. Stop closes this
             // same queue synchronously, then drains all accepted submissions.
@@ -1184,6 +1233,7 @@ final class TelemetryModel: NSObject {
     }
 
     func sceneChanged(background: Bool) {
+        if background { diagnosticWorkspace.flushEvidence() }
         if collecting, let event = try? TelemetryEvent.state(background ? "background" : "foreground",
             capturedAt: Date().timeIntervalSince1970, source: "ios-native",
             appVersion: eventAppVersion, device: eventDevice) {
@@ -1272,6 +1322,9 @@ final class TelemetryModel: NSObject {
                 mode: runMode
             )
             let writer = try MeasurementWriteQueue(recorder: recorder)
+            let auditStart = try DiagnosticAuditTimestamp(epochSeconds: now,
+                monotonicNanoseconds: DispatchTime.now().uptimeNanoseconds)
+            diagnosticAudit.begin(at: auditStart)
             measurementContextGeneration = UUID()
             localRecorder = recorder
             recordingWriteQueue = writer
@@ -1284,6 +1337,7 @@ final class TelemetryModel: NSObject {
                            monotonicNanos: DispatchTime.now().uptimeNanoseconds))
             publishCarPlayProjection()
         } catch {
+            diagnosticAudit.discard()
             localRecordingEnabled = false
             recordingLifecycle.fail()
             localRecordingStatus = "Local recorder unavailable"
@@ -1293,11 +1347,15 @@ final class TelemetryModel: NSObject {
     func stopRecording() {
         guard !recordingClosing else { return }
         guard let recorder = localRecorder, let writer = recordingWriteQueue else {
+            diagnosticAudit.discard()
             localRecordingEnabled = false
             return
         }
-        localRecordingEnabled = false
         recordingClosing = true
+        // Audit close rows enter the same queue before finish. A failed enqueue
+        // may call stopRecording again, so establish the close guard first.
+        record(contentsOf: diagnosticAudit.finish())
+        localRecordingEnabled = false
         localRecordingStatus = "Closing local recording"
         let pending = writer.finish(endedAt: Date().timeIntervalSince1970,
                                     monotonicNanos: DispatchTime.now().uptimeNanoseconds)

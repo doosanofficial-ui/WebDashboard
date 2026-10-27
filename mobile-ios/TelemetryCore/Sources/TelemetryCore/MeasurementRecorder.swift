@@ -470,6 +470,32 @@ public actor MeasurementRecorder {
                 receivedAtMonotonicNanos: monotonicNanos,
                 payloadJSON: String(decoding: encoder.encode(SystemPayload(name: name)), as: UTF8.self)
             )
+        case .diagnosticAudit(let event):
+            return try EncodedRow(kind: "SYSTEM", sourceTimestamp: event.timestamp.epochSeconds,
+                receivedAtEpoch: event.timestamp.epochSeconds,
+                receivedAtMonotonicNanos: event.timestamp.monotonicNanoseconds,
+                payloadJSON: String(decoding: encoder.encode(DiagnosticAuditSystemPayload(event: event)), as: UTF8.self))
+        case .diagnosticSelection(let change, let timestamp, let monotonicNanos):
+            guard timestamp.isFinite else { throw TelemetryError.invalidBatch }
+            struct SelectionPayload: Encodable {
+                let name = "diagnostic_query_selection_changed_v1"
+                let version = 1
+                let action: SignalAcquisitionSelectionChange.Action
+                let localContextID: String
+                let profileID: String
+                let profileRevision: String
+                let previousQueryIDs: [String]
+                let selectedQueryIDs: [String]
+                let previousPolicy: SignalAcquisitionPolicy?
+                let policy: SignalAcquisitionPolicy?
+            }
+            let payload = SelectionPayload(action: change.action, localContextID: change.localContextID,
+                profileID: change.profileID, profileRevision: change.profileRevision,
+                previousQueryIDs: change.previousQueryIDs, selectedQueryIDs: change.selectedQueryIDs,
+                previousPolicy: change.previousPolicy, policy: change.policy)
+            return try EncodedRow(kind: "SYSTEM", sourceTimestamp: timestamp, receivedAtEpoch: timestamp,
+                receivedAtMonotonicNanos: monotonicNanos,
+                payloadJSON: String(decoding: encoder.encode(payload), as: UTF8.self))
         }
     }
 
