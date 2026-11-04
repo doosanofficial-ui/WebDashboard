@@ -3,6 +3,31 @@ import XCTest
 @testable import TelemetryCore
 
 final class OBDQuerySchedulerTests: XCTestCase {
+    func testSlowQueryIntervalDoesNotDelaySecondFastRequest() async throws {
+        let original = try SantaFeMX5HybridQueryCatalog.initialQueries()
+        let slow = try revisedQuery(original[2], pollInterval: 5, timeout: 5)
+        let fast = try revisedQuery(original[3], pollInterval: 0.01, timeout: 1)
+        let checkpoint = expectation(description: "second fast request before slow deadline")
+        let transport = ScriptedDiagnosticTransport(
+            replies: standardReplies, hold: fast.requestString, occurrence: 2,
+            checkpoint: checkpoint
+        )
+        let scheduler = OBDQueryScheduler(session: OBDQuerySession(transport: transport))
+        let stream = try await scheduler.start(queries: [slow, fast])
+        let consumer = Task { for await _ in stream {} }
+        // Existing sequential sleep waits five seconds after the first slow
+        // response. The due-time scheduler can issue both fast requests promptly.
+        await fulfillment(of: [checkpoint], timeout: 1)
+        await scheduler.stop()
+        await consumer.value
+        let stoppedWrites = await transport.writes()
+        XCTAssertEqual(stoppedWrites.filter { $0 == slow.requestString }.count, 1)
+        XCTAssertEqual(stoppedWrites.filter { $0 == fast.requestString }.count, 2)
+        await transport.releaseHeldReply()
+        let finalWrites = await transport.writes()
+        XCTAssertEqual(finalWrites, stoppedWrites, "Stop must prevent later requests")
+    }
+
     func testOverlappingObservedIDRequiresExactScheduledDefinition() async throws {
         let query = try SantaFeMX5HybridQueryCatalog.initialQueries()[0]
         var value = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(query)) as? [String: Any])
@@ -949,3 +974,4 @@ private actor ScriptedDiagnosticTransport: CANTransport {
 
     func writes() -> [String] { recorded }
 }
+
