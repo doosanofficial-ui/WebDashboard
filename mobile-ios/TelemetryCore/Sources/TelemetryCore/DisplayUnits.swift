@@ -59,12 +59,17 @@ public enum DisplayUnits {
     // Binary exponent decomposition avoids common-base intermediate over/underflow.
     // Final binary64 rounding remains subject to native parity tests before integration.
     private static func ratio(_ numerator: [Double], _ denominator: [Double]) -> Double {
-        if numerator.contains(0) { return 0 }
+        // Swift's significand is a magnitude; carry operand signs separately.
+        var sign: FloatingPointSign = .plus
+        for value in numerator + denominator where value.sign == .minus {
+            sign = sign == .plus ? .minus : .plus
+        }
+        if numerator.contains(0) { return Double(sign: sign, exponent: 0, significand: 0) }
         var mantissa=1.0
         var exponent=0
         for value in numerator { mantissa *= value.significand; exponent += value.exponent }
         for value in denominator { mantissa /= value.significand; exponent -= value.exponent }
-        return Double(sign: .plus, exponent: exponent, significand: mantissa)
+        return Double(sign: sign, exponent: exponent, significand: mantissa)
     }
     private static func checked(_ value: Double, expectedNonzero: Bool) -> DUDisplayState {
         guard value.isFinite else { return .unavailable(.overflow) }

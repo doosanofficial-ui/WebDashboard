@@ -10,7 +10,10 @@ final class SelectedRawExportTests: XCTestCase {
     }
     private func bundle(_ records: [SelectedRawRecord]) throws -> SelectedRawBundle {
         let s = snapshot(records)
-        return try XCTUnwrap(SelectedRawExport.build(SelectedRawExport.select(s, ids: records.map(\.id)), current: s))
+        // Let expected export errors reach XCTAssertThrowsError without an unwrap failure.
+        let selection = try SelectedRawExport.select(s, ids: records.map(\.id))
+        let result = try SelectedRawExport.build(selection, current: s)
+        return try XCTUnwrap(result)
     }
     func testDefaultEmpty() throws {
         let s = snapshot([record()]); XCTAssertNil(try SelectedRawExport.build(SelectedRawExport.select(s), current: s))

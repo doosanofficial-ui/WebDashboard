@@ -571,31 +571,38 @@ final class OBDQuerySchedulerTests: XCTestCase {
         }, "The old close must not cancel the new stream")
     }
 
-    // Catches a query immediately following the first result instead of waiting
-    // through its configured polling interval, where Stop must remain effective.
+    // All configured queries are initially due. Stop after their initial
+    // responses, while each is waiting for its own next polling deadline.
     func testStopDuringPollingIntervalPreventsNextConfiguredRequest() async throws {
         let original = try SantaFeMX5HybridQueryCatalog.initialQueries()
         let first = try revisedQuery(original[2], pollInterval: 1, timeout: 1)
-        let second = try fastQuery(original[1])
+        let second = try revisedQuery(original[1], pollInterval: 1, timeout: 1)
         let firstResponse = expectation(description: "first configured query succeeds")
+        let secondResponse = expectation(description: "second configured query succeeds")
         let transport = ScriptedDiagnosticTransport(replies: standardReplies)
         let scheduler = OBDQueryScheduler(session: OBDQuerySession(transport: transport))
         let stream = try await scheduler.start(queries: [first, second])
         let consumer = Task {
             for await outcome in stream {
-                if case .success(let result) = outcome, result.queryID == first.id {
-                    firstResponse.fulfill()
+                if case .success(let result) = outcome {
+                    if result.queryID == first.id { firstResponse.fulfill() }
+                    if result.queryID == second.id { secondResponse.fulfill() }
                 }
             }
         }
 
-        await fulfillment(of: [firstResponse], timeout: 2)
+        await fulfillment(of: [firstResponse, secondResponse], timeout: 2)
         await scheduler.stop()
         await consumer.value
-        let writes = await transport.writes()
+        let stoppedWrites = await transport.writes()
 
-        XCTAssertEqual(writes.filter { $0 == first.requestString }.count, 1)
-        XCTAssertEqual(writes.filter { $0 == second.requestString }.count, 0)
+        XCTAssertEqual(stoppedWrites.filter { $0 == first.requestString }.count, 1)
+        XCTAssertEqual(stoppedWrites.filter { $0 == second.requestString }.count, 1)
+        // Cross both next deadlines: cancelling the polling wait must not leave
+        // a request that can resume and write after Stop has returned.
+        try await Task.sleep(nanoseconds: 1_100_000_000)
+        let finalWrites = await transport.writes()
+        XCTAssertEqual(finalWrites, stoppedWrites, "Stop must prevent all later transport writes")
     }
 
     // Catches stopping after a recoverable bitmap outcome or continuing after a fatal one.

@@ -49,6 +49,17 @@ final class DisplayUnitsTests: XCTestCase {
         guard case let .available(zero)=DisplayUnits.convert(source(-0.0,.speed,.kmh)).state else { return XCTFail() }
         XCTAssertEqual(zero.sign,.minus)
     }
+    func testNegativeZeroSurvivesScaledConversion() {
+        for (quantity, from, to) in [(DUQuantity.speed, DUUnit.kmh, DUUnit.mph),
+                                     (.pressure, .kPa, .bar), (.energy, .wh, .kwh)] {
+            guard case let .available(value) = DisplayUnits.convert(source(-0.0, quantity, from), to: to).state else {
+                XCTFail("Negative zero should remain available")
+                continue
+            }
+            XCTAssertEqual(value, 0)
+            XCTAssertEqual(value.sign, .minus)
+        }
+    }
     func testRoundtripBounds() {
         let cases: [(DUQuantity,DUUnit,DUUnit)] = [(.speed,.kmh,.mph),(.distance,.km,.mi),(.pressure,.kPa,.psi),
             (.pressure,.kPa,.bar),(.volume,.litre,.usGallon),(.volume,.litre,.imperialGallon),(.energy,.wh,.kwh),(.temperature,.c,.f)]
