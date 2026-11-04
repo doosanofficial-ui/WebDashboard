@@ -133,9 +133,13 @@ final class TrackBearingEstimateTests: XCTestCase {
             XCTAssertNil(TrackBearingEstimate.smooth(points, asOf: 104).bearing)
         }
         XCTAssertNil(TrackBearingEstimate.smooth(Array(points.prefix(2)), asOf: 102).bearing)
-        let five = (0..<5).map { i in
-            fix(archiveSequence: Int64(100 + 4 * i), predecessorArchiveSequence: i == 0 ? nil : Int64(96 + 4 * i),
-                gpsOrdinal: i, timestamp: 100 + Double(i), longitude: Double(i) * 0.001)
+        let five: [TrackBearingEstimate.Fix] = (0..<5).map { (i: Int) in
+            let sequence = Int64(100 + 4 * i)
+            let predecessor: Int64? = i == 0 ? nil : Int64(96 + 4 * i)
+            let timestamp = 100.0 + Double(i)
+            let longitude = Double(i) * 0.001
+            return fix(archiveSequence: sequence, predecessorArchiveSequence: predecessor,
+                       gpsOrdinal: i, timestamp: timestamp, longitude: longitude)
         }
         XCTAssertNil(TrackBearingEstimate.smooth(five, asOf: 104).bearing)
         let longWindow = [points[0],
