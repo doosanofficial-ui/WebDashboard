@@ -6,6 +6,8 @@ import tempfile
 import sys
 import subprocess
 import re
+import json
+import signal
 
 SPEC = importlib.util.spec_from_file_location("ios_lifecycle_runner", Path(__file__).resolve().parents[1] / "verify_ios_lifecycle.py")
 runner = importlib.util.module_from_spec(SPEC)
@@ -69,6 +71,43 @@ class LifecycleRunnerTests(unittest.TestCase):
             self.assertIn("23 passed", log.read_text())
             runner.run_test_command([sys.executable, "-c", "print('success')"], log, 10)
             self.assertIn("success", log.read_text())
+
+    @unittest.skipUnless(os.name == "posix", "Requires POSIX process ownership")
+    def test_timed_out_hosted_command_reaps_its_inherited_child(self):
+        program = ("import subprocess, sys, time; "
+                   "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
+                   "print(child.pid, flush=True); time.sleep(60)")
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "owned-test.log"
+            pid = None
+            try:
+                with self.assertRaises(subprocess.TimeoutExpired):
+                    runner.run_test_command([sys.executable, "-c", program], log, 2)
+                pid = int(log.read_text().splitlines()[0])
+                with self.assertRaises(ProcessLookupError, msg="Timeout must not leave the run-owned child alive"):
+                    os.kill(pid, 0)
+                pid = None
+                receipt = json.loads(log.with_suffix(".process.json").read_text())
+                self.assertTrue(receipt["timedOut"])
+                self.assertIs(receipt["groupExistsAfterCleanup"], False)
+            finally:
+                if pid is not None:
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+
+    @unittest.skipUnless(os.name == "posix", "Requires POSIX process ownership")
+    def test_cleanup_runs_and_retains_nonzero_exit_without_writable_phase_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            marker = root / "owned-fixture"
+            marker.touch()
+            command = [sys.executable, "-c", "import pathlib,sys; pathlib.Path(sys.argv[1]).unlink(); sys.exit(7)", str(marker)]
+            result = runner.run_test_command(command, root / "unavailable" / "shutdown.log", 10,
+                                             check=False, best_effort_recording=True)
+            self.assertFalse(marker.exists())
+            self.assertEqual(result.returncode, 7)
 
     def test_missing_compatible_runtime_is_a_blocker_not_pass(self):
         with self.assertRaises(ValueError):
@@ -151,7 +190,7 @@ class HostedCleanupControlFlowTests(unittest.TestCase):
             private.mkdir()
             events, calls = [], []
             boot_error = subprocess.TimeoutExpired(["xcrun", "simctl", "bootstatus", device, "-b"], 180)
-            shutdown_error = subprocess.TimeoutExpired(["xcrun", "simctl", "shutdown", device], 60)
+            shutdown_error = subprocess.TimeoutExpired(["xcrun", "simctl", "shutdown", device], 300)
             reader_error = subprocess.TimeoutExpired(["fixture-reader"], 60, output=reader_output, stderr=reader_stderr)
             original_write = Path.write_text
             original_open = Path.open
@@ -194,28 +233,29 @@ class HostedCleanupControlFlowTests(unittest.TestCase):
                         raise reader_error
                     return json.dumps({"totalTestCount": runner.EXPECTED_TEST_COUNT, "passedTests": runner.EXPECTED_TEST_COUNT, "failedTests": 0, "skippedTests": 0})
                 raise AssertionError("Unexpected external command: " + repr(command))
-            def run(command, **kwargs):
+            def run(command, log, timeout, *, check=True, best_effort_recording=False):
                 if command[0] == "xcodebuild":
-                    self.assertEqual(kwargs['timeout'], 900)
-                    self.assertIs(kwargs['text'], True)
-                    self.assertEqual(kwargs['stderr'], subprocess.STDOUT)
-                    self.assertNotIn('start_new_session', kwargs)
-                    kwargs["stdout"].write("Synthetic runner control-flow fixture; not XCTest execution\n")
-                    return subprocess.CompletedProcess(command, 65 if body == "xcode" else 0)
+                    self.assertEqual(timeout, 900)
+                    self.assertTrue(check)
+                    self.assertFalse(best_effort_recording)
+                    log.write_text("Synthetic runner control-flow fixture; not XCTest execution\n")
+                    if body == "xcode":
+                        raise subprocess.CalledProcessError(65, command)
+                    return subprocess.CompletedProcess(command, 0)
                 self.assertIn(command[2], ("shutdown", "delete"))
                 self.assertEqual(command, ["xcrun", "simctl", command[2], device])
-                self.assertEqual(kwargs["timeout"], 60)
-                self.assertTrue(kwargs["capture_output"])
-                calls.append({"command": command, "timeout": kwargs["timeout"], "check": kwargs.get("check", False)})
+                self.assertEqual(timeout, 300)
+                self.assertTrue(best_effort_recording)
+                calls.append({"command": command, "timeout": timeout, "check": check})
                 phase = command[2]
                 events.append(phase)
                 fault = shutdown if phase == "shutdown" else delete
                 if fault == "timeout":
-                    raise shutdown_error if phase == "shutdown" else subprocess.TimeoutExpired(command, 60)
+                    raise shutdown_error if phase == "shutdown" else subprocess.TimeoutExpired(command, timeout)
                 if fault == "error":
                     raise OSError("synthetic " + phase + " launch failure")
                 code = 7 if fault == "nonzero" else 0
-                if code and kwargs.get("check", False):
+                if code and check:
                     raise subprocess.CalledProcessError(code, command)
                 if phase == "delete" and not code:
                     owned.unlink()
@@ -245,7 +285,7 @@ class HostedCleanupControlFlowTests(unittest.TestCase):
                 stack.enter_context(patch.object(runner, "output", side_effect=output))
                 stack.enter_context(patch.object(runner, "read_test_summary_output", side_effect=lambda bundle, _results:
                     output(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)], timeout=180)))
-                stack.enter_context(patch.object(runner.subprocess, "run", side_effect=run))
+                stack.enter_context(patch.object(runner, "run_test_command", side_effect=run))
                 reader_process = stack.enter_context(patch.object(runner.subprocess, "check_output",
                     side_effect=reader_error if body == "reader" else None,
                     return_value=json.dumps({"totalTestCount": runner.EXPECTED_TEST_COUNT,

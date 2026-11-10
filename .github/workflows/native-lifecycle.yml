@@ -15,7 +15,7 @@ jobs:
     runs-on: xcode-27
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
-    timeout-minutes: 34  # Preserve headroom for boot600s and summary180s.
+    timeout-minutes: 62  # Host commands up to 47m, plus preflight, owned reaping, setup, and evidence upload.
     steps:
       - uses: actions/checkout@v7
       - name: Require Xcode, iOS SDK and runtime 27.x
@@ -23,6 +23,7 @@ jobs:
       - name: Check fail-closed lifecycle runner
         run: python3 -m unittest discover -s scripts/tests -p test_ios_lifecycle_runner.py -v
       - name: Install XcodeGen
+        timeout-minutes: 5
         run: |
           if ! brew list xcodegen >/dev/null 2>&1; then
             brew install xcodegen

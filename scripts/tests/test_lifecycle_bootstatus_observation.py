@@ -73,16 +73,16 @@ class LifecycleObserverIsolationRegressionTests(unittest.TestCase):
                         'passedTests': lifecycle.EXPECTED_TEST_COUNT, 'failedTests': 0, 'skippedTests': 0})
                 raise AssertionError('Unreplaced native boundary: ' + repr(command))
 
-            def run(command, **kwargs):
-                native_calls.append((list(command), kwargs))
+            def run(command, log, timeout, *, check=True, best_effort_recording=False):
+                native_calls.append((list(command), {'timeout': timeout, 'check': check}))
                 if command[0] == 'xcodebuild':
-                    kwargs['stdout'].write('Synthetic xcode boundary, no XCTest execution\n')
+                    log.write_text('Synthetic xcode boundary, no XCTest execution\n')
                     return subprocess.CompletedProcess(command, 0)
                 phase = command[2]
                 if phase not in ('shutdown', 'delete'):
                     raise AssertionError('Unreplaced cleanup boundary')
                 events.append(phase)
-                if cleanup_fault and phase == 'shutdown': raise subprocess.TimeoutExpired(command, 60)
+                if cleanup_fault and phase == 'shutdown': raise subprocess.TimeoutExpired(command, timeout)
                 if cleanup_fault and phase == 'delete': raise subprocess.CalledProcessError(7, command)
                 if phase == 'delete': owned.unlink()
                 return subprocess.CompletedProcess(command, 0)
@@ -120,7 +120,7 @@ class LifecycleObserverIsolationRegressionTests(unittest.TestCase):
                 stack.enter_context(patch.object(lifecycle, 'output', side_effect=output))
                 stack.enter_context(patch.object(lifecycle, "read_test_summary_output", side_effect=lambda bundle, _results:
                     output(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)], timeout=60)))
-                stack.enter_context(patch.object(lifecycle.subprocess, 'run', side_effect=run))
+                stack.enter_context(patch.object(lifecycle, 'run_test_command', side_effect=run))
                 stack.enter_context(patch.object(lifecycle.subprocess, 'Popen', side_effect=late_popen))
                 stack.enter_context(patch.object(lifecycle, 'observe_first_failure', side_effect=first_failure))
                 stack.enter_context(patch.object(observation, 'OBSERVE_AFTER_SECONDS', .001))
@@ -172,7 +172,7 @@ class LifecycleObserverIsolationRegressionTests(unittest.TestCase):
         boot = [call for call in value['nativeCalls'] if call[0] == COMMAND]
         self.assertEqual(boot, [(COMMAND, 600)])
         cleanup = [call for call in value['nativeCalls'] if call[0][1:3] in (['simctl', 'shutdown'], ['simctl', 'delete'])]
-        self.assertEqual([call[1]['timeout'] for call in cleanup], [60, 60])
+        self.assertEqual([call[1]['timeout'] for call in cleanup], [300, 300])
         self.assertEqual([call[1]['check'] for call in cleanup], [False, True])
 
     def test_timeout_does_not_wait_for_blocked_optional_journal(self):

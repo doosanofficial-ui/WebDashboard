@@ -23,6 +23,7 @@ from failure_observation import observe_first_failure
 EXPECTED_TEST_COUNT = 92
 SUMMARY_READ_TIMEOUT_SECONDS = 180
 BOOTSTATUS_TIMEOUT_SECONDS = 600
+SIMULATOR_CLEANUP_TIMEOUT_SECONDS = 300
 
 
 def stage_sources(root, destination):
@@ -35,11 +36,21 @@ def is_ios27_version(version):
     return isinstance(version, str) and re.fullmatch(r"27(?:\.[0-9]+)+", version) is not None
 
 
-def run_test_command(command, log, timeout):
-    """A nonzero xcodebuild exit is failure even if result counters look green."""
-    with log.open("w", encoding="utf-8") as stream:
-        subprocess.run(command, stdout=stream, stderr=subprocess.STDOUT,
-                       check=True, timeout=timeout)
+def run_test_command(command, log, timeout, *, check=True, best_effort_recording=False):
+    """Bound a hosted phase and reap only its inherited process group."""
+    from verify_offline_replay import run_owned_phase
+
+    receipt = log.with_suffix(".process.json")
+    try:
+        print(f"HOSTED PHASE {log.stem}: waiting up to {timeout}s; progress: {receipt.name}", flush=True)
+    except OSError:
+        if not best_effort_recording:
+            raise
+    evidence = run_owned_phase(command, log, receipt, timeout, ensure_group_cleanup=True,
+                               group_cleanup_timeout=2, check=check, best_effort_recording=best_effort_recording)
+    if evidence.get("groupExistsAfterCleanup") is not False or evidence.get("groupCleanupErrors"):
+        raise RuntimeError(f"Unresolved hosted process group cleanup: {receipt}")
+    return subprocess.CompletedProcess(command, evidence["exitCode"])
 
 
 def select_runtime_and_type(data):
@@ -159,13 +170,12 @@ def main():
         (results / "command.json").write_text(json.dumps(command, indent=2), encoding="utf-8")
         log = results / "xcodebuild.log"
         failure_phase = "hosted-xcode"
-        with log.open("w", encoding="utf-8") as stream:
-            run = failure_observation.observe_call(
-                lambda: subprocess.run(command, stdout=stream, stderr=subprocess.STDOUT, text=True, timeout=900),
-                results, failure_phase, 900)
+        try:
+            failure_observation.observe_call(
+                lambda: run_test_command(command, log, 900), results, failure_phase, 900)
+        except subprocess.CalledProcessError as error:
+            raise RuntimeError(f"xcodebuild exited {error.returncode}; see {log}") from error
         print(log.read_text(encoding="utf-8", errors="replace")[-22000:], flush=True)
-        if run.returncode:
-            raise RuntimeError(f"xcodebuild exited {run.returncode}; see {log}")
         failure_phase = "result-read"
         summary = json.loads(failure_observation.observe_call(
             lambda: read_test_summary_output(bundle, results),
@@ -189,12 +199,14 @@ def main():
                 # Only this run's created UUID; retain the existing return-code policy.
                 for phase in ("shutdown", "delete"):
                     command = ["xcrun", "simctl", phase, simulator]
-                    entry = {"phase": phase, "command": command, "timeoutSeconds": 60,
+                    timeout = SIMULATOR_CLEANUP_TIMEOUT_SECONDS
+                    entry = {"phase": phase, "command": command, "timeoutSeconds": timeout,
                              "checkReturnCode": phase == "delete", "timedOut": False}
                     try:
                         result = failure_observation.observe_call(
-                            lambda: subprocess.run(command, check=phase == "delete", capture_output=True, timeout=60),
-                            results, 'hosted-' + phase, 60)
+                            lambda: run_test_command(command, results / f"hosted-{phase}.log", timeout,
+                                                     check=phase == "delete", best_effort_recording=True),
+                            results, 'hosted-' + phase, timeout)
                         entry.update(accepted=True, commandSucceeded=result.returncode == 0, exitCode=result.returncode)
                     except Exception as error:
                         entry.update(accepted=False, commandSucceeded=False,

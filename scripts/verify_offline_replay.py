@@ -136,7 +136,7 @@ def phase_resource_snapshot():
     return value
 
 
-def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False, ensure_group_cleanup=False, group_cleanup_timeout=0):
+def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False, ensure_group_cleanup=False, group_cleanup_timeout=0, *, check=True):
     """Record one bounded phase and stop only its newly owned POSIX process group."""
     if os.name != "posix":
         raise ValueError("Owned phase requires POSIX process groups")
@@ -212,7 +212,7 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False,
             if observed > deadline:
                 raise subprocess.TimeoutExpired(command, timeout)
             completion['exitCode'] = code
-            if code:
+            if code and check:
                 error = subprocess.CalledProcessError(code, command)
         except subprocess.TimeoutExpired:
             error = completion['error'] = subprocess.TimeoutExpired(command, timeout)
@@ -237,7 +237,10 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False,
                 observe_boundary('eventSetReturnedMonotonic')
     def recording_error(error):
         evidence.setdefault("recordingErrors", []).append(str(error))
-        print("Phase evidence could not be recorded: " + str(error), file=sys.stderr)
+        try:
+            print("Phase evidence could not be recorded: " + str(error), file=sys.stderr)
+        except OSError:
+            pass
     def save():
         boundaries['saveCalls'] = min(boundaries['saveCalls'] + 1, 65535)
         boundaries['saveLatestReturnedMonotonic'] = None
@@ -371,7 +374,7 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False,
             if 'error' in completion:
                 raise completion['error']
             code = completion['exitCode']
-            if code:
+            if code and check:
                 raise subprocess.CalledProcessError(code, command)
             if ensure_group_cleanup:
                 stop_owned_group()  # Optional diagnostic worker owns all inherited probe descendants.
