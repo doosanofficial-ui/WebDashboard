@@ -400,19 +400,21 @@ class FirstFailureObservationTests(unittest.TestCase):
                 with patch.object(m.json, 'dump', side_effect=dump), \
                      patch.object(m, 'resources', return_value={'cpuCount': 1}) as resources, \
                      patch.object(m, 'simctl_identity') as identity, \
-                     patch.object(m, 'run_probe') as probe:
+                     patch.object(m, 'run_probe', return_value={
+                         'name': 'neutral-process', 'childReaped': True, 'childExitCode': 0}) as probe:
                     result = m.worker(folder, None, time.monotonic() + 20)
                 self.assertEqual(result, 2, 'A journal failure must stop this optional worker')
                 self.assertEqual(len(at_fault), 1)
                 value = json.loads(at_fault[0])
                 self.assertEqual(receipt.read_bytes(), at_fault[0], 'Retain the last complete published snapshot')
-                self.assertEqual(value['probes'], [])
+                self.assertEqual(value['probes'], [{
+                    'name': 'neutral-process', 'childReaped': True, 'childExitCode': 0}])
                 self.assertNotIn('finishedMonotonic', value)
                 identity.assert_not_called()
-                probe.assert_not_called()
+                probe.assert_called_once_with('neutral-process', [sys.executable, '-c', 'pass'], 3, None, [])
                 if boundary == 'start':
                     resources.assert_not_called()
-                    self.assertEqual(value['stages'], [])
+                    self.assertEqual([x['name'] for x in value['stages']], ['neutral-process'])
                 else:
                     resources.assert_called_once_with()
                     self.assertEqual(value['stages'][-1]['name'], 'resources')
