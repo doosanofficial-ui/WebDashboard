@@ -95,10 +95,12 @@ final class SmallViewportUIRegression: XCTestCase {
         capture(app, "editor-portrait-canvas-end")
         XCUIDevice.shared.orientation = .landscapeLeft
         let window = app.windows.firstMatch
-        let rotated = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            window.frame.width > window.frame.height
-        }, object: window)
-        XCTAssertEqual(XCTWaiter.wait(for: [rotated], timeout: 5), .completed)
+        let rotated = UIConditionWait.until(timeout: 5) {
+            // One AX snapshot keeps both dimensions coherent and avoids a second round trip.
+            let frame = window.frame
+            return frame.width > frame.height
+        }
+        XCTAssertTrue(rotated)
         let landscape = window.screenshot()
         XCTAssertGreaterThan(landscape.image.size.width, landscape.image.size.height)
         capture(app, "editor-landscape-initial")
