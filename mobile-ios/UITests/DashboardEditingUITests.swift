@@ -17,6 +17,34 @@ final class DashboardEditingUITests: XCTestCase {
     private func capture(_ app: XCUIApplication, _ name: String) {
         let image = XCTAttachment(screenshot: app.screenshot()); image.name = name; image.lifetime = .keepAlways; add(image)
         let ax = XCTAttachment(string: app.debugDescription); ax.name = name + "-AX"; ax.lifetime = .keepAlways; add(ax)
+        if name == "magnetic-landscape-release" {
+            // Keep the original whole-app capture. Its AX bounds can include an
+            // off-window Other; the window capture distinguishes that from clipping
+            // in the presented editor without changing the drag or undo assertions.
+            let window = app.windows.firstMatch
+            let windowImage = window.screenshot()
+            let presented = XCTAttachment(screenshot: windowImage)
+            presented.name = "magnetic-landscape-release-window"
+            presented.lifetime = .keepAlways; add(presented)
+            let snapshot = try? app.snapshot()
+            let observedWindow = window.frame
+            let captureBounds: [String: Any] = [
+                "appSnapshotAvailable": snapshot != nil,
+                "windowFrame": [observedWindow.minX, observedWindow.minY,
+                                observedWindow.width, observedWindow.height],
+                "windowScreenshotSize": [windowImage.image.size.width, windowImage.image.size.height],
+                "appSnapshotFrame": snapshot.map { [$0.frame.minX, $0.frame.minY,
+                                                    $0.frame.width, $0.frame.height] } ?? [],
+                "scope": "Sequential captures of unchanged post-drag state; not an atomic app/window/AX transaction"
+            ]
+            if let data = try? JSONSerialization.data(withJSONObject: captureBounds, options: [.sortedKeys]) {
+                let attachment = XCTAttachment(data: data, uniformTypeIdentifier: "public.json")
+                attachment.name = "magnetic-landscape-release-capture-bounds"
+                attachment.lifetime = .keepAlways; add(attachment)
+            }
+            XCTAssertGreaterThan(windowImage.image.size.width, windowImage.image.size.height,
+                "Landscape visual evidence must include the presented app window")
+        }
     }
     func testSelectedCardKeepsConfigurationAvailableOnDemand() {
         let app = XCUIApplication(); app.launchArguments += ["--app-language", "en"]; app.launch(); capture(app, "SYNTHETIC-concept-live-idle"); openEditor(app)

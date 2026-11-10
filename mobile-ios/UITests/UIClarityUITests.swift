@@ -173,8 +173,87 @@ final class UIClarityUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["No confirmed stale signals"].exists, app.debugDescription)
         XCTAssertTrue(app.staticTexts["Freshness is unknown for this recording."].exists)
         XCTAssertFalse(app.descendants(matching: .any).matching(identifier: "signal-row-SANTAFEHYB_HVBAT_SOC").firstMatch.exists)
+        try captureStableFilterWindow(app, name: "DEMO-stale-filter-settled",
+                                      expectedLabel: "Show all signals")
+        app.buttons["signals-stale-filter"].tap()
+        XCTAssertTrue(app.staticTexts["48.5"].waitForExistence(timeout: 5))
+        try captureStableFilterWindow(app, name: "DEMO-all-filter-settled",
+                                      expectedLabel: "Show stale signals")
         #endif
     }
+
+    // A stable screenshot bracket separates a title transition from persistent
+    // overlapping pixels. Preserve every attempt; never retry a stable failure.
+    private func captureStableFilterWindow(_ app: XCUIApplication, name: String,
+                                          expectedLabel: String) throws {
+        let entered = ProcessInfo.processInfo.systemUptime
+        let deadline = entered + 5
+        let window = app.windows.firstMatch
+        var attempt = 0
+        while ProcessInfo.processInfo.systemUptime < deadline {
+            attempt += 1
+            let before = window.screenshot()
+            let beforeEnd = ProcessInfo.processInfo.systemUptime
+            let beforeAttachment = XCTAttachment(screenshot: before)
+            beforeAttachment.name = "\(name)-attempt-\(attempt)-before"
+            beforeAttachment.lifetime = .keepAlways; add(beforeAttachment)
+            let snapshot: XCUIElementSnapshot
+            do {
+                snapshot = try app.snapshot()
+            } catch {
+                let failure: [String: Any] = ["attempt": attempt, "stage": "AX-snapshot-threw",
+                    "enteredSystemUptime": entered, "deadlineSystemUptime": deadline,
+                    "screenshotBeforeEnd": beforeEnd,
+                    "failureObservedSystemUptime": ProcessInfo.processInfo.systemUptime,
+                    "error": String(describing: error)]
+                if let data = try? JSONSerialization.data(withJSONObject: failure, options: [.sortedKeys]) {
+                    let attachment = XCTAttachment(data: data, uniformTypeIdentifier: "public.json")
+                    attachment.name = "\(name)-attempt-\(attempt)-failure"
+                    attachment.lifetime = .keepAlways; add(attachment)
+                }
+                throw error
+            }
+            let snapshotEnd = ProcessInfo.processInfo.systemUptime
+            let after = window.screenshot()
+            let stable = before.pngRepresentation == after.pngRepresentation
+            let end = ProcessInfo.processInfo.systemUptime
+            var filterNodes: [XCUIElementSnapshot] = []
+            var hasAlert = false
+            func visit(_ node: XCUIElementSnapshot) {
+                if node.identifier == "signals-stale-filter" && node.elementType == .button {
+                    filterNodes.append(node)
+                }
+                if node.elementType == .alert { hasAlert = true }
+                node.children.forEach(visit)
+            }
+            visit(snapshot)
+            let receipt: [String: Any] = ["attempt": attempt, "enteredSystemUptime": entered,
+                "deadlineSystemUptime": deadline, "screenshotBeforeEnd": beforeEnd,
+                "snapshotEnd": snapshotEnd, "screenshotAfterEnd": end,
+                "bracketingPNGBytesEqual": stable, "observedAlert": hasAlert,
+                "filterNodes": filterNodes.map { ["label": $0.label,
+                    "frame": [$0.frame.minX, $0.frame.minY, $0.frame.width, $0.frame.height]] as [String: Any] },
+                "scope": "Screenshot-bracketed immutable AX snapshot; not atomic. Inspect pixels separately."]
+            let data = try JSONSerialization.data(withJSONObject: receipt, options: [.prettyPrinted, .sortedKeys])
+            let afterAttachment = XCTAttachment(screenshot: after)
+            afterAttachment.name = "\(name)-attempt-\(attempt)-after"
+            afterAttachment.lifetime = .keepAlways; add(afterAttachment)
+            let attachment = XCTAttachment(data: data, uniformTypeIdentifier: "public.json")
+            attachment.name = "\(name)-attempt-\(attempt)-AX-interval"
+            attachment.lifetime = .keepAlways; add(attachment)
+            XCTAssertFalse(hasAlert, "Stop filter observation when an alert is present")
+            if hasAlert { return }
+            // Charge PNG comparison and attachment work to this diagnostic's
+            // bounded observation too; a late stable frame is not success.
+            if stable && ProcessInfo.processInfo.systemUptime < deadline {
+                XCTAssertEqual(filterNodes.count, 1)
+                XCTAssertEqual(filterNodes.first?.label, expectedLabel)
+                return
+            }
+        }
+        XCTFail("Filter window evidence did not stabilize inside its 5-second observation budget")
+    }
+
     func testSelectedSOCProfileIsVisibleBeforeGenericUnavailableSignals() throws {
         #if !targetEnvironment(simulator)
         throw XCTSkip("Dashboard UI audit is Simulator-only")
