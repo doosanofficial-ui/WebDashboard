@@ -242,7 +242,16 @@ final class UIClarityUITests: XCTestCase {
         XCTAssertTrue(go.waitForExistence(timeout: 5))
         // Keep gestures inside the content area. Whole-app swipes in a short
         // landscape window can pull a system overlay over the app.
-        app.activate()
+        let stateBeforeActivation = app.state
+        let activationStarted = ProcessInfo.processInfo.systemUptime
+        print("UIClarity.foreground.before state=\(stateBeforeActivation.rawValue) " +
+              "activate=\(stateBeforeActivation != .runningForeground)")
+        if stateBeforeActivation != .runningForeground {
+            app.activate()
+        }
+        let stateAfterActivation = app.state
+        print("UIClarity.foreground.after state=\(stateAfterActivation.rawValue) " +
+              "elapsed=\(ProcessInfo.processInfo.systemUptime - activationStarted)")
         let foreground = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             app.state == .runningForeground
         }, object: app)

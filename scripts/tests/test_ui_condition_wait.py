@@ -133,5 +133,42 @@ print(String(data: try JSONSerialization.data(withJSONObject:
         self.assertAlmostEqual(result['elapsed'], 2.74)
 
 
+    def test_foreground_audit_avoids_reactivating_an_already_foreground_app(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root/'mobile-ios/UITests/UIClarityUITests.swift').read_text()
+        case = source.split('func testRecordedTimeAccessibilityAtLargeTextAndLandscape()', 1)[1]
+        activation = case.split('over the app.\n', 1)[1].split('let foreground = ', 1)[0]
+        with tempfile.TemporaryDirectory(prefix='foreground-observation-') as directory:
+            temporary = Path(directory)
+            main = temporary/'main.swift'
+            main.write_text('''import Foundation
+// This host harness executes the actual activation caller; it is not UI runtime evidence.
+enum ApplicationState: Int { case runningBackground = 3, runningForeground = 4 }
+final class ObservedApplication {
+    var state: ApplicationState
+    var activations = 0
+    init(_ state: ApplicationState) { self.state = state }
+    func activate() { activations += 1; state = .runningForeground }
+}
+func observe(_ state: ApplicationState) -> [String: Int] {
+    let app = ObservedApplication(state)
+''' + activation + '''
+    return ["activations": app.activations, "state": app.state.rawValue]
+}
+let results = ["foreground": observe(.runningForeground), "background": observe(.runningBackground)]
+print(String(data: try JSONSerialization.data(withJSONObject: results), encoding: .utf8)!)
+''')
+            build = subprocess.run(['swiftc', '-swift-version', '5', '-module-cache-path', str(temporary/'cache'),
+                str(main), '-o', str(temporary/'observe')], capture_output=True, text=True, timeout=45)
+            self.assertEqual(build.returncode, 0, build.stderr)
+            run = subprocess.run([str(temporary/'observe')], capture_output=True, text=True, timeout=5)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            result = json.loads(run.stdout.splitlines()[-1])
+        self.assertEqual(result['foreground']['activations'], 0, 'An already foreground app needs no activation round trip')
+        self.assertEqual(result['background']['activations'], 1, 'A background app must still be activated')
+        self.assertEqual(result['foreground']['state'], 4)
+        self.assertEqual(result['background']['state'], 4)
+
+
 if __name__ == '__main__':
     unittest.main()
