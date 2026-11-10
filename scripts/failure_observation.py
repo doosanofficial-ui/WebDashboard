@@ -606,20 +606,25 @@ def replace_worker_journal(path, value):
                 pass
 
 
-def worker(results, simulator, deadline):
+def worker(results, simulator, deadline, *, neutral_only=False):
+    if neutral_only and simulator is not None:
+        raise ValueError('Neutral baseline cannot target a Simulator')
     owned_children = []
     probes = [('neutral-process', [sys.executable, '-c', 'pass'])]
     if simulator:
         probes.append(('owned-simulator-state', ['xcrun', 'simctl', 'list', 'devices', simulator, '--json']))
         probes.append(('owned-app-registration', ['xcrun', 'simctl', 'listapps', simulator]))
-    probes.extend([('memory-pages', ['/usr/bin/vm_stat']),
-        ('service-processes', ['/bin/ps', '-A', '-ww', '-o', 'pid=,stat=,time=,comm=']),
-        ('selected-xcresulttool', ['xcrun', '--find', 'xcresulttool']),
-        ('disk-io', ['/usr/sbin/iostat', '-d', '-c', '1'])])
+    if not neutral_only:
+        probes.extend([('memory-pages', ['/usr/bin/vm_stat']),
+            ('service-processes', ['/bin/ps', '-A', '-ww', '-o', 'pid=,stat=,time=,comm=']),
+            ('selected-xcresulttool', ['xcrun', '--find', 'xcresulttool']),
+            ('disk-io', ['/usr/sbin/iostat', '-d', '-c', '1'])])
     value = {'diagnosisStartedMonotonic': time.monotonic(), 'deadlineMonotonic': deadline,
              'budgetSeconds': DIAGNOSTIC_BUDGET_SECONDS, 'resources': None, 'probes': [], 'stages': [],
              'scope': 'CI-only, owned UUID and numeric allowlist; no raw system dump'}
-    destination = results / 'failure-diagnostic-probes.json'
+    if neutral_only:
+        value['scope'] = 'Fixed neutral-process baseline only; no Simulator, service or readiness query'
+    destination = results / ('neutral-process-baseline.json' if neutral_only else 'failure-diagnostic-probes.json')
     # Persist worker entry before optional imports, system file reads or subprocess observations.
     _worker_checkpoint('journal-entry-write-started')
     if not safe_write(destination, value):
@@ -652,15 +657,6 @@ def worker(results, simulator, deadline):
             publish()
 
     try:
-        if time.monotonic() < deadline:
-            value['resources'] = observe_stage('resources', resources)
-        if time.monotonic() < deadline:
-            try:
-                value['simctlIdentity'] = observe_stage('simctl-identity', lambda: simctl_identity(results))
-            except JournalWriteError:
-                raise
-            except Exception as error:
-                value['simctlIdentityErrorType'] = type(error).__name__
         for name, command in probes:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
@@ -678,8 +674,25 @@ def worker(results, simulator, deadline):
             publish()
             if owned_children:
                 break  # Do not create more children while ownership of this one remains unresolved.
+            # Persist the control before optional metadata can consume the budget.
+            if name == 'neutral-process' and not neutral_only:
+                if time.monotonic() < deadline:
+                    value['resources'] = observe_stage('resources', resources)
+                if time.monotonic() < deadline:
+                    try:
+                        value['simctlIdentity'] = observe_stage('simctl-identity', lambda: simctl_identity(results))
+                    except JournalWriteError:
+                        raise
+                    except Exception as error:
+                        value['simctlIdentityErrorType'] = type(error).__name__
         value['finishedMonotonic'] = time.monotonic()
+        if neutral_only:
+            value['controlSucceeded'] = bool(len(value['probes']) == 1 and
+                value['probes'][0].get('childReaped') and value['probes'][0].get('childExitCode') == 0 and
+                not value['probes'][0].get('errorType'))
         publish()
+        if neutral_only:
+            return 0 if not owned_children and value['controlSucceeded'] else 1
         return 0 if not owned_children and all(p.get('childReaped') or p.get('errorType') == 'FileNotFoundError'
                                                for p in value['probes']) else 1
     except JournalWriteError:
@@ -779,12 +792,14 @@ if __name__ == '__main__':
     parser.add_argument('--worker', type=Path, required=True)
     parser.add_argument('--simulator', required=True)
     parser.add_argument('--deadline', type=float, required=True)
+    parser.add_argument('--neutral-baseline', action='store_true',
+                        help='Run only the fixed neutral control in a supervised CI worker')
     args = parser.parse_args()
     if os.environ.get('GITHUB_ACTIONS') != 'true':
         raise SystemExit(2)
     try:
         device = str(uuid.UUID(args.simulator)).upper() if args.simulator != '-' else None
         _worker_checkpoint('arguments-valid')
-        raise SystemExit(worker(args.worker, device, args.deadline))
+        raise SystemExit(worker(args.worker, device, args.deadline, neutral_only=args.neutral_baseline))
     except Exception:
         raise SystemExit(2)  # No raw probe output or private exception details.
