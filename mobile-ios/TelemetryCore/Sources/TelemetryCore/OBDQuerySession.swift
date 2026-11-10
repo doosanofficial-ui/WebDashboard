@@ -518,7 +518,7 @@ public actor OBDQuerySession {
     }
 }
 
-/// Polls definitions sequentially on a single diagnostic session. Failure of
+/// Polls due definitions serially on a single diagnostic session. Failure of
 /// one optional manufacturer query is emitted as data and does not stop the
 /// remaining candidates.
 public actor OBDQueryScheduler {
@@ -594,34 +594,43 @@ public actor OBDQueryScheduler {
         let pair = AsyncStream<OBDQueryOutcome>.makeStream()
         continuation = pair.continuation
         task = Task { [weak self, session] in
+            // OBDQueryDefinition has already validated positive, representable
+            // nanosecond intervals. Keep scheduling separate from wall time.
+            var schedule = OBDPollingSchedule(
+                intervals: queries.map { UInt64(($0.pollInterval * 1_000_000_000).rounded(.towardZero)) },
+                now: DispatchTime.now().uptimeNanoseconds
+            )
             var terminate = false
             while !Task.isCancelled && !terminate {
-                for query in queries {
-                    guard !Task.isCancelled else { break }
-                    guard await self?.generation == currentGeneration else { terminate = true; break }
-                    // Explicitly configured bitmap queries always remain eligible
-                    // for refresh, even when an earlier continuation bit is clear.
-                    if Self.bitmapPage(for: query) == nil {
-                        if await self?.support(for: query) == .unsupported { continue }
-                    }
-                    do {
-                        let result = try await session.query(query)
-                        await self?.yield(.success(result), for: query, generation: currentGeneration)
-                    } catch let error as OBDQuerySessionError {
-                        await self?.yield(.failure(queryID: query.id, error: error), for: query, generation: currentGeneration)
-                        terminate = Self.shouldTerminate(after: error)
-                        if terminate { break }
-                    } catch is CancellationError {
-                        break
-                    } catch {
-                        await self?.yield(.failure(queryID: query.id, error: .transport), for: query, generation: currentGeneration)
-                    }
-                    do {
-                        try await Task.sleep(nanoseconds: UInt64(query.pollInterval * 1_000_000_000))
-                    } catch {
-                        break
-                    }
+                guard await self?.generation == currentGeneration else { break }
+                let selection = schedule.next(at: DispatchTime.now().uptimeNanoseconds)
+                if selection.delayNanoseconds > 0 {
+                    do { try await Task.sleep(nanoseconds: selection.delayNanoseconds) }
+                    catch { break }
+                    // Recheck cancellation, generation and due order after waking.
+                    continue
                 }
+                let index = selection.queryIndex
+                let query = queries[index]
+                // Explicitly configured bitmap queries remain refreshable.
+                // No new discovery or manufacturer queries are introduced.
+                if Self.bitmapPage(for: query) == nil,
+                   await self?.support(for: query) == .unsupported {
+                    schedule.complete(index, at: DispatchTime.now().uptimeNanoseconds)
+                    continue
+                }
+                do {
+                    let result = try await session.query(query)
+                    await self?.yield(.success(result), for: query, generation: currentGeneration)
+                } catch let error as OBDQuerySessionError {
+                    await self?.yield(.failure(queryID: query.id, error: error), for: query, generation: currentGeneration)
+                    terminate = Self.shouldTerminate(after: error)
+                } catch is CancellationError {
+                    break
+                } catch {
+                    await self?.yield(.failure(queryID: query.id, error: .transport), for: query, generation: currentGeneration)
+                }
+                schedule.complete(index, at: DispatchTime.now().uptimeNanoseconds)
             }
             await self?.finishStream(generation: currentGeneration)
         }
@@ -709,3 +718,4 @@ public actor OBDQueryScheduler {
         }
     }
 }
+
