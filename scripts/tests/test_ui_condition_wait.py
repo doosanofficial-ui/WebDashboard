@@ -92,5 +92,46 @@ print(String(data: try JSONSerialization.data(withJSONObject: ["immediate": imme
         self.assertEqual(result['invalidReads'], 0)
 
 
+    def test_orientation_uses_one_coherent_window_frame_inside_the_deadline(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root/'mobile-ios/UITests/SmallViewportUIRegression.swift').read_text()
+        observation = source.split('let rotated = ', 1)[1]
+        if observation.startswith('XCTNSPredicateExpectation'):
+            body = 'return ' + observation.split('{ _, _ in\n', 1)[1].split('\n        }, object: window)', 1)[0].strip()
+        else:
+            body = observation.split('UIConditionWait.until(timeout: 5) {\n', 1)[1].split('\n        }', 1)[0]
+        with tempfile.TemporaryDirectory(prefix='orientation-observation-') as directory:
+            temporary = Path(directory)
+            main = temporary/'main.swift'
+            main.write_text('''import Foundation
+import CoreGraphics
+var clock = 0.0
+var frameReads = 0
+final class ObservedWindow {
+    var frame: CGRect {
+        frameReads += 1
+        clock += 2.74 // Cost of the first AX frame lookup in the preserved failure log.
+        return CGRect(x: 0, y: 0, width: 874, height: 402)
+    }
+}
+let window = ObservedWindow()
+let rotated = UIConditionWait.until(timeout: 5, now: { clock }, pause: { clock += $0 }) {
+''' + body + '''
+}
+print(String(data: try JSONSerialization.data(withJSONObject:
+    ["rotated": rotated, "frameReads": frameReads, "elapsed": clock]), encoding: .utf8)!)
+''')
+            build = subprocess.run(['swiftc', '-swift-version', '5', '-module-cache-path', str(temporary/'cache'),
+                str(root/'mobile-ios/UITests/UIConditionWait.swift'), str(main), '-o', str(temporary/'observe')],
+                capture_output=True, text=True, timeout=45)
+            self.assertEqual(build.returncode, 0, build.stderr)
+            run = subprocess.run([str(temporary/'observe')], capture_output=True, text=True, timeout=5)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            result = json.loads(run.stdout)
+        self.assertTrue(result['rotated'], 'An already-landscape frame must fit the unchanged5-second budget')
+        self.assertEqual(result['frameReads'], 1, 'Width and height must come from the same AX snapshot')
+        self.assertAlmostEqual(result['elapsed'], 2.74)
+
+
 if __name__ == '__main__':
     unittest.main()
