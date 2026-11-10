@@ -148,8 +148,8 @@ final class OfflineReplayUITests: XCTestCase {
         exportBoundaries.append(.init(iteration: iteration, format: format, event: event,
             uptime: ProcessInfo.processInfo.systemUptime, epoch: Date().timeIntervalSince1970, result: result))
     }
-    private func observedExporterClosed(_ app: XCUIApplication, iteration: Int, format: String) -> XCTNSPredicateExpectation {
-        XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+    private func observedExporterClosed(_ app: XCUIApplication, iteration: Int, format: String) -> Bool {
+        UIConditionWait.until(timeout: 5) {
             self.exportBoundary("predicate.start", iteration: iteration, format: format)
             self.exportBoundary("filesBar.exists.start", iteration: iteration, format: format)
             let bar = app.navigationBars["FullDocumentManagerViewControllerNavigationBar"].exists
@@ -162,7 +162,7 @@ final class OfflineReplayUITests: XCTestCase {
             }
             self.exportBoundary("predicate.return", iteration: iteration, format: format, result: !visible)
             return !visible
-        }, object: app)
+        }
     }
     private func attachExportBoundaries() {
         guard let data = try? JSONEncoder().encode(exportBoundaries) else { return }
@@ -611,12 +611,11 @@ final class OfflineReplayUITests: XCTestCase {
                 .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)))
             exportBoundary("input.call.return", iteration: iteration, format: format)
             print("SYNTHETIC export input return iteration=\(iteration) format=\(format) uptime=\(ProcessInfo.processInfo.systemUptime) epoch=\(Date().timeIntervalSince1970)")
-            let closed = observedExporterClosed(app, iteration: iteration, format: format)
             exportBoundary("wait.start", iteration: iteration, format: format)
-            let result = XCTWaiter.wait(for: [closed], timeout: 5)
-            exportBoundary("wait.return", iteration: iteration, format: format, result: result == .completed)
-            attachExportBoundaries() // Encoding/attachment occurs after the unchanged wait.
-            XCTAssertEqual(result, .completed, app.debugDescription)
+            let result = observedExporterClosed(app, iteration: iteration, format: format)
+            exportBoundary("wait.return", iteration: iteration, format: format, result: result)
+            attachExportBoundaries() // Encoding/attachment occurs after the bounded wait.
+            XCTAssertTrue(result, app.debugDescription)
             XCTAssertTrue(app.tabBars.buttons["Sessions"].waitForExistence(timeout: 5))
         }
         let replay = app.buttons["replay-saved-session"]
