@@ -5,6 +5,7 @@ import TelemetryCore
 struct SignalsView: View {
     @Bindable var model: TelemetryModel
     @State private var signalEditorPresented = false
+    @State private var customPIDEditorPresented = false
     @State private var searchText = ""
     @State private var showStaleOnly = false
     @State private var showDeveloperControls = false
@@ -40,6 +41,12 @@ struct SignalsView: View {
             .navigationTitle(AppLocalization.text("Signals"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { customPIDEditorPresented = true } label: {
+                        Label(AppLanguageStore.shared.language == .korean ? "커스텀 PID 추가" : "New Custom PID", systemImage: "plus")
+                    }
+                    .accessibilityIdentifier("signals-new-custom-pid")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(AppLocalization.text("Edit"), systemImage: "slider.horizontal.3") {
                         signalEditorPresented = true
@@ -47,6 +54,9 @@ struct SignalsView: View {
                     .disabled(model.adapterProfile == nil)
                     .accessibilityIdentifier("signals-edit-catalog")
                 }
+            }
+            .sheet(isPresented: $customPIDEditorPresented) {
+                CustomPIDEditorView(model: model, openedProfile: model.adapterProfile)
             }
             .sheet(isPresented: $signalEditorPresented) {
                 if let profile = model.adapterProfile {

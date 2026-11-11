@@ -1,0 +1,8 @@
+{
+  "App/SignalsView.swift": "a8a446c6b66f031621a762e36557bb63924fb497a5abaaca9e8f752512065395",
+  "App/TelemetryModel.swift": "19d1fea786ca9736733a66ed74ba67fb2011ce8945a084761412a0782d3be362",
+  "App/CustomPIDEditorView.swift": "0290aaae9b873b7f9c642bab9145a4cee395635fba08559eb27a6e74bb02d01b",
+  "TelemetryCore/Sources/TelemetryCore/CustomOBDPIDDraft.swift": "af2dba48b6d891acc45ef633368f873efaad6dabf03b640490c8f62fc251276b",
+  "TelemetryCore/Tests/TelemetryCoreTests/CustomOBDPIDDraftTests.swift": "de6b8cb6bf2398fcae817090a17ca1445c02489d8a25a01e0acad9bd1d4ebe36",
+  "UITests/CustomPIDUITests.swift": "9f84bbd3989473c7adefc7c024ce82067e3099d78241196015e31efa23649d17"
+}

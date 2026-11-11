@@ -593,6 +593,28 @@ final class TelemetryModel: NSObject {
         return true
     }
 
+    var canEditCustomPID: Bool {
+        runMode == .live && !localRecordingEnabled && !recordingClosing && !collecting &&
+        connection == "Disconnected" && diagnosticWorkspace.canEdit
+    }
+
+    func addCustomPID(_ draft: CustomOBDPIDDraft, expected: AdapterProfile) throws {
+        guard canEditCustomPID, let profile = adapterProfile, let adapterProfileURL else {
+            throw DiagnosticWorkspaceState.WorkspaceError.stopAcquisition
+        }
+        let updated = try draft.appending(to: profile, expected: expected)
+        let data = try JSONEncoder().encode(updated)
+        // Persistence is the commit point; a failed write cannot publish a
+        // partially changed query list, refresh timeouts or start acquisition.
+        try data.write(to: adapterProfileURL, options: .atomic)
+        adapterProfile = updated
+        configureDiagnosticSignalTimeouts(updated.diagnosticQueries)
+        adapterProfileStatus = "Profile saved: \(updated.name)"
+        // Existing explicit selections stay revision-bound and fail closed
+        // until reviewed. Adding a PID never broadens a saved selection.
+        try? diagnosticWorkspace.preview(profile: updated)
+    }
+
     func replaceAdapterProfileSignals(_ signals: [SignalDefinition]) -> Bool {
         guard let profile = adapterProfile, let adapterProfileURL, !signals.isEmpty else {
             adapterProfileStatus = "Load an adapter profile before editing signals"

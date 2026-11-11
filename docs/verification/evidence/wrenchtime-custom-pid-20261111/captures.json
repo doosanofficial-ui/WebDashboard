@@ -1,0 +1,44 @@
+[
+  {
+    "file": "SYNTHETIC-custom-pid-cancel-reset.png",
+    "timestamp": 1794404770.995,
+    "device": "CF44E21B-06DF-4AD4-8356-9381B6DB982D",
+    "sha256": "5a4e897b82cd65d2b669078a7c2d017b6e1a7fec5e194731feeee970bd4b4b71"
+  },
+  {
+    "file": "SYNTHETIC-custom-pid-empty.png",
+    "timestamp": 1794404762.423,
+    "device": "CF44E21B-06DF-4AD4-8356-9381B6DB982D",
+    "sha256": "5a4e897b82cd65d2b669078a7c2d017b6e1a7fec5e194731feeee970bd4b4b71"
+  },
+  {
+    "file": "SYNTHETIC-custom-pid-ko-largest-identity.png",
+    "timestamp": 1794404794.531,
+    "device": "CF44E21B-06DF-4AD4-8356-9381B6DB982D",
+    "sha256": "5f8664453222b5ac9a05ec1c1df4388fc33e6e85d1639ae39f56c5c7b400b171"
+  },
+  {
+    "file": "SYNTHETIC-custom-pid-ko-largest-top.png",
+    "timestamp": 1794404787.227,
+    "device": "CF44E21B-06DF-4AD4-8356-9381B6DB982D",
+    "sha256": "be1632ec4ac74bf2dd5fd6ef1da4e23f4c5268292020ff7a3c5c0122458ea200"
+  },
+  {
+    "file": "SYNTHETIC-custom-pid-persisted-no-live-value.png",
+    "timestamp": 1794404865.476,
+    "device": "CF44E21B-06DF-4AD4-8356-9381B6DB982D",
+    "sha256": "37b7a8e27f136618310e0c311bf05cf7ec7018b0b19701de9c21a5c1a6c9382b"
+  },
+  {
+    "file": "SYNTHETIC-custom-pid-preview-60C.png",
+    "timestamp": 1794404840.943,
+    "device": "CF44E21B-06DF-4AD4-8356-9381B6DB982D",
+    "sha256": "1bfd1fc82e5e4b60ef352b8646a588313df27f6bdb2f763fd68125b9435d25b3"
+  },
+  {
+    "file": "SYNTHETIC-custom-pid-invalid-ECU-no-value.png",
+    "timestamp": 1794404913.213,
+    "device": "CF44E21B-06DF-4AD4-8356-9381B6DB982D",
+    "sha256": "69fce0d629a08950e6726398f1523c292f63ac15998d3c4ce00027a76beedde7"
+  }
+]
