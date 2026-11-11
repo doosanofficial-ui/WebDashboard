@@ -34,7 +34,8 @@ APP_CONTAINER_TIMEOUT_SECONDS = 180  # communicate wait; launch/recording/cleanu
 SE_APP_BUILD_TIMEOUT_SECONDS = 900  # Finite SE-only candidate after late progress at the600-second stop.
 
 
-# Explicit, disjoint 10 + 1 + 14 + 4 + 1 + 1 selectors; route and each maximum-text language have their own budget.
+# Explicit, disjoint 10 + 1 + 12 + 2 + 4 + 1 + 1 selectors. The two numeric
+# recovery cases have their own layout shard without dropping tests or raising deadlines.
 TEST_GROUPS = {'replay': ['TelemetryUITests/OfflineReplayUITests/testSessionReplayShowsAnalysisAndSynchronizedRecordedTime',
             'TelemetryUITests/OfflineReplayUITests/testRecordedSignalHistoryContainsOnlySelectedTimePrefix',
             'TelemetryUITests/OfflineReplayUITests/testPlayingLongSliderDragPreservesCapturedUserTarget',
@@ -46,8 +47,7 @@ TEST_GROUPS = {'replay': ['TelemetryUITests/OfflineReplayUITests/testSessionRepl
             'TelemetryUITests/OfflineReplayUITests/testSetupPresentsLocalWorkflowWithoutServerOrCredential',
             'TelemetryUITests/OfflineReplayUITests/testSeededSessionPickerSnapshotAndReadOnlyControls'],
  'replay-route': ['TelemetryUITests/OfflineReplayUITests/testRecordedGPSRouteContainsOnlySelectedTimePrefix'],
- 'layout': ['TelemetryUITests/DashboardEditingUITests/testSelectedCardKeepsConfigurationAvailableOnDemand',
-            'TelemetryUITests/DashboardEditingUITests/testMoveReleaseUndoRedoAndReentryPreserveNeighbor',
+ 'layout': ['TelemetryUITests/DashboardEditingUITests/testMoveReleaseUndoRedoAndReentryPreserveNeighbor',
             'TelemetryUITests/DashboardEditingUITests/testResizeReleaseUndoPreserveNeighbor',
             'TelemetryUITests/DashboardEditingUITests/testOverlappingResizeKeepsSelectedHandleUsableForNextResize',
             'TelemetryUITests/DashboardEditingUITests/testLandscapeMoveUsesCurrentMeasuredGeometry',
@@ -58,8 +58,9 @@ TEST_GROUPS = {'replay': ['TelemetryUITests/OfflineReplayUITests/testSessionRepl
             'TelemetryUITests/UIClarityUITests/testSingleInstantRecordingExplainsUnavailableTimeNavigation',
             'TelemetryUITests/TelemetryUITests/testMeasurementExportControlIsVisible',
             'TelemetryUITests/TelemetryUITests/testMeasurementCSVExportControlIsVisible',
-            'TelemetryUITests/SmallViewportUIRegression/testSmallViewportLiveAndEditorReachability',
-            'TelemetryUITests/SmallViewportStatusUIRegression/testStatusAndEditingHelpRemainAccessibleAtMaximumText']}
+            'TelemetryUITests/SmallViewportStatusUIRegression/testStatusAndEditingHelpRemainAccessibleAtMaximumText'],
+ 'layout-numeric': ['TelemetryUITests/DashboardEditingUITests/testSelectedCardKeepsConfigurationAvailableOnDemand',
+                    'TelemetryUITests/SmallViewportUIRegression/testSmallViewportLiveAndEditorReachability']}
 
 
 TEST_GROUPS["help"] = [
@@ -916,7 +917,7 @@ def main():
             try:
                 with export_audit.RunnerHeartbeat(results / "runner-heartbeat.json") if export_audit_enabled else nullcontext():
                     run_owned_phase(command, results / "test.log", results / "test-process.json",
-                                    1800 if args.group == "layout" else 1200)
+                                    1800 if args.group in {"layout", "layout-numeric"} else 1200)
             finally:
                 try:
                     failure_observation.observe_ui_test_log(results / "test.log", results / "ui-test-log-observation.json")

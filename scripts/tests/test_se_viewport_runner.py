@@ -38,7 +38,7 @@ class SEViewportRunnerTests(unittest.TestCase):
             'TelemetryUITests/SmallViewportStatusUIRegression/testStatusAndEditingHelpRemainAccessibleAtMaximumText'])
         existing = [test for group in runner.TEST_GROUPS.values() for test in group]
         self.assertEqual((len(existing), len(set(existing))), (31, 31))
-        self.assertTrue(set(runner.SE_VIEWPORT_TESTS).issubset(runner.TEST_GROUPS['layout']))
+        self.assertTrue(set(runner.SE_VIEWPORT_TESTS).issubset(set(runner.TEST_GROUPS['layout']) | set(runner.TEST_GROUPS.get('layout-numeric', []))))
         clean = {'totalTestCount': 2, 'passedTests': 2, 'failedTests': 0, 'skippedTests': 0}
         runner.verify_summary(clean, len(runner.SE_VIEWPORT_TESTS))
         for field in ('failedTests', 'skippedTests', 'passedTests', 'totalTestCount'):

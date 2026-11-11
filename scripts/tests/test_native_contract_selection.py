@@ -99,7 +99,7 @@ class HelpAssetGateTests(unittest.TestCase):
         self.assertNotIn("unittest discover", seed)
         self.assertNotIn("unittest discover", se)
         self.assertIn("run: python scripts/verify_help_assets.py", job("contracts"))
-        self.assertIn('Require all 31 UI tests across six disjoint groups', job("native-replay-ui-aggregate"))
+        self.assertIn('Require all 31 UI tests across seven disjoint groups', job("native-replay-ui-aggregate"))
         self.assertNotIn("continue-on-error", workflow)
 
 

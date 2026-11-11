@@ -109,14 +109,14 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        group: [replay, replay-route, layout, help, help-max-en, help-max-ko]
+        group: [replay, replay-route, layout, layout-numeric, help, help-max-en, help-max-ko]
     # Official Xcode 27 preview image; no runtime downloads or older fallback.
     runs-on: xcode-27
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
       SEED_MANIFEST_SHA256: ${{ needs.native-seed.outputs.seed_manifest_sha256 }}
-    # Runner sequence: normal4260s (Replay adds5s export audit), Layout4860s; common reserve840s + partition60s.
-    timeout-minutes: ${{ matrix.group == 'layout' && 96 || matrix.group == 'replay' && 87 || 86 }}
+    # Runner sequence: normal4260s (Replay adds5s export audit), Layout4860s; common reserve840s + partition60s; both layout shards retain their original per-command limit.
+    timeout-minutes: ${{ (matrix.group == 'layout' || matrix.group == 'layout-numeric') && 96 || matrix.group == 'replay' && 87 || 86 }}
     steps:
       - uses: actions/checkout@v7
       - name: Download exact-SHA qualified Seed
@@ -189,7 +189,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Require all six UI group jobs to succeed
+      - name: Require all seven UI group jobs to succeed
         env:
           UI_GROUP_RESULT: ${{ needs.native-replay-ui.result }}
         run: |
@@ -212,6 +212,10 @@ jobs:
           path: ui-results/layout
       - uses: actions/download-artifact@v7
         with:
+          name: offline-replay-layout-numeric-${{ github.sha }}
+          path: ui-results/layout-numeric
+      - uses: actions/download-artifact@v7
+        with:
           name: offline-replay-help-${{ github.sha }}
           path: ui-results/help
       - uses: actions/download-artifact@v7
@@ -222,7 +226,7 @@ jobs:
         with:
           name: offline-replay-help-max-ko-${{ github.sha }}
           path: ui-results/help-max-ko
-      - name: Require all 31 UI tests across six disjoint groups
+      - name: Require all 31 UI tests across seven disjoint groups
         run: python3 scripts/verify_offline_replay.py --verify-groups ui-results
 
   native-app:

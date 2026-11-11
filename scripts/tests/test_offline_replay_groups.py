@@ -109,7 +109,12 @@ class ReplayGroupTests(unittest.TestCase):
             expected.update("TelemetryUITests/" + suite + "/" + name for name in re.findall(r"func (test\w+)\(", (root / (suite + ".swift")).read_text()))
         expected.update("TelemetryUITests/TelemetryUITests/" + name for name in ("testMeasurementExportControlIsVisible", "testMeasurementCSVExportControlIsVisible"))
         replay, layout = runner.TEST_GROUPS["replay"], runner.TEST_GROUPS["layout"]
-        self.assertEqual((len(replay), len(layout)), (10, 14))
+        self.assertEqual((len(replay), len(layout)), (10, 12))
+        numeric = runner.TEST_GROUPS.get("layout-numeric")
+        self.assertEqual(numeric, [
+            "TelemetryUITests/DashboardEditingUITests/testSelectedCardKeepsConfigurationAvailableOnDemand",
+            "TelemetryUITests/SmallViewportUIRegression/testSmallViewportLiveAndEditorReachability"])
+        self.assertFalse(set(layout) & set(numeric))
         self.assertFalse(set(replay) & set(layout))
         route = runner.TEST_GROUPS.get('replay-route')
         self.assertEqual(route, ['TelemetryUITests/OfflineReplayUITests/testRecordedGPSRouteContainsOnlySelectedTimePrefix'])
@@ -157,8 +162,8 @@ class ReplayGroupTests(unittest.TestCase):
         workflow = (Path(__file__).resolve().parents[2] / '.github/workflows/native-reliability.yml').read_text()
         matrix = re.search(r'group:\s*\[([^\]]+)\]', workflow)
         self.assertIsNotNone(matrix)
-        self.assertEqual([part.strip() for part in matrix.group(1).split(',')], ['replay', 'replay-route', 'layout', 'help', 'help-max-en', 'help-max-ko'])
-        for group in ['replay', 'replay-route', 'layout', 'help', 'help-max-en', 'help-max-ko']:
+        self.assertEqual([part.strip() for part in matrix.group(1).split(',')], ['replay', 'replay-route', 'layout', 'layout-numeric', 'help', 'help-max-en', 'help-max-ko'])
+        for group in ['replay', 'replay-route', 'layout', 'layout-numeric', 'help', 'help-max-en', 'help-max-ko']:
             self.assertIn('name: offline-replay-' + group + '-${{ github.sha }}', workflow)
             self.assertIn('path: ui-results/' + group, workflow)
         from test_layout_runner_budget import workflow_timeout
@@ -166,6 +171,35 @@ class ReplayGroupTests(unittest.TestCase):
         self.assertEqual(workflow_timeout(job_block(workflow, 'native-replay-ui'), 'layout'), 96)
         self.assertEqual(workflow_timeout(job_block(workflow, 'native-replay-ui'), 'replay'), 87)
         self.assertIn("if [ \"$UI_GROUP_RESULT\" != \"success\" ]", workflow)
+
+    def test_missing_skipped_or_duplicated_numeric_group_cannot_pass_aggregate(self):
+        self.assertIn("layout-numeric", runner.TEST_GROUPS)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.green_groups(root)
+            target = root / "layout-numeric/summary.json"
+            normal = target.read_text()
+            target.unlink()
+            with self.assertRaises(FileNotFoundError):
+                runner.verify_group_results(root)
+            target.write_text(json.dumps({"totalTestCount": 2, "passedTests": 1,
+                                          "failedTests": 0, "skippedTests": 1}))
+            with self.assertRaises(ValueError):
+                runner.verify_group_results(root)
+            target.write_text(normal)
+            (root / "layout-numeric/selection.json").write_text(json.dumps({
+                "group": "layout-numeric", "tests": runner.TEST_GROUPS["layout"][:2]}))
+            with self.assertRaises(ValueError):
+                runner.verify_group_results(root)
+
+    def test_selected_workflow_preserves_all_21_cases_including_numeric_group(self):
+        workflow = (Path(__file__).resolve().parents[2] / '.github/workflows/native-selected-ui.yml').read_text()
+        selected = re.search(r"fromJSON\(inputs.help_only && '\[\"help\"\]' \|\| '([^']+)'", workflow)
+        self.assertIsNotNone(selected)
+        groups = json.loads(selected.group(1))
+        self.assertEqual(groups, ["replay-route", "layout", "layout-numeric", "help", "help-max-en", "help-max-ko"])
+        tests = [test for group in groups for test in runner.TEST_GROUPS[group]]
+        self.assertEqual((len(tests), len(set(tests))), (21, 21))
 
     def test_missing_skipped_or_duplicated_route_cannot_pass_aggregate(self):
         self.assertIn('replay-route', runner.TEST_GROUPS)

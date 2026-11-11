@@ -50,6 +50,11 @@ class LayoutRunnerBudgetTests(unittest.TestCase):
         "TelemetryUITests/SmallViewportStatusUIRegression/testStatusAndEditingHelpRemainAccessibleAtMaximumText",
     ]
 
+    numeric_tests = [layout_tests[0], layout_tests[12]]
+    layout_tests = [test for test in layout_tests if test not in (
+        "TelemetryUITests/DashboardEditingUITests/testSelectedCardKeepsConfigurationAvailableOnDemand",
+        "TelemetryUITests/SmallViewportUIRegression/testSmallViewportLiveAndEditorReachability")]
+
     def run_selection(self, selection, container_error=None, build_ready_after=None,
                       successful=False, measure_full_budget=False, summary_count=None):
         calls = []
@@ -196,7 +201,7 @@ class LayoutRunnerBudgetTests(unittest.TestCase):
             with self.subTest(group=group):
                 ui, selected, details = self.run_selection(["--group", group], successful=True,
                     measure_full_budget=True, summary_count=len(tests))
-                ui_timeout = 1800 if group == "layout" else 1200
+                ui_timeout = 1800 if group in {"layout", "layout-numeric"} else 1200
                 expected_handoffs = [60, 60, 60, 60, 240, 60, 60, 60, 600, 120,
                                      600, 600, 180, ui_timeout, 60, 120]
                 if group == "replay":
@@ -218,15 +223,15 @@ class LayoutRunnerBudgetTests(unittest.TestCase):
             reliability_minutes = workflow_timeout(reliability, group)
             reliability_reserve = 840 + 60  # Common job work plus this workflow's partition test.
             self.assertGreaterEqual(reliability_minutes * 60, seconds + reliability_reserve)
-            reliability_ceiling = {"replay": 87, "layout": 96}.get(group, 86)
+            reliability_ceiling = {"replay": 87, "layout": 96, "layout-numeric": 96}.get(group, 86)
             self.assertEqual(reliability_minutes, reliability_ceiling)
-            if group in {"replay-route", "layout", "help", "help-max-en", "help-max-ko"}:
+            if group in {"replay-route", "layout", "layout-numeric", "help", "help-max-en", "help-max-ko"}:
                 selected_minutes = workflow_timeout(selected, group)
                 self.assertGreaterEqual(selected_minutes * 60, seconds + 840)
-                self.assertEqual(selected_minutes, 95 if group == "layout" else 85)
+                self.assertEqual(selected_minutes, 95 if group in {"layout", "layout-numeric"} else 85)
 
     def test_actual_layout_command_gets_1800_seconds_and_other_selections_keep_1200(self):
-        cases = [(["--group", "layout"], 1800, 14)]
+        cases = [(["--group", "layout"], 1800, 12), (["--group", "layout-numeric"], 1800, 2)]
         cases += [(["--group", group], 1200, count) for group, count in
                   [("replay", 10), ("replay-route", 1), ("help", 4), ("help-max-en", 1), ("help-max-ko", 1)]]
         cases += [([], 1200, 8), (["--se-viewport"], 1200, 2)]
@@ -240,9 +245,10 @@ class LayoutRunnerBudgetTests(unittest.TestCase):
                 self.assertEqual(timeout, seconds)
                 selectors = [item for item in command if item.startswith("-only-testing:")]
                 self.assertEqual(len(selectors), count)
-                if selection == ["--group", "layout"]:
-                    self.assertEqual(selected, {"group": "layout", "tests": self.layout_tests})
-                    self.assertEqual(selectors, ["-only-testing:" + test for test in self.layout_tests])
+                if selection in (["--group", "layout"], ["--group", "layout-numeric"]):
+                    tests = self.numeric_tests if selection[-1] == "layout-numeric" else self.layout_tests
+                    self.assertEqual(selected, {"group": selection[-1], "tests": tests})
+                    self.assertEqual(selectors, ["-only-testing:" + test for test in tests])
 
     def test_required_container_wait_uses_180_seconds_and_exact_owned_command(self):
         for selection in (["--group", "layout"], ["--group", "help-max-en"],
@@ -271,10 +277,10 @@ class LayoutRunnerBudgetTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         for filename, job in [("native-reliability.yml", "native-replay-ui"), ("native-selected-ui.yml", "selected-ui")]:
             block = job_block((root / ".github/workflows" / filename).read_text(), job)
-            expected_values = ({"layout": 96, "replay": 87, "replay-route": 86,
+            expected_values = ({"layout": 96, "layout-numeric": 96, "replay": 87, "replay-route": 86,
                                 "help": 86, "help-max-en": 86, "help-max-ko": 86}
                                if filename == "native-reliability.yml" else
-                               {"layout": 95, "replay": 85, "replay-route": 85,
+                               {"layout": 95, "layout-numeric": 95, "replay": 85, "replay-route": 85,
                                 "help": 85, "help-max-en": 85, "help-max-ko": 85})
             for group, expected in expected_values.items():
                 with self.subTest(workflow=filename, group=group):
