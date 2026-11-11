@@ -69,6 +69,7 @@ private struct SetupView: View {
                 LazyVStack(alignment: .leading, spacing: TelemetryTheme.Spacing.medium) {
                     LanguagePicker().padding().telemetrySurface(.standard)
                     firstRunCard
+                    RecordingActivitySettingsView(model: model)
                     permissionsCard
                     adapterCard
                     developerCard

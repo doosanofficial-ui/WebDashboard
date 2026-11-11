@@ -25,16 +25,13 @@
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Connect to a user-selected CAN adapter after its transport profile is verified.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Connect to the operator's telemetry server on the local network.</string>
+	<string>Connect to a verified telemetry adapter on the local network.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Continue the explicitly started measurement session while the screen is locked.</string>
+	<string>Continue an explicitly started measurement session during app switching.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Record location alongside CAN measurements during an operator session.</string>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>location</string>
-		<string>bluetooth-central</string>
-	</array>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -54,6 +51,11 @@
 			</array>
 		</dict>
 	</dict>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>bluetooth-central</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

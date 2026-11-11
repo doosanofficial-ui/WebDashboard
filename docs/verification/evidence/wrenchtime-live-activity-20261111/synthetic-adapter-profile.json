@@ -1,0 +1,69 @@
+{
+  "schema_version": 2,
+  "id": "synthetic-diagnostic",
+  "name": "SYNTHETIC diagnostic profile",
+  "transport": "wifi",
+  "host": "127.0.0.1",
+  "port": 35000,
+  "signals": [],
+  "diagnosticQueries": [
+    {
+      "id": "custom.existing.coolant",
+      "name": "SYNTHETIC existing coolant",
+      "requestCANID": 2016,
+      "responseCANID": 2024,
+      "isExtended": false,
+      "service": "01",
+      "command": "05",
+      "pollInterval": 1,
+      "timeout": 3,
+      "flowControl": true,
+      "sourceRepository": "synthetic-test",
+      "sourcePath": "local-fixture",
+      "sourceCommit": "synthetic",
+      "signals": [
+        {
+          "id": "existing.coolant",
+          "name": "SYNTHETIC existing coolant",
+          "startBit": 0,
+          "bitLength": 8,
+          "byteOrder": "intel",
+          "isSigned": false,
+          "factor": 1,
+          "offset": -40,
+          "unit": "C",
+          "timeout": 3
+        }
+      ]
+    },
+    {
+      "id": "custom.existing.rpm",
+      "name": "SYNTHETIC existing RPM",
+      "requestCANID": 2016,
+      "responseCANID": 2024,
+      "isExtended": false,
+      "service": "01",
+      "command": "0C",
+      "pollInterval": 1,
+      "timeout": 3,
+      "flowControl": true,
+      "sourceRepository": "synthetic-test",
+      "sourcePath": "local-fixture",
+      "sourceCommit": "synthetic",
+      "signals": [
+        {
+          "id": "existing.rpm",
+          "name": "SYNTHETIC existing RPM",
+          "startBit": 0,
+          "bitLength": 16,
+          "byteOrder": "motorola",
+          "isSigned": false,
+          "factor": 0.25,
+          "offset": 0,
+          "unit": "rpm",
+          "timeout": 3
+        }
+      ]
+    }
+  ]
+}

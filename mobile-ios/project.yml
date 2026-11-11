@@ -14,9 +14,10 @@ targets:
   Telemetry:
     type: application
     platform: iOS
-    sources: [App]
+    sources: [App, ActivityShared]
     dependencies:
       - package: TelemetryCore
+      - target: RecordingActivityExtension
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: local.webdashboard.Telemetry
@@ -30,6 +31,7 @@ targets:
         CFBundleShortVersionString: '$(MARKETING_VERSION)'
         CFBundleVersion: '$(CURRENT_PROJECT_VERSION)'
         UILaunchScreen: {}
+        NSSupportsLiveActivities: true
         NSLocationWhenInUseUsageDescription: Record location alongside CAN measurements during an operator session.
         NSLocationAlwaysAndWhenInUseUsageDescription: Continue an explicitly started measurement session during app switching.
         NSLocalNetworkUsageDescription: Connect to a verified telemetry adapter on the local network.
@@ -44,6 +46,28 @@ targets:
                 UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).CarPlaySceneDelegate
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         ITSAppUsesNonExemptEncryption: false
+  RecordingActivityExtension:
+    type: app-extension
+    platform: iOS
+    sources: [RecordingActivity, ActivityShared]
+    dependencies:
+      - package: TelemetryCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.webdashboard.Telemetry.RecordingActivity
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 548HKZYKDP
+        TARGETED_DEVICE_FAMILY: '1'
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
+    info:
+      path: RecordingActivity/Info.plist
+      properties:
+        CFBundleDisplayName: Recording Activity
+        CFBundleShortVersionString: '$(MARKETING_VERSION)'
+        CFBundleVersion: '$(CURRENT_PROJECT_VERSION)'
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
   TelemetryUITests:
     type: bundle.ui-testing
     platform: iOS

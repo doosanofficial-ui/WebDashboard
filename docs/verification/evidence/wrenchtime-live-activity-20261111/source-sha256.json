@@ -1,0 +1,62 @@
+[
+  {
+    "path": "mobile-ios/App/DashboardView.swift",
+    "sha256": "6aa719cdc279dca6d36abefcdce4dea237686d71d5d6accb54b7e9502014189f",
+    "canonicalMatchesTestedSnapshot": true
+  },
+  {
+    "path": "mobile-ios/App/Info.plist",
+    "sha256": "a668b9259da6cc1e28dada74c4fd6c349fec58f4e3311946dde385448082a53d",
+    "canonicalMatchesTestedSnapshot": true
+  },
+  {
+    "path": "mobile-ios/App/TelemetryModel.swift",
+    "sha256": "b561b73b23161f0155b9b225b90441f716dd14c853879525fbd348ca06f56cdd",
+    "canonicalMatchesTestedSnapshot": true
+  },
+  {
+    "path": "mobile-ios/App/RecordingActivityController.swift",
+    "sha256": "b5b460202730a3981409b1d928f886d56fbe9cba359f0d23e941dbf9d524b3af",
+    "canonicalMatchesTestedSnapshot": true
+  },
+  {
+    "path": "mobile-ios/App/RecordingActivitySettingsView.swift",
+    "sha256": "ce648a8392232cbeb37b21a9e735cc05aabb0e391dadbe80cf02cc48dd7f7a68",
+    "canonicalMatchesTestedSnapshot": true
+  },
+  {
+    "path": "mobile-ios/ActivityShared/RecordingActivityAttributes.swift",
+    "sha256": "0508960656d3ee0bb4ea1fb124115eeec933cbb5b97fd52644671c7a2b3db017",
+    "canonicalMatchesTestedSnapshot": true
+  },
+  {
+    "path": "mobile-ios/RecordingActivity/RecordingActivityWidget.swift",
+    "sha256": "8beb5504ee66e097f4ebf4e68245be7c6e0a4cdddd7e5026a066c002d4b42fb0",
+    "canonicalMatchesTestedSnapshot": true
+  },
+  {
+    "path": "mobile-ios/RecordingActivity/Info.plist",
+    "sha256": "76143407f8e4b4aa3db1758ea17fddd615c750ba7f3580f638e2f65e1c17f273",
+    "canonicalMatchesTestedSnapshot": true
+  },
+  {
+    "path": "mobile-ios/TelemetryCore/Sources/TelemetryCore/RecordingActivitySnapshot.swift",
+    "sha256": "b6507c5193a91ea884ee07de581d36ea7387ea1374c4ba6d0c9549e9b4b75e94",
+    "canonicalMatchesTestedSnapshot": true
+  },
+  {
+    "path": "mobile-ios/TelemetryCore/Tests/TelemetryCoreTests/RecordingActivitySnapshotTests.swift",
+    "sha256": "96c721058345efa0c5f3be6c2ece40bde7013933aa3cf9251975768dbb2ef4fd",
+    "canonicalMatchesTestedSnapshot": true
+  },
+  {
+    "path": "mobile-ios/UITests/RecordingActivityUITests.swift",
+    "sha256": "9a8a47782da44137c6b193260c6c138a4e48f6c53ba0d226c3678075923d4fe8",
+    "canonicalMatchesTestedSnapshot": true
+  },
+  {
+    "path": "mobile-ios/project.yml",
+    "sha256": "c22afa38fb1663373ca9a58b1a0687f9bfa4304a90484c5f2257f5ab289d53dd",
+    "canonicalMatchesTestedSnapshot": true
+  }
+]

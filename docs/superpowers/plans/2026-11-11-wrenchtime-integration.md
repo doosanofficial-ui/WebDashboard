@@ -25,6 +25,20 @@ The user's execution instruction and repository standing authorization request i
 - [x] Custom PID core RED → GREEN
 - [x] UI integration and safety boundary
 - [x] Full tests/build, dedicated UI evidence, independent review
-- [ ] Authorized commit/push after verified gates; do not alter blocked prior commit author
+- [x] Verified custom PID slice committed locally as 2f0635f
+- [ ] Remote synchronization; do not alter blocked prior commit author
 
 Custom PID validation: 466 core + 4 UI passed; see [review record](../../verification/wrenchtime-custom-pid-2026-11-11.md). Next ActivityKit work is separate and not part of this acceptance.
+
+## Second slice: local REC-linked Live Activity
+
+1. Keep ActivityKit independent of acquisition and durable recording. Default off; explicit selected signals, no push token/server/App Group or background-mode expansion.
+2. Build a pure bounded projection and generation gate, then connect only recorder start success, stop/failure, scene transitions and received samples. End orphaned activities on launch; dismissal cannot recreate the same session. Terminal intent invalidates pending updates before disk close.
+3. Add an embedded WidgetKit extension with iOS 17 Lock Screen/Dynamic Island support and an iOS 18 availability-gated supplemental small family. Treat actual CarPlay appearance and iOS 17 runtime separately from iOS 27 compilation.
+4. Verify core tests, target/embedding, dedicated synthetic opt-in/REC/relaunch UI, actual system surface pixels and regression of the first slice. Record physical-device and entitlement limitations. Commit only verified portions.
+
+Core projection RED → GREEN is complete (6 focused, full suite 472 passed). Final Activity suite: 3 passed; first-slice PID regression: 4 passed. All 11 final captures were directly inspected; see [Activity verification](../../verification/wrenchtime-live-activity-2026-11-11.md). OS stale rendering is delayed, not a hard 15-second deadline. Snapshot time and the disclosure reflect that observed limit. Parent direct UI review and remote synchronization remain separate gates.
+
+## Next bounded slice
+
+Add current displayed-recorded-sample minimum/maximum/sample-average to the existing RecordedSignalHistoryView, reusing MeasurementReplay.SignalHistory and ReplayController.recordedHistory. Preserve its 60-second/600-point/cursor limits; label truncated scope. Do not merge mixed units/sources or invent zeros for unavailable values. Define historical quality inclusion explicitly and test backward seek/session isolation. Vehicle-context presets should later link existing VehicleContext IDs to DashboardProfile with legacy dashboard.json and undo preservation, not introduce another vehicle model.

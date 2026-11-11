@@ -1,0 +1,52 @@
+{
+  "devicesAndConfigurations" : [
+    {
+      "device" : {
+        "architecture" : "arm64",
+        "deviceId" : "CF44E21B-06DF-4AD4-8356-9381B6DB982D",
+        "deviceName" : "Telemetry-WrenchTime-SYNTHETIC-20261111",
+        "modelName" : "iPhone 17",
+        "osBuildNumber" : "24A434",
+        "osVersion" : "27.0",
+        "platform" : "iOS Simulator"
+      },
+      "expectedFailures" : 0,
+      "failedTests" : 1,
+      "passedTests" : 0,
+      "skippedTests" : 0,
+      "testPlanConfiguration" : {
+        "configurationId" : "1",
+        "configurationName" : "Test Scheme Action"
+      }
+    }
+  ],
+  "environmentDescription" : "Telemetry · Built with macOS 27.0",
+  "expectedFailures" : 0,
+  "failedTests" : 1,
+  "finishTime" : 1794407342.494,
+  "passedTests" : 0,
+  "result" : "Failed",
+  "runtimeWarnings" : [
+
+  ],
+  "skippedTests" : 0,
+  "startTime" : 1794407260.995,
+  "statistics" : [
+
+  ],
+  "testFailures" : [
+    {
+      "failureText" : "XCTAssertTrue failed - Suspended activity must stop asserting freshness",
+      "targetName" : "TelemetryUITests",
+      "testIdentifier" : 1,
+      "testIdentifierString" : "RecordingActivityUITests/testLiveActivityIsOptInRECLinkedAndEndsWhenStopped()",
+      "testIdentifierURL" : "test://com.apple.xcode/Telemetry/TelemetryUITests/RecordingActivityUITests/testLiveActivityIsOptInRECLinkedAndEndsWhenStopped",
+      "testName" : "testLiveActivityIsOptInRECLinkedAndEndsWhenStopped()"
+    }
+  ],
+  "title" : "Test - Telemetry",
+  "topInsights" : [
+
+  ],
+  "totalTestCount" : 1
+}

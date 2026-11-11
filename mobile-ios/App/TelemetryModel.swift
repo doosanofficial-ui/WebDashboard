@@ -39,6 +39,7 @@ final class TelemetryModel: NSObject {
     let replayController = ReplayController()
     let diagnosticWorkspace = DiagnosticWorkspaceState()
     let diagnosticAudit = DiagnosticAuditRecordingState()
+    let recordingActivity = RecordingActivityController()
     var replaySignalQuality: [String: SignalQuality] = [:]
     var replaySignalFreshness: [String: MeasurementReplay.SignalFreshness] = [:]
     @ObservationIgnored private var replayGeneration = UUID()
@@ -375,6 +376,7 @@ final class TelemetryModel: NSObject {
                                 self.rawCANText = "-"
                             }
                             self.updateDashboardConditions(values: frame.sig, now: frame.t)
+                            self.refreshRecordingActivity()
                             if self.connectionStableSince == nil {
                                 self.connectionStableSince = Date()
                             } else if let stableSince = self.connectionStableSince,
@@ -860,6 +862,7 @@ final class TelemetryModel: NSObject {
     }
 
     private func publishCarPlayProjection() {
+        refreshRecordingActivity()
         #if canImport(CarPlay)
         let recordingState: String = storageStatus != nil
             ? "failed"
@@ -876,6 +879,27 @@ final class TelemetryModel: NSObject {
             primaryValues: values
         ))
         #endif
+    }
+
+    private func recordingActivitySnapshot(now: Date = Date()) -> RecordingActivitySnapshot {
+        let inputs = recordingActivity.selectedIDs.map { id -> RecordingActivitySnapshot.Input in
+            let raw = adapterProfile?.signals.first { $0.id == id }
+            let diagnostic = adapterProfile?.diagnosticQueries.flatMap(\.signals).first { $0.id == id }
+            let received = canSource == "Server" ? lastFrameAt?.timeIntervalSince1970 : localSignalReceivedAt[id]
+            let value = canSource == "Server" && connection != "Connected" ? nil : frame?.sig[id]
+            return .init(id: id, name: raw?.name ?? diagnostic?.name ?? id,
+                unit: raw?.unit ?? diagnostic?.unit ?? (id == "demo.signal" ? "demo" : ""),
+                value: runMode == .replay ? nil : value, receivedAt: received,
+                timeout: localSignalTimeouts[id] ?? raw?.timeout ?? diagnostic?.timeout ?? 3)
+        }
+        return .make(selectedIDs: recordingActivity.selectedIDs, inputs: inputs,
+            startedAt: recordingStartedAt?.timeIntervalSince1970 ?? now.timeIntervalSince1970,
+            now: now.timeIntervalSince1970)
+    }
+
+    func refreshRecordingActivity(force: Bool = false) {
+        guard localRecordingEnabled, !recordingClosing, runMode != .replay else { return }
+        recordingActivity.update(recordingActivitySnapshot(), force: force)
     }
 
     func startLocation() {
@@ -1255,6 +1279,7 @@ final class TelemetryModel: NSObject {
     }
 
     func sceneChanged(background: Bool) {
+        refreshRecordingActivity(force: true)
         if background { diagnosticWorkspace.flushEvidence() }
         if collecting, let event = try? TelemetryEvent.state(background ? "background" : "foreground",
             capturedAt: Date().timeIntervalSince1970, source: "ios-native",
@@ -1357,6 +1382,10 @@ final class TelemetryModel: NSObject {
             localRecordingStatus = "Local recorder ready"
             record(.system(name: "recording_started", timestamp: now,
                            monotonicNanos: DispatchTime.now().uptimeNanoseconds))
+            if localRecordingEnabled, !recordingClosing {
+                recordingActivity.begin(sessionID: sessionID, startedAt: Date(timeIntervalSince1970: now),
+                    mode: runMode, snapshot: recordingActivitySnapshot())
+            }
             publishCarPlayProjection()
         } catch {
             diagnosticAudit.discard()
@@ -1367,6 +1396,8 @@ final class TelemetryModel: NSObject {
     }
 
     func stopRecording() {
+        // Invalidate presentation immediately, before waiting for disk close.
+        recordingActivity.end(interrupted: recordingLifecycle.state == .failed)
         guard !recordingClosing else { return }
         guard let recorder = localRecorder, let writer = recordingWriteQueue else {
             diagnosticAudit.discard()

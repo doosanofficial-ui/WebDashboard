@@ -1,0 +1,8 @@
+{
+  "scope": "Dedicated synthetic Simulator only. Permission/prior screenshots are not final UI evidence.",
+  "simulator_id": "CF44E21B-06DF-4AD4-8356-9381B6DB982D",
+  "permission_initial_result": "/tmp/telemetry-wrenchtime.mfQHbp/activity-single-permission.xcresult",
+  "continued_permission_observed_and_accepted": "Native UI snapshot and tap e126, 2026-11-11 14:27 UTC, Telemetry Live Activity only",
+  "prior_stale_observation": "Native screenshot 2026-11-11 ~14:30 UTC; ActivityKit logged staleDate 14:28:40 UTC. No precise latency guarantee.",
+  "manual_process_suspension_performed": false
+}
