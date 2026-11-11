@@ -34,8 +34,6 @@ final class SmallViewportStatusUIRegression: XCTestCase {
         XCTAssertTrue(closeStatus.waitForNonExistence(timeout: remaining(until: dismissalDeadline)))
         XCTAssertTrue(app.scrollViews["session-status-details-scroll"].waitForNonExistence(
             timeout: remaining(until: dismissalDeadline)))
-        _ = try captureStatusEvidence(app, name: "after-done-before-hit-query")
-        XCTAssertGreaterThan(remaining(until: dismissalDeadline), 0, "Dismissal capture exceeded the original 5-second deadline")
         let edit = app.buttons["edit-dashboard"]
         // Edit may already be ready; query before scheduling the first polling callback.
         let initiallyHittable = edit.isHittable
@@ -47,7 +45,13 @@ final class SmallViewportStatusUIRegression: XCTestCase {
             }, object: edit)
             XCTAssertEqual(XCTWaiter.wait(for: [editReady], timeout: remaining(until: dismissalDeadline)), .completed, app.debugDescription)
         }
-        XCTAssertGreaterThan(remaining(until: dismissalDeadline), 0, "Hittability returned after the original 5-second deadline")
+        let dismissalReadyAt = ProcessInfo.processInfo.systemUptime
+        XCTAssertGreaterThan(dismissalDeadline - dismissalReadyAt, 0,
+            "Hittability returned after the original 5-second deadline")
+        // Freeze the UI verdict before screenshot/AX diagnostics. Their cost must
+        // not postpone the first Edit query or turn a late UI result into success.
+        print("STATUS_DISMISSAL_READY observed=\(dismissalReadyAt) deadline=\(dismissalDeadline); diagnostic capture follows")
+        _ = try captureStatusEvidence(app, name: "after-done-after-hit-query")
         edit.tap()
         XCTAssertTrue(app.buttons["undo-dashboard-layout"].waitForExistence(timeout: 5))
         let picker = app.buttons["dashboard-page-picker"]
