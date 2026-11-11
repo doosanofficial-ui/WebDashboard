@@ -106,6 +106,7 @@ final class SmallViewportUIRegression: XCTestCase {
         capture(app, "editor-landscape-initial")
         XCTAssertTrue(reveal(last, app: app, editor: true), "Landscape last canvas actions must be fully exposed")
         capture(app, "editor-landscape-canvas-end")
+        try DashboardNumericInputUIChecks.verifyRecovery(app, owner: self, name: "SE-EN-AX5-portrait")
         #endif
     }
 }

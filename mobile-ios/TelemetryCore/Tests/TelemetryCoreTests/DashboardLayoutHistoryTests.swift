@@ -34,6 +34,23 @@ final class DashboardLayoutHistoryTests: XCTestCase {
             expectedPage: original.pages[0], widgetID: "active", rect: .init(x: 1, y: 4, width: 2, height: 1)))
         XCTAssertEqual(profile, current); XCTAssertFalse(history.canUndo(in: profile))
     }
+    func testRectUndoAndRedoNeverRemoveWidgetsAddedAfterTheCommand() throws {
+        var profile = try fixture(); let original = profile; var history = DashboardLayoutHistory()
+        let moved = DashboardRect(x: 1, y: 3, width: 2, height: 1)
+        XCTAssertTrue(history.commit(profile: &profile, expectedProfileID: profile.id,
+            expectedPage: profile.pages[0], widgetID: "active", rect: moved))
+        let added = DashboardWidgetDefinition(id: "added", type: .numericGauge, signalID: nil,
+            rect: .init(x: 0, y: 5, width: 2, height: 1), zIndex: 2,
+            configuration: original.pages[0].widgets[0].configuration)
+        try profile.addWidget(added, toPage: "page")
+        XCTAssertTrue(history.undo(profile: &profile))
+        XCTAssertEqual(profile.pages[0].widgets.map(\.id), ["active", "neighbor", "added"])
+        XCTAssertEqual(profile.pages[0].widgets.last, added)
+        XCTAssertEqual(profile.pages[0].widgets[0].rect, original.pages[0].widgets[0].rect)
+        XCTAssertTrue(history.redo(profile: &profile))
+        XCTAssertEqual(profile.pages[0].widgets.last, added)
+        XCTAssertEqual(profile.pages[0].widgets[0].rect, moved)
+    }
     func testNoOpReleaseDoesNotEraseRedo() throws {
         var profile = try fixture(); let original = profile; var history = DashboardLayoutHistory()
         XCTAssertTrue(history.commit(profile: &profile, expectedProfileID: profile.id, expectedPage: profile.pages[0],

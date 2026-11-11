@@ -46,7 +46,7 @@ final class DashboardEditingUITests: XCTestCase {
                 "Landscape visual evidence must include the presented app window")
         }
     }
-    func testSelectedCardKeepsConfigurationAvailableOnDemand() {
+    func testSelectedCardKeepsConfigurationAvailableOnDemand() throws {
         let app = XCUIApplication(); app.launchArguments += ["--app-language", "en"]; app.launch(); capture(app, "SYNTHETIC-concept-live-idle"); openEditor(app)
         let active = widget("fixture-0", app); XCTAssertTrue(active.waitForExistence(timeout: 5)); active.tap()
         let configuration = app.buttons["widget-configuration-disclosure"]
@@ -59,6 +59,15 @@ final class DashboardEditingUITests: XCTestCase {
         XCTAssertFalse(app.buttons["undo-dashboard-layout"].isEnabled)
         let image = XCTAttachment(screenshot: app.screenshot()); image.name = "SYNTHETIC-concept-editor-compact"
         image.lifetime = .keepAlways; add(image)
+        try DashboardNumericInputUIChecks.verifyRecovery(app, owner: self, name: "EN-default")
+        app.terminate()
+        let korean = XCUIApplication()
+        korean.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+                                  "-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR", "--app-language", "ko"]
+        defer { XCUIDevice.shared.orientation = .portrait }
+        try DashboardNumericInputUIChecks.verifyRecovery(korean, owner: self,
+            name: "KR-AX5-landscape", korean: true, landscape: true)
+        korean.terminate()
     }
 
     func testMoveReleaseUndoRedoAndReentryPreserveNeighbor() {

@@ -12,6 +12,8 @@ struct DashboardEditorView: View {
     @State private var draftSignalID = ""
     @State private var draftUnit = ""
     @State private var draftDecimals = "1"
+    @State private var draftValidationError: DashboardNumericDraft.ValidationError?
+    @FocusState private var numericInputFocus: DashboardNumericDraft.Field?
     @State private var draftMinimum = ""
     @State private var draftMaximum = ""
     @State private var draftWarning = ""
@@ -49,25 +51,33 @@ struct DashboardEditorView: View {
                     .accessibilityIdentifier("dashboard-save-error")
                 }
                 if let profile = model.dashboardProfile, let page = selectedPage {
-                    if !dynamicTypeSize.isAccessibilitySize {
-                        pageControls(profile: profile, page: page)
-                    }
-                    ScrollView {
-                        if dynamicTypeSize.isAccessibilitySize {
-                            VStack(spacing: 12) {
-                                pageControls(profile: profile, page: page)
+                    if dynamicTypeSize.isAccessibilitySize && configurationExpanded {
+                        // The expanded form owns the visible viewport, not a nested footer scroll.
+                        ScrollView {
+                            selectionControls(page: page, scrollsConfiguration: false)
+                        }
+                        .accessibilityIdentifier("dashboard-widget-configuration-scroll")
+                    } else {
+                        if !dynamicTypeSize.isAccessibilitySize {
+                            pageControls(profile: profile, page: page)
+                        }
+                        ScrollView {
+                            if dynamicTypeSize.isAccessibilitySize {
+                                VStack(spacing: 12) {
+                                    pageControls(profile: profile, page: page)
+                                    DashboardEditorCanvas(model: model, page: page,
+                                                           selectedWidgetID: $selectedWidgetID)
+                                        .padding(.horizontal)
+                                }
+                            } else {
                                 DashboardEditorCanvas(model: model, page: page,
                                                        selectedWidgetID: $selectedWidgetID)
                                     .padding(.horizontal)
                             }
-                        } else {
-                            DashboardEditorCanvas(model: model, page: page,
-                                                   selectedWidgetID: $selectedWidgetID)
-                                .padding(.horizontal)
                         }
+                        .accessibilityIdentifier("dashboard-editor-scroll")
+                        selectionControls(page: page)
                     }
-                    .accessibilityIdentifier("dashboard-editor-scroll")
-                    selectionControls(page: page)
                 } else {
                     ContentUnavailableView("No dashboard profile", systemImage: "rectangle.3.group")
                 }
@@ -85,6 +95,14 @@ struct DashboardEditorView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(AppLocalization.text("Done")) { dismiss() }
+                        .accessibilityIdentifier("dashboard-editor-done")
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    if numericInputFocus != nil {
+                        Spacer()
+                        Button(AppLocalization.text("Done")) { numericInputFocus = nil }
+                            .accessibilityIdentifier("dashboard-numeric-keyboard-done")
+                    }
                 }
             }
             .onAppear {
@@ -196,7 +214,7 @@ struct DashboardEditorView: View {
     }
 
     @ViewBuilder
-    private func selectionControls(page: DashboardPage) -> some View {
+    private func selectionControls(page: DashboardPage, scrollsConfiguration: Bool = true) -> some View {
         if let selectedWidgetID,
            let widget = page.widgets.first(where: { $0.id == selectedWidgetID }) {
             VStack(alignment: .leading, spacing: 8) {
@@ -231,11 +249,10 @@ struct DashboardEditorView: View {
                 }
                 .buttonStyle(.bordered)
 
-                DisclosureGroup(isExpanded: $configurationExpanded) {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 8) {
+                let fields = VStack(alignment: .leading, spacing: 8) {
                             HStack {
                                 TextField(AppLocalization.text("Label"), text: $draftLabel)
+                                    .accessibilityIdentifier("dashboard-widget-label")
                                 Menu(AppLocalization.text("Bind signal")) {
                                     if model.availableSignalIDs.isEmpty {
                                         Text(AppLocalization.text("No profile signals"))
@@ -256,13 +273,10 @@ struct DashboardEditorView: View {
                                 TextField(AppLocalization.text("Unit"), text: $draftUnit)
                                 TextField(AppLocalization.text("Decimals"), text: $draftDecimals)
                                     .keyboardType(.numberPad)
+                                    .focused($numericInputFocus, equals: .decimals)
+                                    .accessibilityIdentifier("dashboard-widget-decimals")
                             }
-                            HStack {
-                                TextField(AppLocalization.text("Min"), text: $draftMinimum).keyboardType(.numbersAndPunctuation)
-                                TextField(AppLocalization.text("Max"), text: $draftMaximum).keyboardType(.numbersAndPunctuation)
-                                TextField(AppLocalization.text("Warn"), text: $draftWarning).keyboardType(.numbersAndPunctuation)
-                                TextField(AppLocalization.text("Critical"), text: $draftCritical).keyboardType(.numbersAndPunctuation)
-                            }
+                            numericRangeInputs
                             Toggle(AppLocalization.text("Condition enabled"), isOn: $draftConditionEnabled)
                             if draftConditionEnabled {
                                 Picker(AppLocalization.text("Condition"), selection: $draftConditionOperator) {
@@ -292,19 +306,42 @@ struct DashboardEditorView: View {
                                 }
                                 Toggle(AppLocalization.text("Stale is active"), isOn: $draftConditionStaleActive)
                             }
+                            if let error = draftValidationError {
+                                Text(numericValidationMessage(error))
+                                    .font(.caption).foregroundStyle(.orange)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .accessibilityIdentifier("dashboard-widget-numeric-error")
+                            }
                             Button(AppLocalization.text("Apply widget configuration")) {
                                 applyDraft(pageID: page.id, widgetID: widget.id)
                             }
                             .buttonStyle(.borderedProminent)
                             .accessibilityIdentifier("apply-widget-configuration")
-                        }
-                        .padding(.vertical, 6)
-                    }
-                    .frame(maxHeight: 300)
-                } label: {
-                    Text(AppLocalization.text("Widget configuration")).font(.subheadline.weight(.semibold))
                 }
-                .accessibilityIdentifier("widget-configuration-disclosure")
+                .padding(.vertical, 6)
+                if scrollsConfiguration {
+                    DisclosureGroup(isExpanded: $configurationExpanded) {
+                        ScrollView { fields }
+                            .frame(maxHeight: 300)
+                            .accessibilityIdentifier("dashboard-widget-configuration-scroll")
+                    } label: {
+                        Text(AppLocalization.text("Widget configuration")).font(.subheadline.weight(.semibold))
+                    }
+                    .accessibilityIdentifier("widget-configuration-disclosure")
+                } else {
+                    Button {
+                        numericInputFocus = nil
+                        configurationExpanded = false
+                    } label: {
+                        HStack {
+                            Text(AppLocalization.text("Widget configuration")).font(.subheadline.weight(.semibold))
+                            Spacer()
+                            Image(systemName: "chevron.up").accessibilityHidden(true)
+                        }
+                    }
+                    .accessibilityIdentifier("widget-configuration-disclosure")
+                    fields
+                }
             }
             .textFieldStyle(.roundedBorder)
             .padding(.horizontal)
@@ -312,7 +349,37 @@ struct DashboardEditorView: View {
         }
     }
 
+    private var numericRangeInputs: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout())
+        return layout {
+            numericRangeInput("Min", text: $draftMinimum, field: .minimum, identifier: "minimum")
+            numericRangeInput("Max", text: $draftMaximum, field: .maximum, identifier: "maximum")
+            numericRangeInput("Warn", text: $draftWarning, field: .warning, identifier: "warning")
+            numericRangeInput("Critical", text: $draftCritical, field: .critical, identifier: "critical")
+        }
+    }
+
+    private func numericRangeInput(_ title: String, text: Binding<String>,
+                                   field: DashboardNumericDraft.Field, identifier: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if dynamicTypeSize.isAccessibilitySize {
+                Text(AppLocalization.text(title))
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("dashboard-widget-" + identifier + "-label")
+            }
+            TextField(AppLocalization.text(title), text: text)
+                .keyboardType(.numbersAndPunctuation)
+                .focused($numericInputFocus, equals: field)
+                .accessibilityIdentifier("dashboard-widget-" + identifier)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private func loadDraftFromSelection() {
+        draftValidationError = nil
+        numericInputFocus = nil
         guard let page = selectedPage,
               let selectedWidgetID,
               let widget = page.widgets.first(where: { $0.id == selectedWidgetID }) else { return }
@@ -345,7 +412,17 @@ struct DashboardEditorView: View {
     }
 
     private func applyDraft(pageID: String, widgetID: String) {
-        guard let decimals = Int(draftDecimals.trimmingCharacters(in: .whitespacesAndNewlines)) else { return }
+        numericInputFocus = nil
+        let numbers: DashboardNumericDraft.Values
+        switch DashboardNumericDraft(decimals: draftDecimals, minimum: draftMinimum, maximum: draftMaximum,
+                                     warning: draftWarning, critical: draftCritical).validated() {
+        case .failure(let error):
+            draftValidationError = error
+            return
+        case .success(let values):
+            numbers = values
+        }
+        draftValidationError = nil
         let condition: DashboardCondition? = draftConditionEnabled
             ? DashboardCondition(
                 op: draftConditionOperator,
@@ -360,11 +437,11 @@ struct DashboardEditorView: View {
         let configuration = DashboardWidgetConfiguration(
             label: draftLabel.isEmpty ? "Signal" : draftLabel,
             unit: draftUnit,
-            decimals: decimals,
-            minimum: optionalDouble(draftMinimum),
-            maximum: optionalDouble(draftMaximum),
-            warningThreshold: optionalDouble(draftWarning),
-            criticalThreshold: optionalDouble(draftCritical),
+            decimals: numbers.decimals,
+            minimum: numbers.minimum,
+            maximum: numbers.maximum,
+            warningThreshold: numbers.warning,
+            criticalThreshold: numbers.critical,
             condition: condition
         )
         let signal = draftSignalID.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -374,6 +451,16 @@ struct DashboardEditorView: View {
             signalID: signal.isEmpty ? nil : signal,
             configuration: configuration
         )
+    }
+
+    private func numericValidationMessage(_ error: DashboardNumericDraft.ValidationError) -> String {
+        switch error {
+        case .invalidDecimals:
+            return AppLocalization.text("Decimal places must be a whole number from 0 to 6.")
+        case .invalidNumber(let field):
+            return String(format: AppLocalization.text("%@ must be a finite number or empty."),
+                          AppLocalization.text(field.rawValue))
+        }
     }
 
     private func optionalDouble(_ text: String) -> Double? {

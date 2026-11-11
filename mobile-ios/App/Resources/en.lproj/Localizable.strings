@@ -582,3 +582,9 @@
 "Vehicle session" = "Vehicle session";
 "View snapshot time" = "View snapshot time";
 "Without a local context, the existing profile defaults remain active. Add a context to save an explicit selection." = "Without a local context, the existing profile defaults remain active. Add a context to save an explicit selection.";
+
+/* Widget numeric validation */
+"Min" = "Min";
+"Max" = "Max";
+"Decimal places must be a whole number from 0 to 6." = "Decimal places must be a whole number from 0 to 6.";
+"%@ must be a finite number or empty." = "%@ must be a finite number or empty.";

@@ -582,3 +582,9 @@
 "Vehicle session" = "차량 세션";
 "View snapshot time" = "화면 기준 시각";
 "Without a local context, the existing profile defaults remain active. Add a context to save an explicit selection." = "로컬 문맥이 없으면 기존 프로필 기본값을 사용합니다. 명시적인 수집 선택을 저장하려면 문맥을 추가하세요.";
+
+/* Widget numeric validation */
+"Min" = "최소";
+"Max" = "최대";
+"Decimal places must be a whole number from 0 to 6." = "소수 자릿수는 0~6 사이의 정수로 입력하세요.";
+"%@ must be a finite number or empty." = "%@에는 유한한 숫자를 입력하거나 비워 두세요.";

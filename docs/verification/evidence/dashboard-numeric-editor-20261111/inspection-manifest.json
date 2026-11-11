@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "reviewer": "primary-agent",
+  "reviewDate": "2026-11-11",
+  "sourceBaseCommit": "e5fb11d5f1fd5a52e9a8b494c119621930b1ebba",
+  "codeDylibSHA256": "15cb203e4c76bf059dd3cdb9145005085872a5028581e1edea0b087bd8c04866",
+  "finalCanonicalBundleSHA256": "47a5874600f6763bb9b8fd22b2e83f17142346e3d3d6dfaaa2a47d302b0a071a",
+  "finalHelpManifestSHA256": "163d027ce572c0276f925a53176b913f939aef23bff2619c11ecdce7919c2e38",
+  "privacy": "Synthetic UI only; no physical-device, vehicle location, private session or native diagnostic report",
+  "limits": "Not a full UI inventory, physical runtime, CarPlay entitlement or commercial release acceptance",
+  "files": [
+    {
+      "name": "after-en-ax5-maximum.png",
+      "bytes": 499567,
+      "sha256": "664e0412744266c8f1baa87d8075c459c08a008f343b2fb5433316072a3aa759",
+      "directlyInspected": true,
+      "provenance": "owned-Simulator-0.22.5-build21-synthetic"
+    },
+    {
+      "name": "after-en-ax5-minimum.png",
+      "bytes": 328022,
+      "sha256": "4ac58ab8c52a44be40e6a0bc4d8d6d54d2a13afea039deb309950b27d364bec8",
+      "directlyInspected": true,
+      "provenance": "owned-Simulator-0.22.5-build21-synthetic"
+    },
+    {
+      "name": "after-ko-ax5-landscape-preview.png",
+      "bytes": 332626,
+      "sha256": "232324588ff551b58804b9b69d025acb011347910f75c1c0851df91bc0e681d7",
+      "directlyInspected": true,
+      "provenance": "explicit-sips-Z1800-inspection-derivative"
+    },
+    {
+      "name": "after-ko-ax5-landscape-source.png",
+      "bytes": 559310,
+      "sha256": "de7aa947741a6e15022a4bd6e207e8365cd465a605f9b9f8d4134d9f115bebee",
+      "directlyInspected": true,
+      "provenance": "owned-Simulator-0.22.5-build21-synthetic"
+    },
+    {
+      "name": "before-en-ax5.png",
+      "bytes": 350461,
+      "sha256": "ddd1dde89768894a8908d2fc502c68863acfb9b263219efd69f14789c10371c5",
+      "directlyInspected": true,
+      "provenance": "old-local-candidate-0.22.4"
+    },
+    {
+      "name": "help-runtime-en.png",
+      "bytes": 579931,
+      "sha256": "bf065c7b65882fa149fbedf3acc5815df84973096bdceeca91bf1457601e029d",
+      "directlyInspected": true,
+      "provenance": "owned-Simulator-0.22.5-build21-synthetic"
+    },
+    {
+      "name": "help-runtime-ko.png",
+      "bytes": 384037,
+      "sha256": "2b475e48147e4892498cca09d77a449c65dbbe7c4f6d1b82ff54fb24417d8544",
+      "directlyInspected": true,
+      "provenance": "owned-Simulator-0.22.5-build21-synthetic"
+    },
+    {
+      "name": "invalid-en-default.png",
+      "bytes": 432928,
+      "sha256": "217868051077a7f9bf82381768cb56bd0b8467649799d14995a2125a2dd2a67d",
+      "directlyInspected": true,
+      "provenance": "owned-Simulator-0.22.5-build21-synthetic"
+    },
+    {
+      "name": "paired-en-critical.png",
+      "bytes": 447840,
+      "sha256": "89db9a38c083604781531e9fe2408de5e0a362609bf74ec5925a4820fc80ad48",
+      "directlyInspected": true,
+      "provenance": "owned-Simulator-0.22.5-build21-synthetic"
+    },
+    {
+      "name": "paired-en-maximum.png",
+      "bytes": 479974,
+      "sha256": "4ae261f9f21215d475bdfe3e7c26536d5405ce2e22e7681ed0d2682f0d08c20b",
+      "directlyInspected": true,
+      "provenance": "owned-Simulator-0.22.5-build21-synthetic"
+    },
+    {
+      "name": "paired-en-minimum.png",
+      "bytes": 324696,
+      "sha256": "8bb6b4c6a282d9c90fd205a151bcc59bd5738ec3a371be0798c911d561de9415",
+      "directlyInspected": true,
+      "provenance": "owned-Simulator-0.22.5-build21-synthetic"
+    },
+    {
+      "name": "paired-en-warning.png",
+      "bytes": 474943,
+      "sha256": "e95feddf94d34e3526bbe3851f6fc1801d361fba4fd6b2de23c72ecbd01873e4",
+      "directlyInspected": true,
+      "provenance": "owned-Simulator-0.22.5-build21-synthetic"
+    },
+    {
+      "name": "paired-ko-critical.png",
+      "bytes": 481940,
+      "sha256": "3be18c714306220f1143f6ab86c4dd97aace2f04e8407b05b155d882915913b4",
+      "directlyInspected": true,
+      "provenance": "owned-Simulator-0.22.5-build21-synthetic"
+    },
+    {
+      "name": "paired-ko-maximum.png",
+      "bytes": 568578,
+      "sha256": "935ae2175984694b8cd0a8eb7ee4acdc9744a7c3dfdd2af5fa22924ec7a398be",
+      "directlyInspected": true,
+      "provenance": "owned-Simulator-0.22.5-build21-synthetic"
+    },
+    {
+      "name": "paired-ko-minimum.png",
+      "bytes": 732429,
+      "sha256": "352b25aadcb7a82617738e14940d170825352e32f409b438769372536c24c093",
+      "directlyInspected": true,
+      "provenance": "owned-Simulator-0.22.5-build21-synthetic"
+    },
+    {
+      "name": "paired-ko-warning.png",
+      "bytes": 464749,
+      "sha256": "86807467ff37cb3a2cb5702d86b04c15a036e9242a9253061c18dc70930c611d",
+      "directlyInspected": true,
+      "provenance": "owned-Simulator-0.22.5-build21-synthetic"
+    },
+    {
+      "name": "restored-en-ax5.png",
+      "bytes": 325020,
+      "sha256": "3c7f4f2bb377d4027d54510325e2a8d5a9d36c25b101bcd878bf0d9ca7fb72c5",
+      "directlyInspected": true,
+      "provenance": "owned-Simulator-0.22.5-build21-synthetic"
+    },
+    {
+      "name": "se-ax5-landscape-canvas.png",
+      "bytes": 299483,
+      "sha256": "80e9d85b404824d7a87ee204c282087a60f502ecc281b5b9b57682ddf473f75f",
+      "directlyInspected": true,
+      "provenance": "owned-Simulator-0.22.5-build21-synthetic"
+    },
+    {
+      "name": "se-ax5-minimum.png",
+      "bytes": 193151,
+      "sha256": "200d9b05eb1d7b44f9a736d06e264ee4e4eb0ddbcf9695b2ea54fd21fa42ba96",
+      "directlyInspected": true,
+      "provenance": "owned-Simulator-0.22.5-build21-synthetic"
+    }
+  ]
+}
