@@ -62,6 +62,8 @@ import TelemetryCore
             // No await/yield between the real callback's queue admission and Stop.
             stopped = true
             model.stopRecording()
+            expect(model.recordingActivity.ends == [false] && model.recordingClosing,
+                   "production Stop ends presentation synchronously while durable close is pending")
             model.diagnosticAdapter.stop()
         }
         model.diagnosticAdapter.start(profile: profile)
@@ -69,6 +71,13 @@ import TelemetryCore
         try await waitFor(await transport.closeEvents())
         guard let recorder = model.completedRecorder else { throw ProbeError.deadline }
         let beforeLate = try await recorder.export()
+        expect(model.recordingActivity.begins.count == 1,
+               "production REC reaches the presentation boundary exactly once")
+        let presentation = model.recordingActivity.begins.first
+        expect(presentation?.sessionID == beforeLate.first?.sessionID,
+               "presentation receives the durable recording session identity")
+        expect(presentation?.mode == .live && presentation?.snapshot.readings.isEmpty == true,
+               "host presentation fixture carries no invented measurements")
         let originalFailureCallbacks = failureCallbacks
         await transport.pushLateReply()
         model.diagnosticAdapter.onQueryFailure?(

@@ -55,7 +55,7 @@ class CompilerBoundary(Exception):
 
 
 class DiagnosticRecordingGeneratorTests(unittest.TestCase):
-    def generated(self, current=True):
+    def generated(self, current=True, source_text=None):
         """Execute generation with synthetic inputs; stop before the Swift boundary."""
         captured = {}
         with tempfile.TemporaryDirectory(prefix="diagnostic-generator-contract-") as directory:
@@ -63,7 +63,7 @@ class DiagnosticRecordingGeneratorTests(unittest.TestCase):
             app = root / "mobile-ios/App"
             app.mkdir(parents=True)
             model = app / "TelemetryModel.swift"
-            model.write_text(source(current))
+            model.write_text(source(current) if source_text is None else source_text)
             (app / "DiagnosticAdapterController.swift").write_text("// synthetic source identity\n")
             for name in ("DiagnosticWorkspaceState", "DiagnosticAuditRecordingState"):
                 (app / (name + ".swift")).write_text("final class " + name + " {}\n")
@@ -155,6 +155,19 @@ class DiagnosticRecordingGeneratorTests(unittest.TestCase):
         self.assertIn("let diagnosticWorkspace = DiagnosticWorkspaceState()", current["model"])
         self.assertIn("let diagnosticAudit = DiagnosticAuditRecordingState()", current["model"])
         self.assertEqual(current["command"][current["command"].index("--jobs") + 1], "1")
+
+    def test_activity_presentation_seam_keeps_actual_recording_methods(self):
+        actual = GENERATOR.SOURCE.read_text()
+        emitted = self.generated(source_text=actual)
+        for name in ("startRecording", "stopRecording"):
+            self.assertIn(GENERATOR.extract(actual, name), emitted["model"])
+        self.assertIn("final class RecordingActivityProbe", emitted["model"])
+        self.assertIn("let recordingActivity = RecordingActivityProbe()", emitted["model"])
+        self.assertIn("func recordingActivitySnapshot() -> RecordingActivitySnapshot", emitted["model"])
+        self.assertIn("snapshot: RecordingActivitySnapshot", emitted["model"])
+        self.assertIn("recordingActivity.begins.count == 1", emitted["checks"])
+        self.assertIn("recordingActivity.ends == [false]", emitted["checks"])
+        self.assertNotIn("import ActivityKit", emitted["model"])
 
     def test_generated_checks_preserve_loss_markers_and_check_both_healthy_phases(self):
         checks = self.generated(True)["checks"]

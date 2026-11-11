@@ -13,7 +13,27 @@ enum ProbeError: Error { case missingTransport, deadline }
     }
 }
 
+// Presentation-only spy for this macOS storage harness. It never uses ActivityKit,
+// reads preferences or certifies actual system rendering. Production REC bodies
+// below remain verbatim and call this typed boundary normally.
+@MainActor final class RecordingActivityProbe {
+    struct Begin {
+        let sessionID: String
+        let startedAt: Date
+        let mode: TelemetryRunMode
+        let snapshot: RecordingActivitySnapshot
+    }
+    private(set) var begins: [Begin] = []
+    private(set) var ends: [Bool] = []
+    func begin(sessionID: String, startedAt: Date, mode: TelemetryRunMode,
+               snapshot: RecordingActivitySnapshot) {
+        begins.append(.init(sessionID: sessionID, startedAt: startedAt, mode: mode, snapshot: snapshot))
+    }
+    func end(interrupted: Bool) { ends.append(interrupted) }
+}
+
 @MainActor final class RecordingModel {
+    let recordingActivity = RecordingActivityProbe()
     let diagnosticAdapter = DiagnosticAdapterController()
     let telemetryStore = TelemetryStore()
     var runMode = TelemetryRunMode.live
@@ -39,6 +59,11 @@ enum ProbeError: Error { case missingTransport, deadline }
         // PRODUCTION_BINDINGS
     }
 
+    func recordingActivitySnapshot() -> RecordingActivitySnapshot {
+        .make(selectedIDs: [], inputs: [],
+              startedAt: recordingStartedAt?.timeIntervalSince1970 ?? 0,
+              now: Date().timeIntervalSince1970)
+    }
     func publishCarPlayProjection() { projectionReturned?() }
     func applyLocalDiagnosticSignals(values: [String: Double], rawValues: [String: UInt64],
         source: String, sequence: UInt64, timestamp: Double, responseCANID: UInt32) {

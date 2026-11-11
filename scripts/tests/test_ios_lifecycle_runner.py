@@ -146,6 +146,21 @@ class LifecycleRunnerTests(unittest.TestCase):
         self.assertIn("testCancelledComputedManySignalSeekCannotPublish", declarations)
         self.assertIn("testStopAfterComputedManySignalSeekDiscardsResultAndAllOwnedState", declarations)
 
+    def test_host_includes_production_app_shared_activity_sources(self):
+        root = Path(__file__).resolve().parents[2]
+        def target_sources(filename, target):
+            source = (root / "mobile-ios" / filename).read_text()
+            block = re.search(r"(?ms)^  " + re.escape(target) + r":\n(.*?)(?=^  \w|^schemes:|\Z)", source)
+            self.assertIsNotNone(block, target)
+            declaration = re.search(r"^    sources: \[(.*?)\]$", block.group(1), re.MULTILINE)
+            self.assertIsNotNone(declaration, target)
+            return {path.strip() for path in declaration.group(1).split(",")}
+        production = target_sources("project.yml", "Telemetry")
+        host = target_sources("lifecycle-tests.yml", "TelemetryLifecycleHost")
+        self.assertIn("ActivityShared", production)
+        self.assertEqual(host, production, "Hosted App compilation must include shared production types")
+        self.assertTrue((root / "mobile-ios/ActivityShared/RecordingActivityAttributes.swift").is_file())
+
     def test_expanded_gate_rejects_old_green_or_partial_counts(self):
         expected = runner.EXPECTED_TEST_COUNT
         runner.verify_summary({"totalTestCount": runner.EXPECTED_TEST_COUNT, "passedTests": runner.EXPECTED_TEST_COUNT, "failedTests": 0,

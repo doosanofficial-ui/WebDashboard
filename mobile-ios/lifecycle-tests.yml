@@ -4,7 +4,7 @@ targets:
   TelemetryLifecycleHost:
     type: application
     platform: iOS
-    sources: [App]
+    sources: [App, ActivityShared]
     dependencies:
       - package: TelemetryCore
     settings:
