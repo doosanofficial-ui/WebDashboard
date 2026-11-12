@@ -330,7 +330,7 @@ final class OfflineReplayUITests: XCTestCase {
             let raw = observation.readText("predicate-replay-position") { position.label }
             let current = Double(raw.split(separator: " ").first.map(String.init) ?? "") ?? -1
             return current >= seconds + 2.5
-        }, object: position)
+        }, object: nil) // The closure reads position; XCTest must not snapshot it again for diagnostics.
         observation.mark(.waitRequested)
         let delayedResult = XCTWaiter.wait(for: [delayedTouch], timeout: 10)
         observation.mark(.waitReturned)

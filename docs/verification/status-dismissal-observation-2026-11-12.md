@@ -31,3 +31,17 @@ A new host regression compiles and executes the actual extracted caller with det
 The fake assertions collect failures rather than aborting execution, so this harness proves failure classification and ordering, not XCTest's `continueAfterFailure=false` unwinding, native polling or real device timing. An independent read-only review found no weakened deadline or failure-overwrite path. Fresh exact-SHA CI must still verify actual Edit readiness and the later help-frame assertions. Earlier captures do not certify this new runtime path.
 
 Local full native contracts passed 492/492 with no failures, errors, skips or deferrals. Xcode 27 generic Simulator build-for-testing passed without boot/install/launch. Existing Help 60-input/same-run evidence, platform documentation and whitespace gates passed. These checks do not substitute for the pending actual UI run.
+
+## Exact-SHA remote result
+
+At `974df6c5d918f5b7148cd63e46a7e7328f67dfa6`, [Layout job 130856331622](https://github.com/doosanofficial-ui/WebDashboard/actions/runs/43118930515/job/130856331622) completed all 12 selected tests with zero failures/skips. The original [artifact 13904831768](https://github.com/doosanofficial-ui/WebDashboard/actions/runs/43118930515/artifacts/13904831768) has ZIP SHA256 `8710a8e9442a9edfccb5845efd2d915743af234b95d7d00dc878c90457dc42ef`, matching GitHub's digest. Test log, xcresult summary and completion receipt agree.
+
+The status test passed in 46.059 seconds. Its readiness verdict was observed at monotonic time 1167.4507634583333 against deadline 1169.7404629583334: 2.7103005 seconds elapsed, 2.2896995 seconds remaining. Capture started later at 1167.4508230416668 and lasted 1.0177105833 seconds. Edit was then tapped, help expanded, and the full explanation/frame/card/Undo assertions executed. Explanation bottom 618.3333 and first-card top 624.3333 establish 6pt separation in that coherent receipt.
+
+The implementation and independent reviewers directly opened all six original bracket images, captured 2026-11-12 00:32:31–00:32:51 UTC:
+
+- Before Done: `C52A5042-B959-4E69-9BCF-241402C89DD5.png`, `D5E89616-A3CB-4F1D-803B-84295DA4046B.png`.
+- After Done: `D616854D-442A-43BC-BA0E-9CF3337A5CB2.png`, `39A1198E-778F-4303-BA26-E2E852F46705.png`.
+- Expanded help: `5167BB3B-9AC6-4289-98B7-0C89154D501C.png`, `8DD31EE5-4FEF-4A9A-9DF6-87FA5C8096AE.png`.
+
+Pixels confirm readable status/Done, dismissed modal, visible Edit and the full expanded explanation above the first card. They also show remaining maximum-text presentation issues: the secondary Edit label wraps, the editor title truncates and the adjacent horizontally scrolling Add control is only partly visible. These results certify the targeted dismissal/help behavior, not whole-screen polish or all other screenshots. This is iPhone 17, iOS 27.0/24A434, Xcode 27A266a, English maximum-text CI Simulator evidence. Legacy “SE” attachment names do not establish SE or physical-device coverage. No local UI interaction was needed to inspect these artifacts.
