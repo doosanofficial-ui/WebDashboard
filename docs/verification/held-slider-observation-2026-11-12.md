@@ -32,3 +32,15 @@ A host regression compiles the actual extracted wait caller and `HomeStateObserv
 This model does not prove real XCTest scheduling, absence of future diagnostic snapshots, late-return semantics, baseline acquisition or actual held dragging. Independent read-only review found no semantic weakening. Fresh exact-SHA remote Simulator CI is required before calling the runtime failure repaired. No local Simulator boot, installation, launch, device control, permission-dialog interaction or Apple report submission occurred during this diagnosis.
 
 Local verification passed 493/493 native contracts with zero failures, errors, skips or deferrals. The signed-disabled generic iOS Simulator build-for-testing passed without a boot/install/launch. The first confined build attempt failed during package resolution with `sandbox_apply: Operation not permitted`; the authorized ordinary build retained that receipt and completed successfully. Platform documentation and whitespace validation also passed. None of these checks replaces the pending remote UI result.
+
+## Exact-commit native result
+
+At `99342c7b8fc2f70385dfc27bafdcb35cbb042ffb`, [Replay job 130939525656](https://github.com/doosanofficial-ui/WebDashboard/actions/runs/43144339439/job/130939525656) passed all ten selected tests with zero failures/skips. The test process exited 0 in 1009.024 seconds within its unchanged 1200-second limit, without TERM/KILL. The held-slider test passed in 56.324 seconds.
+
+[Artifact 13912048068](https://github.com/doosanofficial-ui/WebDashboard/actions/runs/43144339439/artifacts/13912048068) ZIP SHA256 `b36f0301ac90e039d65ea684e1869445487e512f18986a6fffe967c33c1cbaf0` matched downloaded bytes. All 50 seed source-input hashes match the commit. The original timing attachment `2936965E-21E4-4C7D-B185-9B7E07591699.json` has SHA256 `3a75df3e1f04f14aaa4eee0939dc1fa205ca60a2b7d54c4503578cf1cf9bb741`.
+
+It records baseline 0.8 seconds and five predicates at 1.4, 1.9, 2.4, 2.9 and 3.4 seconds against threshold 3.3. The wait completed in 5.411122 seconds with zero omitted/unfinished reads. No element-debug-description capture appears during this advancement wait. The original two-second press, slow drag and three-second hold then execute, followed by unchanged pause/editing/75%-target and Signals assertions.
+
+Both reviewers directly opened `5CDF2B7B-17E7-4612-A13A-B1DB67CC7ABB.png`, captured 03:13:22.881 UTC on iPhone 17/iOS 27.0/24A434. It shows 436.5/600 seconds (72.75%, within the original 75% ±5% tolerance), Play, 0.5× and “Playback held during editing”, with no dialog. The relevant controls and text are clear. Only this screenshot is cited as this change's direct visual evidence.
+
+This establishes successful native execution at the changed commit, not immunity to every runner-load condition, other UI groups, full-app visual completion or physical-device behavior. The separate route job's result-reader failure and Korean Help investigation remain distinct.

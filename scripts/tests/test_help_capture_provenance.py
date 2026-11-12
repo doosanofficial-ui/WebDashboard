@@ -256,7 +256,11 @@ class HelpProductReceiptTests(unittest.TestCase):
             def container(*args, **kwargs):
                 if fault == 'app-container': raise original_error
                 return str(root / 'device/Containers/Data/Application' / SIMULATOR)
-            def phase(command, log, receipt, timeout):
+            def phase(command, log, receipt, timeout, **options):
+                if command[1:5] == ['xcresulttool', 'get', 'test-results', 'summary']:
+                    log.write_text(output(command))
+                    return {'launched': True, 'exitCode': 0, 'timedOut': False,
+                            'groupExistsAfterCleanup': False}
                 phases.append(command)
                 if 'build-for-testing' in command:
                     self.fixture(Path(command[command.index('-derivedDataPath') + 1]), app_directory='Generated-configuration')

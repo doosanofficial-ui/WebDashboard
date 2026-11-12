@@ -30,6 +30,7 @@ from failure_observation import observe_first_failure
 
 
 APP_INSTALL_TIMEOUT_SECONDS = 600
+UI_SUMMARY_READ_TIMEOUT_SECONDS = 60  # Preserve the original summary-only command budget.
 APP_CONTAINER_TIMEOUT_SECONDS = 180  # communicate wait; launch/recording/cleanup are additional.
 SE_APP_BUILD_TIMEOUT_SECONDS = 900  # Finite SE-only candidate after late progress at the600-second stop.
 
@@ -565,6 +566,23 @@ FAILED_RESULT_OUTPUT_LIMIT_BYTES = 2 * 1024 * 1024
 RESULT_GROUP_CONFIRMATION_SECONDS = 1
 
 
+def read_ui_test_summary_output(bundle, results):
+    """Retain summary output and ownership evidence within the existing numeric budget."""
+    log = results / "result-read-command.log"
+    receipt = results / "result-read-process.json"
+    if any(path.exists() or path.is_symlink() for path in (log, receipt)):
+        raise FileExistsError("Result reader evidence already exists; use a new result directory")
+    recorded = run_owned_phase(
+        ["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)],
+        log, receipt, UI_SUMMARY_READ_TIMEOUT_SECONDS, ensure_group_cleanup=True,
+        group_cleanup_timeout=RESULT_GROUP_CONFIRMATION_SECONDS)
+    # Leader exit alone does not prove that inherited writers have stopped.
+    if (not isinstance(recorded, dict) or recorded.get("launched") is not True
+            or recorded.get("groupExistsAfterCleanup") is not False):
+        raise ValueError("Result reader owned-group cleanup is unconfirmed")
+    return log.read_text(encoding="utf-8")
+
+
 def collect_failed_test_results(bundle, results, deadline, clock=None):
     """Retain failed native evidence only after its entire owned writer group stops."""
     clock = clock or time.monotonic
@@ -924,7 +942,7 @@ def main():
                 except Exception:
                     pass  # Optional log parsing cannot replace the original UI result or cleanup.
             failure_phase = "result-read"
-            summary = json.loads(output(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)]))
+            summary = json.loads(read_ui_test_summary_output(bundle, results))
             (results / "summary.json").write_text(json.dumps(summary, indent=2))
             native = results / "native-exports"
             native.mkdir()

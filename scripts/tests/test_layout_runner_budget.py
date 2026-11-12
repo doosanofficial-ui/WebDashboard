@@ -91,6 +91,11 @@ class LayoutRunnerBudgetTests(unittest.TestCase):
             def phase(command, log, receipt, timeout, **kwargs):
                 calls.append((command, log.name, timeout))
                 sequential_budgets.append(timeout)
+                if command[1:5] == ['xcresulttool', 'get', 'test-results', 'summary']:
+                    log.write_text(json.dumps({'totalTestCount': summary_count, 'passedTests': summary_count,
+                                               'failedTests': 0, 'skippedTests': 0}))
+                    return {'launched': True, 'exitCode': 0, 'timedOut': False,
+                            'groupExistsAfterCleanup': False}
                 if log.name == "build.log" and build_ready_after is not None and build_ready_after > timeout:
                     error = subprocess.TimeoutExpired(command, timeout, output=b"late build progress")
                     build_failures.append(error)

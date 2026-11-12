@@ -272,7 +272,11 @@ class PostBootstrapDiagnosticsTests(unittest.TestCase):
                 if command[1:5] == ['xcresulttool', 'get', 'test-results', 'summary']:
                     return json.dumps({'totalTestCount': 10, 'passedTests': 10, 'failedTests': 0, 'skippedTests': 0})
                 return ''
-            def phase(command, *args, **kwargs):
+            def phase(command, log, receipt, timeout, **kwargs):
+                if command[1:5] == ['xcresulttool', 'get', 'test-results', 'summary']:
+                    log.write_text(command_output(command))
+                    return {'launched': True, 'exitCode': 0, 'timedOut': False,
+                            'groupExistsAfterCleanup': False}
                 if (failure_phase == 'ui-test' and command[-1] == 'test') or (failure_phase == 'bootstrap' and 'bootstatus' in command):
                     raise primary
                 return {}

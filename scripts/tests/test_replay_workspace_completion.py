@@ -23,6 +23,9 @@ class WorkspaceCompletionBoundaryTests(unittest.TestCase):
         body_error = subprocess.CalledProcessError(65, ["synthetic", "test"])
         output_error = BrokenPipeError("synthetic final status output failure")
         publish_error = OSError("synthetic completed pending-file close failure")
+        reader_error = (subprocess.CalledProcessError(65, ["synthetic-result-reader"])
+                        if mode == "reader-exit" else
+                        subprocess.TimeoutExpired(["synthetic-result-reader"], 60))
         events, visible_during_cleanup, install_errors = [], [], []
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -57,7 +60,7 @@ class WorkspaceCompletionBoundaryTests(unittest.TestCase):
                 def __exit__(self, *args):
                     events.append("workspace-cleanup")
                     visible_during_cleanup.append((results / "ui-completion.json").exists())
-                    if mode in ("cleanup-fail", "body-and-cleanup-fail", "seed-and-cleanup-fail"):
+                    if mode in ("cleanup-fail", "body-and-cleanup-fail", "seed-and-cleanup-fail", "reader-and-cleanup-fail"):
                         raise cleanup_error
 
             def output(command, timeout=60):
@@ -84,6 +87,13 @@ class WorkspaceCompletionBoundaryTests(unittest.TestCase):
                 return ""
 
             def phase(command, log, receipt, timeout, **kwargs):
+                if command[1:5] == ['xcresulttool', 'get', 'test-results', 'summary']:
+                    events.append("result-read")
+                    log.write_text(output(command))
+                    if mode in ("reader-timeout", "reader-exit", "reader-and-cleanup-fail"):
+                        raise reader_error
+                    return {'launched': True, 'exitCode': 0, 'timedOut': False,
+                            'groupExistsAfterCleanup': False}
                 if command[-1] == "test":
                     events.append("ui-test")
                 failed = mode == "body-and-cleanup-fail" and command[-1] == "test"
@@ -143,6 +153,8 @@ class WorkspaceCompletionBoundaryTests(unittest.TestCase):
                         caught = error
             expected = {"cleanup-fail": cleanup_error, "body-and-cleanup-fail": body_error,
                         "seed-and-cleanup-fail": seed_error,
+                        "reader-timeout": reader_error, "reader-exit": reader_error,
+                        "reader-and-cleanup-fail": reader_error,
                         "output-fail": output_error, "publish-fail": publish_error,
                         "install-timeout": install_errors[0] if install_errors else None,
                         "install-error": install_errors[0] if install_errors else None}.get(mode)
@@ -204,6 +216,23 @@ class WorkspaceCompletionBoundaryTests(unittest.TestCase):
         self.assertEqual(result["errorType"], "CalledProcessError")
         for stage in ("app-container", "fixture-install", "ui-test"):
             self.assertNotIn(stage, result["events"])
+
+    def test_result_reader_failure_blocks_public_success_despite_passing_native_test(self):
+        for mode in ("reader-timeout", "reader-exit"):
+            with self.subTest(mode=mode):
+                result = self.run_case(mode)
+                self.assert_rejected(result)
+                self.assertIn("ui-test", result["events"])
+                self.assertIn("result-read", result["events"])
+                self.assertEqual(result["firstFailureObservation"]["phase"], "result-read")
+                self.assertEqual(result["completionVisibleDuringWorkspaceCleanup"], [False])
+
+    def test_result_reader_timeout_stays_first_when_workspace_cleanup_also_fails(self):
+        result = self.run_case("reader-and-cleanup-fail")
+        self.assert_rejected(result)
+        self.assertEqual(result["firstFailureObservation"]["phase"], "result-read")
+        self.assertEqual(result["workspaceCleanupFailure"]["bodyErrorType"], "TimeoutExpired")
+        self.assertEqual(result["workspaceCleanupFailure"]["errorType"], "OSError")
 
     def test_workspace_cleanup_failure_cannot_publish_completion_or_pass_cli(self):
         self.assert_rejected(self.run_case("cleanup-fail"))

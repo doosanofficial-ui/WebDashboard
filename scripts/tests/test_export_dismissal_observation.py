@@ -161,6 +161,10 @@ class RunnerAuditIntegrationTests(unittest.TestCase):
                     return json.dumps({'totalTestCount':1,'passedTests':1,'failedTests':0,'skippedTests':0})
                 return ''
             def phase(command, log, receipt, timeout, **kwargs):
+                if command[1:5] == ['xcresulttool', 'get', 'test-results', 'summary']:
+                    log.write_text(output(command))
+                    return {'launched': True, 'exitCode': 0, 'timedOut': False,
+                            'groupExistsAfterCleanup': False}
                 if command[0]=='xcodebuild' and command[-1]=='test':
                     events.append('test')
                     if failing_test:raise primary
