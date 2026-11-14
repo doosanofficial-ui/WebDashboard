@@ -694,6 +694,8 @@ def cleanup_simulator(simulator, results):
     evidence = {"simulator": simulator, "success": True, "phases": []}
     receipt = results / "simulator-cleanup.json"
     first_cleanup_failure = None
+    recording_failed = False
+    receipt_failed = False
     for phase in ("shutdown", "delete"):
         entry = {"phase": phase}
         try:
@@ -705,6 +707,7 @@ def cleanup_simulator(simulator, results):
             if recorded and recorded.get("recordingErrors"):
                 entry["recordingErrors"] = recorded["recordingErrors"]
                 evidence["success"] = False
+                recording_failed = True
         except (OSError, subprocess.SubprocessError) as error:
             if first_cleanup_failure is None:
                 try:
@@ -718,6 +721,7 @@ def cleanup_simulator(simulator, results):
         try:
             receipt.write_text(json.dumps(evidence, indent=2), encoding="utf-8")
         except OSError as error:
+            receipt_failed = True
             if first_cleanup_failure is None:
                 try:
                     snapshot = failure_observation.failure_snapshot(error)
@@ -729,6 +733,20 @@ def cleanup_simulator(simulator, results):
                 print("Cleanup receipt could not be recorded: " + str(error), file=sys.stderr)
             except Exception:
                 pass  # Optional diagnostics must not skip the next owned cleanup phase.
+    # A failed shutdown can be a CoreSimulator client crash after XCTest. A
+    # successful UUID-specific delete still proves that the owned device was
+    # removed. Keep the shutdown error in the receipt, but do not turn a
+    # passing test into a failure when deletion and all evidence succeeded.
+    if (first_cleanup_failure is not None and first_cleanup_failure[1] == 'simulator-shutdown'
+            and evidence['phases'][-1]['success'] and not recording_failed and not receipt_failed):
+        evidence['success'] = True
+        evidence['shutdownWarning'] = 'Shutdown failed; owned Simulator delete succeeded'
+        try:
+            receipt.write_text(json.dumps(evidence, indent=2), encoding='utf-8')
+            first_cleanup_failure = None
+        except OSError as error:
+            evidence['success'] = False
+            first_cleanup_failure = (error, 'cleanup-receipt', failure_observation.failure_snapshot(error))
     # Delete is attempted before any extra diagnostic work for cleanup-only failures.
     if first_cleanup_failure is not None:
         error, phase, snapshot = first_cleanup_failure

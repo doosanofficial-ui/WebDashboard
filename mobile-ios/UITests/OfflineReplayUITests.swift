@@ -506,6 +506,12 @@ final class OfflineReplayUITests: XCTestCase {
             speed.buttons["2×"].tap()
             XCTAssertTrue(speed.buttons["2×"].isSelected, "Active fast rate must be accepted in cycle \(cycle)")
         }
+        XCTAssertTrue(app.buttons["replay-pause"].exists)
+        XCTAssertFalse(app.staticTexts["Seeking recorded time"].exists)
+        let activeScreenshot = XCTAttachment(screenshot: app.screenshot())
+        activeScreenshot.name = "DEMO-active-replay-rate-without-seek-progress"
+        activeScreenshot.lifetime = .keepAlways
+        add(activeScreenshot)
         app.buttons["stop-replay-header"].tap()
         reveal("saved-session-picker").tap()
         let shortFixture = app.buttons["saved-session-offline-seek-fixture"]

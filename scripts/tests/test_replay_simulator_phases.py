@@ -83,7 +83,7 @@ class SimulatorPhaseTests(unittest.TestCase):
                 return
             cleanup = json.loads((results / "simulator-cleanup.json").read_text())
             self.assertEqual(cleanup["simulator"], device)
-            self.assertEqual(cleanup["success"], not shutdown_fails)
+            self.assertTrue(cleanup["success"], "Owned delete resolves a failed shutdown")
             self.assertEqual([entry["phase"] for entry in cleanup["phases"]], ["shutdown", "delete"])
 
     def test_boot_timeout_retains_progress_and_primary_error(self):
@@ -91,6 +91,40 @@ class SimulatorPhaseTests(unittest.TestCase):
 
     def test_shutdown_timeout_still_attempts_owned_delete_without_masking_boot(self):
         self.boot_failure(True)
+
+    def test_shutdown_abort_is_recorded_but_successful_owned_delete_resolves_cleanup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            results = Path(directory)
+            device = "11111111-1111-4111-8111-111111111111"
+            calls = []
+            def phase(command, log, receipt, timeout, **kwargs):
+                calls.append(command)
+                if command[2] == "shutdown":
+                    raise subprocess.CalledProcessError(-6, command)
+                return {"exitCode": 0}
+            with patch.object(runner, "run_owned_phase", side_effect=phase):
+                self.assertTrue(runner.cleanup_simulator(device, results))
+            self.assertEqual(calls, [["xcrun", "simctl", operation, device]
+                                     for operation in ("shutdown", "delete")])
+            receipt = json.loads((results / "simulator-cleanup.json").read_text())
+            self.assertTrue(receipt["success"])
+            self.assertFalse(receipt["phases"][0]["success"])
+            self.assertTrue(receipt["phases"][1]["success"])
+            self.assertIn("shutdownWarning", receipt)
+
+    def test_failed_owned_delete_still_blocks_cleanup_after_shutdown_abort(self):
+        with tempfile.TemporaryDirectory() as directory:
+            results = Path(directory)
+            device = "11111111-1111-4111-8111-111111111111"
+            def phase(command, log, receipt, timeout, **kwargs):
+                raise subprocess.CalledProcessError(-6, command)
+            with patch.object(runner, "run_owned_phase", side_effect=phase), \
+                    patch.object(runner, "observe_first_failure"):
+                self.assertFalse(runner.cleanup_simulator(device, results))
+            receipt = json.loads((results / "simulator-cleanup.json").read_text())
+            self.assertFalse(receipt["success"])
+            self.assertFalse(receipt["phases"][1]["success"])
+            self.assertNotIn("shutdownWarning", receipt)
 
     def test_cleanup_receipt_error_cannot_mask_boot_or_skip_owned_delete(self):
         self.boot_failure(False, receipt_fails=True)
