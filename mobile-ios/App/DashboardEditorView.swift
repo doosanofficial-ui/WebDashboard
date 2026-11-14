@@ -82,7 +82,7 @@ struct DashboardEditorView: View {
                     ContentUnavailableView("No dashboard profile", systemImage: "rectangle.3.group")
                 }
             }
-            .navigationTitle(AppLocalization.text("Dashboard Editor"))
+            .navigationTitle(AppLocalization.text("Edit"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItemGroup(placement: .topBarLeading) {
@@ -100,6 +100,15 @@ struct DashboardEditorView: View {
                 ToolbarItemGroup(placement: .keyboard) {
                     if numericInputFocus != nil {
                         Spacer()
+                        Button {
+                            if let page = selectedPage, let widgetID = selectedWidgetID {
+                                applyDraft(pageID: page.id, widgetID: widgetID)
+                            }
+                        } label: {
+                            Image(systemName: "checkmark.circle.fill")
+                        }
+                        .accessibilityLabel(AppLocalization.text("Apply widget configuration"))
+                        .accessibilityIdentifier("dashboard-widget-keyboard-apply")
                         Button(AppLocalization.text("Done")) { numericInputFocus = nil }
                             .accessibilityIdentifier("dashboard-numeric-keyboard-done")
                     }
@@ -218,10 +227,11 @@ struct DashboardEditorView: View {
         if let selectedWidgetID,
            let widget = page.widgets.first(where: { $0.id == selectedWidgetID }) {
             VStack(alignment: .leading, spacing: 8) {
+                Text(widget.configuration.label)
+                    .font(.subheadline.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack {
-                    Text(widget.configuration.label).font(.caption.weight(.semibold))
-                    Spacer()
                     Button(AppLocalization.text("Front")) {
                         model.bringDashboardWidgetToFront(pageID: page.id, widgetID: widget.id)
                     }
@@ -250,8 +260,13 @@ struct DashboardEditorView: View {
                 .buttonStyle(.bordered)
 
                 let fields = VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                TextField(AppLocalization.text("Label"), text: $draftLabel)
+                            VStack(alignment: .leading, spacing: 8) {
+                                if dynamicTypeSize.isAccessibilitySize {
+                                    Text(AppLocalization.text("Label"))
+                                        .font(.subheadline).foregroundStyle(.secondary)
+                                }
+                                TextField(AppLocalization.text("Label"), text: $draftLabel, axis: .vertical)
+                                    .lineLimit(1...3)
                                     .accessibilityIdentifier("dashboard-widget-label")
                                 Menu(AppLocalization.text("Bind signal")) {
                                     if model.availableSignalIDs.isEmpty {
@@ -264,10 +279,19 @@ struct DashboardEditorView: View {
                                 }
                                 .accessibilityIdentifier("bind-dashboard-signal")
                             }
-                            HStack {
-                                TextField(AppLocalization.text("Signal ID"), text: $draftSignalID)
+                            VStack(alignment: .leading, spacing: 4) {
+                                if dynamicTypeSize.isAccessibilitySize {
+                                    Text(AppLocalization.text("Signal ID"))
+                                        .font(.subheadline).foregroundStyle(.secondary)
+                                }
+                                TextField(AppLocalization.text("Signal ID"), text: Binding(
+                                    get: { draftSignalID },
+                                    set: { draftSignalID = $0.filter { !$0.isNewline } }
+                                ), axis: .vertical)
+                                    .lineLimit(1...4)
                                     .textInputAutocapitalization(.never)
                                     .autocorrectionDisabled()
+                                    .accessibilityIdentifier("dashboard-widget-signal-id")
                             }
                             HStack {
                                 TextField(AppLocalization.text("Unit"), text: $draftUnit)
@@ -444,7 +468,8 @@ struct DashboardEditorView: View {
             criticalThreshold: numbers.critical,
             condition: condition
         )
-        let signal = draftSignalID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let signal = draftSignalID.filter { !$0.isNewline }
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         model.updateDashboardWidgetBinding(
             pageID: pageID,
             widgetID: widgetID,

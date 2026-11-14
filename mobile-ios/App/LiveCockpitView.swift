@@ -327,12 +327,20 @@ struct LiveCockpitView: View {
                         Text(profile.name)
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer()
-                    Button(AppLocalization.text("Edit"), systemImage: "slider.horizontal.3") {
+                    Button {
                         editorPresented = true
+                    } label: {
+                        if dynamicTypeSize.isAccessibilitySize {
+                            Image(systemName: "slider.horizontal.3")
+                        } else {
+                            Label(AppLocalization.text("Edit"), systemImage: "slider.horizontal.3")
+                        }
                     }
                     .buttonStyle(.bordered)
+                    .accessibilityLabel(AppLocalization.text("Edit"))
                     .accessibilityIdentifier("profile-edit-dashboard")
                 }
                 if profile.pages.count > 1 {

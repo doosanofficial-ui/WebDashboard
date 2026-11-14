@@ -10,8 +10,14 @@ enum DashboardNumericInputUIChecks {
             try require(reveal(minimum, in: app), "Minimum input must be fully reachable")
             let original = text(in: minimum)
             try require(Double(original)?.isFinite == true, "The saved fixture must start with a finite, nonempty minimum")
-            try replace(minimum, with: "1..2", app: app)
-            try apply(app)
+            try replace(minimum, with: "1..2", app: app, keepKeyboard: true)
+            let keyboard = app.keyboards.firstMatch
+            try require(keyboard.waitForExistence(timeout: 5), "Numeric keyboard must remain visible before Apply")
+            let keyboardApply = app.buttons["dashboard-widget-keyboard-apply"]
+            try require(keyboardApply.waitForExistence(timeout: 5) && keyboardApply.isHittable,
+                        "Apply must be reachable while the keyboard is visible")
+            capture(app, owner: owner, name: name + "-keyboard-visible")
+            keyboardApply.tap()
             let error = app.staticTexts["dashboard-widget-numeric-error"]
             try require(error.waitForExistence(timeout: 5), "Malformed numeric input needs visible feedback")
             try require(reveal(error, in: app), "The entire correction message must be reachable")
@@ -88,15 +94,17 @@ enum DashboardNumericInputUIChecks {
         return value == field.placeholderValue ? "" : value
     }
 
-    private static func replace(_ field: XCUIElement, with value: String, app: XCUIApplication) throws {
+    private static func replace(_ field: XCUIElement, with value: String, app: XCUIApplication, keepKeyboard: Bool = false) throws {
         let previous = text(in: field)
         field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
         field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: previous.count + 1))
         if !value.isEmpty { field.typeText(value) }
         try require(text(in: field) == value, "Input fixture must type the exact requested draft")
-        let done = app.buttons["dashboard-numeric-keyboard-done"]
-        try require(done.waitForExistence(timeout: 5) && done.isHittable, "Numeric keyboard must offer a reachable Done action")
-        done.tap()
+        if !keepKeyboard {
+            let done = app.buttons["dashboard-numeric-keyboard-done"]
+            try require(done.waitForExistence(timeout: 5) && done.isHittable, "Numeric keyboard must offer a reachable Done action")
+            done.tap()
+        }
     }
 
     private static func apply(_ app: XCUIApplication) throws {
@@ -167,7 +175,7 @@ enum DashboardNumericInputUIChecks {
 
     private static func editorNavigationBar(in app: XCUIApplication) -> XCUIElement {
         app.navigationBars.matching(NSPredicate(format: "identifier IN %@",
-            ["Dashboard Editor", "Dashboard 편집"])).firstMatch
+            ["Edit", "편집"])).firstMatch
     }
 
     private static func reveal(_ element: XCUIElement, in app: XCUIApplication,
