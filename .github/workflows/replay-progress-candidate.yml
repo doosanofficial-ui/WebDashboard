@@ -67,3 +67,28 @@ jobs:
           path: ${{ runner.temp }}/replay-progress-speed
           if-no-files-found: warn
           retention-days: 14
+  help-capture:
+    needs: seed
+    runs-on: xcode-27
+    timeout-minutes: 55
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+      SEED_MANIFEST_SHA256: ${{ needs.seed.outputs.seed_manifest_sha256 }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: replay-progress-seed-${{ github.sha }}
+          path: ${{ runner.temp }}/replay-seed
+      - run: python3 scripts/verify_ios_lifecycle.py --check-toolchain
+      - run: |
+          if ! brew list xcodegen >/dev/null 2>&1; then brew install xcodegen; fi
+      - name: Capture actual English and Korean Help on this App source
+        run: python3 scripts/verify_offline_replay.py --only-test help-capture --seed-artifact "$RUNNER_TEMP/replay-seed" --seed-manifest-sha256 "$SEED_MANIFEST_SHA256" --result-directory "$RUNNER_TEMP/replay-progress-help"
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: replay-progress-help-${{ github.sha }}
+          path: ${{ runner.temp }}/replay-progress-help
+          if-no-files-found: warn
+          retention-days: 14
