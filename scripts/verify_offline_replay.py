@@ -381,6 +381,12 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False,
             if ensure_group_cleanup:
                 stop_owned_group()  # Optional diagnostic worker owns all inherited probe descendants.
         except BaseException as error:
+            # The final best-effort receipt write happens in finally. Keep a
+            # live reference so callers can inspect errors added there too.
+            try:
+                error.ownedPhaseEvidence = evidence
+            except (AttributeError, TypeError):
+                pass
             try:
                 evidence['callerReceivedFailureMonotonic'] = time.monotonic()
                 if 'firstFailure' in completion:
@@ -694,6 +700,8 @@ def cleanup_simulator(simulator, results):
     evidence = {"simulator": simulator, "success": True, "phases": []}
     receipt = results / "simulator-cleanup.json"
     first_cleanup_failure = None
+    recording_failed = False
+    receipt_failed = False
     for phase in ("shutdown", "delete"):
         entry = {"phase": phase}
         try:
@@ -705,7 +713,26 @@ def cleanup_simulator(simulator, results):
             if recorded and recorded.get("recordingErrors"):
                 entry["recordingErrors"] = recorded["recordingErrors"]
                 evidence["success"] = False
+                recording_failed = True
         except (OSError, subprocess.SubprocessError) as error:
+            if phase == "shutdown":
+                phase_evidence = getattr(error, "ownedPhaseEvidence", None)
+                phase_receipt = results / "simulator-shutdown.json"
+                phase_log = results / "simulator-shutdown.log"
+                try:
+                    recorded_phase = json.loads(phase_receipt.read_text(encoding="utf-8"))
+                    complete = (isinstance(phase_evidence, dict)
+                                and phase_evidence.get("launched") is True
+                                and phase_evidence.get("completionWaiterStopped") is True
+                                and not phase_evidence.get("recordingErrors")
+                                and phase_log.is_file()
+                                and recorded_phase.get("launched") is True
+                                and recorded_phase.get("exitCode") == phase_evidence.get("exitCode"))
+                except (OSError, ValueError, TypeError, AttributeError):
+                    complete = False
+                entry["phaseEvidenceComplete"] = complete
+                if not complete:
+                    recording_failed = True
             if first_cleanup_failure is None:
                 try:
                     snapshot = failure_observation.recorded_failure(results, 'simulator-' + phase, error) or failure_observation.failure_snapshot(error)
@@ -718,6 +745,7 @@ def cleanup_simulator(simulator, results):
         try:
             receipt.write_text(json.dumps(evidence, indent=2), encoding="utf-8")
         except OSError as error:
+            receipt_failed = True
             if first_cleanup_failure is None:
                 try:
                     snapshot = failure_observation.failure_snapshot(error)
@@ -729,6 +757,20 @@ def cleanup_simulator(simulator, results):
                 print("Cleanup receipt could not be recorded: " + str(error), file=sys.stderr)
             except Exception:
                 pass  # Optional diagnostics must not skip the next owned cleanup phase.
+    # A failed shutdown can be a CoreSimulator client crash after XCTest. A
+    # successful UUID-specific delete still proves that the owned device was
+    # removed. Keep the shutdown error in the receipt, but do not turn a
+    # passing test into a failure when deletion and all evidence succeeded.
+    if (first_cleanup_failure is not None and first_cleanup_failure[1] == 'simulator-shutdown'
+            and evidence['phases'][-1]['success'] and not recording_failed and not receipt_failed):
+        evidence['success'] = True
+        evidence['shutdownWarning'] = 'Shutdown failed; owned Simulator delete succeeded'
+        try:
+            receipt.write_text(json.dumps(evidence, indent=2), encoding='utf-8')
+            first_cleanup_failure = None
+        except OSError as error:
+            evidence['success'] = False
+            first_cleanup_failure = (error, 'cleanup-receipt', failure_observation.failure_snapshot(error))
     # Delete is attempted before any extra diagnostic work for cleanup-only failures.
     if first_cleanup_failure is not None:
         error, phase, snapshot = first_cleanup_failure
@@ -812,7 +854,7 @@ def main():
     selection.add_argument("--se-viewport", action="store_true",
                            help="Re-execute the two viewport tests on iPhone SE (3rd generation), iOS 27.x only")
     selection.add_argument("--group", choices=TEST_GROUPS, help="Disjoint portion of the full 31-test CI gate")
-    selection.add_argument("--only-test", choices=["background-export-lifecycle", "active-slider-drag", "ui-clarity", "single-instant", "large-text", "recorded-history", "recorded-route", "native-save-reentry", "native-export-dismissal", "help-capture"],
+    selection.add_argument("--only-test", choices=["background-export-lifecycle", "active-slider-drag", "ui-clarity", "single-instant", "large-text", "recorded-history", "recorded-route", "native-save-reentry", "native-export-dismissal", "help-capture", "replay-speed"],
                         help="Run one new native lifecycle test; default executes all twenty-five UI regressions")
     args = parser.parse_args()
     results = args.result_directory.resolve()
@@ -821,7 +863,7 @@ def main():
                        "active-slider-drag": "testPlayingLongSliderDragPreservesCapturedUserTarget",
                        "recorded-history": "testRecordedSignalHistoryContainsOnlySelectedTimePrefix",
                        "recorded-route": "testRecordedGPSRouteContainsOnlySelectedTimePrefix"}
-    selected_tests = ["-only-testing:" + test for test in HELP_CAPTURE_TESTS] if args.only_test == "help-capture" else ["-only-testing:TelemetryUITests/OfflineReplayUITests/testNativeExportBackgroundReturnCancelAndReentry", "-only-testing:TelemetryUITests/OfflineReplayUITests/testNativeJSONCSVSaveConfirmsCompletion"] if args.only_test == "native-save-reentry" else ["-only-testing:TelemetryUITests/UIClarityUITests/testRecordedTimeAccessibilityAtLargeTextAndLandscape"] if args.only_test == "large-text" else ["-only-testing:TelemetryUITests/UIClarityUITests/testSingleInstantRecordingExplainsUnavailableTimeNavigation"] if args.only_test == "single-instant" else ["-only-testing:TelemetryUITests/UIClarityUITests"] if args.only_test == "ui-clarity" else ["-only-testing:TelemetryUITests/OfflineReplayUITests/" + focused_methods[args.only_test]] if args.only_test else [
+    selected_tests = ["-only-testing:TelemetryUITests/OfflineReplayUITests/testRecordedPlaybackPauseSpeedAndAutomaticEnd"] if args.only_test == "replay-speed" else ["-only-testing:" + test for test in HELP_CAPTURE_TESTS] if args.only_test == "help-capture" else ["-only-testing:TelemetryUITests/OfflineReplayUITests/testNativeExportBackgroundReturnCancelAndReentry", "-only-testing:TelemetryUITests/OfflineReplayUITests/testNativeJSONCSVSaveConfirmsCompletion"] if args.only_test == "native-save-reentry" else ["-only-testing:TelemetryUITests/UIClarityUITests/testRecordedTimeAccessibilityAtLargeTextAndLandscape"] if args.only_test == "large-text" else ["-only-testing:TelemetryUITests/UIClarityUITests/testSingleInstantRecordingExplainsUnavailableTimeNavigation"] if args.only_test == "single-instant" else ["-only-testing:TelemetryUITests/UIClarityUITests"] if args.only_test == "ui-clarity" else ["-only-testing:TelemetryUITests/OfflineReplayUITests/" + focused_methods[args.only_test]] if args.only_test else [
         "-only-testing:TelemetryUITests/OfflineReplayUITests",
         "-only-testing:TelemetryUITests/TelemetryUITests/testMeasurementExportControlIsVisible",
         "-only-testing:TelemetryUITests/TelemetryUITests/testMeasurementCSVExportControlIsVisible",

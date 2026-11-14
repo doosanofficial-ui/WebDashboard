@@ -240,6 +240,25 @@ final class ReplayControllerRaceTests: XCTestCase {
         XCTAssertEqual(c.position, 3); XCTAssertEqual(c.playbackRate, 2)
     }
 
+    func testAutomaticPlaybackTickDoesNotPresentManualSeekProgress() async throws {
+        let gate = ReplayGate()
+        let controller = gatedController(gate)
+        let saved = try fixture("synthetic-playback-progress")
+        _ = try await controller.load(sessionID: saved.session.sessionID) { saved }
+        _ = try await controller.seek(at: 0)
+        await gate.arm()
+        XCTAssertTrue(controller.play(at: 10))
+        let tick = Task { try await controller.advancePlayback(at: 14) }
+        await gate.waitUntilEntered()
+        XCTAssertTrue(controller.isPlaying)
+        XCTAssertFalse(controller.seeking, "Automatic playback must not present manual seek progress")
+        await gate.release()
+        let result = try await tick.value
+        XCTAssertNotNil(result)
+        XCTAssertEqual(controller.position, 4)
+        XCTAssertFalse(controller.seeking)
+    }
+
     func testRateChangeIncludesElapsedTimeSinceLastCompletedTick() async throws {
         let c = ReplayController(); let seed = try fixture("synthetic-delayed-speed")
         let saved = MeasurementExport(session: PersistedMeasurementSession(sessionID: seed.session.sessionID,

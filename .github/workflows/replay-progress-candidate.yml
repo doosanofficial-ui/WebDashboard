@@ -1,0 +1,96 @@
+name: Replay Progress Candidate
+on:
+  push:
+    branches:
+      - fix/replay-progress-20261114
+    paths-ignore:
+      - mobile-ios/App/Resources/HelpScreenshots/**
+permissions:
+  contents: read
+jobs:
+  lifecycle:
+    runs-on: xcode-27
+    timeout-minutes: 35
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v7
+      - run: |
+          if ! brew list xcodegen >/dev/null 2>&1; then brew install xcodegen; fi
+      - name: Verify hosted lifecycle and ReplayController race contracts
+        run: python3 scripts/verify_ios_lifecycle.py --result-directory "$RUNNER_TEMP/replay-progress-lifecycle"
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: replay-progress-lifecycle-${{ github.sha }}
+          path: ${{ runner.temp }}/replay-progress-lifecycle
+          if-no-files-found: warn
+          retention-days: 14
+  seed:
+    runs-on: xcode-27
+    timeout-minutes: 10
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+    outputs:
+      seed_manifest_sha256: ${{ steps.seed.outputs.manifest_sha256 }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Produce qualified synthetic Seed for this exact candidate SHA
+        id: seed
+        run: python3 scripts/verify_replay_seed.py --output "$RUNNER_TEMP/replay-seed"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: replay-progress-seed-${{ github.sha }}
+          path: ${{ runner.temp }}/replay-seed
+          if-no-files-found: error
+          retention-days: 14
+  speed-ui:
+    needs: seed
+    runs-on: xcode-27
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+      SEED_MANIFEST_SHA256: ${{ needs.seed.outputs.seed_manifest_sha256 }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: replay-progress-seed-${{ github.sha }}
+          path: ${{ runner.temp }}/replay-seed
+      - run: python3 scripts/verify_ios_lifecycle.py --check-toolchain
+      - run: |
+          if ! brew list xcodegen >/dev/null 2>&1; then brew install xcodegen; fi
+      - name: Verify active Replay controls without manual seek progress
+        run: python3 scripts/verify_offline_replay.py --only-test replay-speed --seed-artifact "$RUNNER_TEMP/replay-seed" --seed-manifest-sha256 "$SEED_MANIFEST_SHA256" --result-directory "$RUNNER_TEMP/replay-progress-speed"
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: replay-progress-speed-${{ github.sha }}
+          path: ${{ runner.temp }}/replay-progress-speed
+          if-no-files-found: warn
+          retention-days: 14
+  help-capture:
+    needs: seed
+    runs-on: xcode-27
+    timeout-minutes: 55
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+      SEED_MANIFEST_SHA256: ${{ needs.seed.outputs.seed_manifest_sha256 }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: replay-progress-seed-${{ github.sha }}
+          path: ${{ runner.temp }}/replay-seed
+      - run: python3 scripts/verify_ios_lifecycle.py --check-toolchain
+      - run: |
+          if ! brew list xcodegen >/dev/null 2>&1; then brew install xcodegen; fi
+      - name: Capture actual English and Korean Help on this App source
+        run: python3 scripts/verify_offline_replay.py --only-test help-capture --seed-artifact "$RUNNER_TEMP/replay-seed" --seed-manifest-sha256 "$SEED_MANIFEST_SHA256" --result-directory "$RUNNER_TEMP/replay-progress-help"
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: replay-progress-help-${{ github.sha }}
+          path: ${{ runner.temp }}/replay-progress-help
+          if-no-files-found: warn
+          retention-days: 14
