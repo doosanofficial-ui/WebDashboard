@@ -3,6 +3,8 @@ on:
   push:
     branches:
       - fix/replay-progress-20261114
+    paths-ignore:
+      - mobile-ios/App/Resources/HelpScreenshots/**
 permissions:
   contents: read
 jobs:
