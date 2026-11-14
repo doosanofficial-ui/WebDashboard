@@ -151,8 +151,8 @@ final class ReplayController {
 
     private func recordRateDiagnostic(requested: Double, uptime: Double, previousRate: Double,
                                       previousLastTime: Double, accepted: Bool, reason: String) {
-        guard ProcessInfo.processInfo.arguments.contains("--diagnostic-replay-speed"),
-              let cache = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return }
+        guard let cache = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return }
+        try? FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
         let path = cache.appendingPathComponent("replay-speed-diagnostic.log")
         let line = String(format: "requested=%g previous=%g after=%g uptime=%.6f previousLast=%.6f playing=%d accepted=%d reason=%@\n",
                           requested, previousRate, playbackRate, uptime, previousLastTime,

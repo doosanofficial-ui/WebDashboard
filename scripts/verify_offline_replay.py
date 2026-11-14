@@ -940,6 +940,12 @@ def main():
                 if args.only_test == "replay-speed-diagnostic":
                     try:
                         diagnostic_log = container / "Library/Caches/replay-speed-diagnostic.log"
+                        (results / "replay-speed-file-observation.json").write_text(json.dumps({
+                            "path": str(diagnostic_log),
+                            "exists": diagnostic_log.is_file(),
+                            "cacheExists": diagnostic_log.parent.is_dir(),
+                            "cacheNames": sorted(path.name for path in diagnostic_log.parent.iterdir())
+                                if diagnostic_log.parent.is_dir() else []}, indent=2))
                         if diagnostic_log.is_file():
                             shutil.copy2(diagnostic_log, results / "replay-speed-setter.log")
                     except Exception as diagnostic_error:
