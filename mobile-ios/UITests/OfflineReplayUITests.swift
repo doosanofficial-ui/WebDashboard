@@ -495,9 +495,17 @@ final class OfflineReplayUITests: XCTestCase {
         XCTAssertTrue(speed.buttons["0.5×"].isSelected, "Slow playback rate must be accepted")
         reveal("replay-play").tap()
         XCTAssertTrue(app.buttons["replay-pause"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Seeking recorded time"].exists,
+                       "Automatic playback must not show the manual seek spinner")
         speed.buttons["2×"].tap() // Change rate during playback, not only while paused.
         XCTAssertTrue(speed.buttons["2×"].isSelected, "Active playback must accept the changed rate")
         XCTAssertTrue(app.buttons["replay-pause"].exists, "Rate change must occur during active playback")
+        for cycle in 0..<3 {
+            speed.buttons["0.5×"].tap()
+            XCTAssertTrue(speed.buttons["0.5×"].isSelected, "Active slow rate must be accepted in cycle \(cycle)")
+            speed.buttons["2×"].tap()
+            XCTAssertTrue(speed.buttons["2×"].isSelected, "Active fast rate must be accepted in cycle \(cycle)")
+        }
         app.buttons["stop-replay-header"].tap()
         reveal("saved-session-picker").tap()
         let shortFixture = app.buttons["saved-session-offline-seek-fixture"]
