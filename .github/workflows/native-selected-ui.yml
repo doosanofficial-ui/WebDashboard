@@ -7,10 +7,15 @@ on:
         type: boolean
         required: false
         default: false
+      numeric_only:
+        description: Verify only the two existing dashboard Numeric layout cases
+        type: boolean
+        required: false
+        default: false
 permissions:
   contents: read
 concurrency:
-  group: ${{ inputs.help_only && 'native-help4' || 'native-selected-ui21' }}-${{ github.ref }}
+  group: ${{ inputs.help_only && 'native-help4' || inputs.numeric_only && 'native-numeric2' || 'native-selected-ui21' }}-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   # Select the original21 cases or only its unexecuted Help4 group.
@@ -47,7 +52,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        group: ${{ fromJSON(inputs.help_only && '["help"]' || '["replay-route","layout","layout-numeric","help","help-max-en","help-max-ko"]') }}
+        group: ${{ fromJSON(inputs.help_only && '["help"]' || inputs.numeric_only && '["layout-numeric"]' || '["replay-route","layout","layout-numeric","help","help-max-en","help-max-ko"]') }}
     runs-on: xcode-27
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer

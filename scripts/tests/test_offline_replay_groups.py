@@ -194,9 +194,12 @@ class ReplayGroupTests(unittest.TestCase):
 
     def test_selected_workflow_preserves_all_21_cases_including_numeric_group(self):
         workflow = (Path(__file__).resolve().parents[2] / '.github/workflows/native-selected-ui.yml').read_text()
-        selected = re.search(r"fromJSON\(inputs.help_only && '\[\"help\"\]' \|\| '([^']+)'", workflow)
+        selected = re.search(r"fromJSON\(inputs.help_only && '([^']+)' \|\| inputs.numeric_only && '([^']+)' \|\| '([^']+)'", workflow)
         self.assertIsNotNone(selected)
-        groups = json.loads(selected.group(1))
+        self.assertEqual(json.loads(selected.group(1)), ["help"])
+        self.assertEqual(json.loads(selected.group(2)), ["layout-numeric"])
+        self.assertIn("inputs.numeric_only && 'native-numeric2'", workflow)
+        groups = json.loads(selected.group(3))
         self.assertEqual(groups, ["replay-route", "layout", "layout-numeric", "help", "help-max-en", "help-max-ko"])
         tests = [test for group in groups for test in runner.TEST_GROUPS[group]]
         self.assertEqual((len(tests), len(set(tests))), (21, 21))
