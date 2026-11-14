@@ -162,7 +162,7 @@ class ProductionBootstrapTests(unittest.TestCase):
             self.assertIs(caught.exception, original)
             value = json.loads((results / 'boot-only.json').read_text())
             self.assertFalse(value['trialPassed'])
-            self.assertTrue(value['cleanupResolved'])
+            self.assertFalse(value['cleanupResolved'])
             self.assertFalse(value['officialBootstatusPassed'])
             first = json.loads((results / 'first-failure-observation.json').read_text())
             self.assertEqual(first['phase'], 'simulator-bootstatus')

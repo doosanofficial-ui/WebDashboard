@@ -381,6 +381,12 @@ def run_owned_phase(command, log, receipt, timeout, best_effort_recording=False,
             if ensure_group_cleanup:
                 stop_owned_group()  # Optional diagnostic worker owns all inherited probe descendants.
         except BaseException as error:
+            # The final best-effort receipt write happens in finally. Keep a
+            # live reference so callers can inspect errors added there too.
+            try:
+                error.ownedPhaseEvidence = evidence
+            except (AttributeError, TypeError):
+                pass
             try:
                 evidence['callerReceivedFailureMonotonic'] = time.monotonic()
                 if 'firstFailure' in completion:
@@ -709,6 +715,24 @@ def cleanup_simulator(simulator, results):
                 evidence["success"] = False
                 recording_failed = True
         except (OSError, subprocess.SubprocessError) as error:
+            if phase == "shutdown":
+                phase_evidence = getattr(error, "ownedPhaseEvidence", None)
+                phase_receipt = results / "simulator-shutdown.json"
+                phase_log = results / "simulator-shutdown.log"
+                try:
+                    recorded_phase = json.loads(phase_receipt.read_text(encoding="utf-8"))
+                    complete = (isinstance(phase_evidence, dict)
+                                and phase_evidence.get("launched") is True
+                                and phase_evidence.get("completionWaiterStopped") is True
+                                and not phase_evidence.get("recordingErrors")
+                                and phase_log.is_file()
+                                and recorded_phase.get("launched") is True
+                                and recorded_phase.get("exitCode") == phase_evidence.get("exitCode"))
+                except (OSError, ValueError, TypeError, AttributeError):
+                    complete = False
+                entry["phaseEvidenceComplete"] = complete
+                if not complete:
+                    recording_failed = True
             if first_cleanup_failure is None:
                 try:
                     snapshot = failure_observation.recorded_failure(results, 'simulator-' + phase, error) or failure_observation.failure_snapshot(error)
