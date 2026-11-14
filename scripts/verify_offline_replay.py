@@ -939,8 +939,12 @@ def main():
             finally:
                 if args.only_test == "replay-speed-diagnostic":
                     try:
-                        diagnostic_log = container / "Library/Caches/replay-speed-diagnostic.log"
+                        post_test_container = Path(output(["xcrun", "simctl", "get_app_container", simulator,
+                            "local.webdashboard.Telemetry", "data"], timeout=APP_CONTAINER_TIMEOUT_SECONDS).strip())
+                        diagnostic_log = post_test_container / "Library/Caches/replay-speed-diagnostic.log"
                         (results / "replay-speed-file-observation.json").write_text(json.dumps({
+                            "beforeTestContainer": str(container),
+                            "afterTestContainer": str(post_test_container),
                             "path": str(diagnostic_log),
                             "exists": diagnostic_log.is_file(),
                             "cacheExists": diagnostic_log.parent.is_dir(),
