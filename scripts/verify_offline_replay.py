@@ -812,7 +812,7 @@ def main():
     selection.add_argument("--se-viewport", action="store_true",
                            help="Re-execute the two viewport tests on iPhone SE (3rd generation), iOS 27.x only")
     selection.add_argument("--group", choices=TEST_GROUPS, help="Disjoint portion of the full 31-test CI gate")
-    selection.add_argument("--only-test", choices=["background-export-lifecycle", "active-slider-drag", "ui-clarity", "single-instant", "large-text", "recorded-history", "recorded-route", "native-save-reentry", "native-export-dismissal", "help-capture"],
+    selection.add_argument("--only-test", choices=["background-export-lifecycle", "active-slider-drag", "ui-clarity", "single-instant", "large-text", "recorded-history", "recorded-route", "native-save-reentry", "native-export-dismissal", "help-capture", "replay-speed-diagnostic"],
                         help="Run one new native lifecycle test; default executes all twenty-five UI regressions")
     args = parser.parse_args()
     results = args.result_directory.resolve()
@@ -821,7 +821,7 @@ def main():
                        "active-slider-drag": "testPlayingLongSliderDragPreservesCapturedUserTarget",
                        "recorded-history": "testRecordedSignalHistoryContainsOnlySelectedTimePrefix",
                        "recorded-route": "testRecordedGPSRouteContainsOnlySelectedTimePrefix"}
-    selected_tests = ["-only-testing:" + test for test in HELP_CAPTURE_TESTS] if args.only_test == "help-capture" else ["-only-testing:TelemetryUITests/OfflineReplayUITests/testNativeExportBackgroundReturnCancelAndReentry", "-only-testing:TelemetryUITests/OfflineReplayUITests/testNativeJSONCSVSaveConfirmsCompletion"] if args.only_test == "native-save-reentry" else ["-only-testing:TelemetryUITests/UIClarityUITests/testRecordedTimeAccessibilityAtLargeTextAndLandscape"] if args.only_test == "large-text" else ["-only-testing:TelemetryUITests/UIClarityUITests/testSingleInstantRecordingExplainsUnavailableTimeNavigation"] if args.only_test == "single-instant" else ["-only-testing:TelemetryUITests/UIClarityUITests"] if args.only_test == "ui-clarity" else ["-only-testing:TelemetryUITests/OfflineReplayUITests/" + focused_methods[args.only_test]] if args.only_test else [
+    selected_tests = ["-only-testing:TelemetryUITests/OfflineReplayUITests/testRecordedPlaybackPauseSpeedAndAutomaticEnd"] if args.only_test == "replay-speed-diagnostic" else ["-only-testing:" + test for test in HELP_CAPTURE_TESTS] if args.only_test == "help-capture" else ["-only-testing:TelemetryUITests/OfflineReplayUITests/testNativeExportBackgroundReturnCancelAndReentry", "-only-testing:TelemetryUITests/OfflineReplayUITests/testNativeJSONCSVSaveConfirmsCompletion"] if args.only_test == "native-save-reentry" else ["-only-testing:TelemetryUITests/UIClarityUITests/testRecordedTimeAccessibilityAtLargeTextAndLandscape"] if args.only_test == "large-text" else ["-only-testing:TelemetryUITests/UIClarityUITests/testSingleInstantRecordingExplainsUnavailableTimeNavigation"] if args.only_test == "single-instant" else ["-only-testing:TelemetryUITests/UIClarityUITests"] if args.only_test == "ui-clarity" else ["-only-testing:TelemetryUITests/OfflineReplayUITests/" + focused_methods[args.only_test]] if args.only_test else [
         "-only-testing:TelemetryUITests/OfflineReplayUITests",
         "-only-testing:TelemetryUITests/TelemetryUITests/testMeasurementExportControlIsVisible",
         "-only-testing:TelemetryUITests/TelemetryUITests/testMeasurementCSVExportControlIsVisible",
@@ -937,6 +937,14 @@ def main():
                     run_owned_phase(command, results / "test.log", results / "test-process.json",
                                     1800 if args.group in {"layout", "layout-numeric"} else 1200)
             finally:
+                if args.only_test == "replay-speed-diagnostic":
+                    try:
+                        diagnostic_log = container / "Library/Caches/replay-speed-diagnostic.log"
+                        if diagnostic_log.is_file():
+                            shutil.copy2(diagnostic_log, results / "replay-speed-setter.log")
+                    except Exception as diagnostic_error:
+                        (results / "replay-speed-copy-error.json").write_text(
+                            json.dumps({"error": str(diagnostic_error)}))
                 try:
                     failure_observation.observe_ui_test_log(results / "test.log", results / "ui-test-log-observation.json")
                 except Exception:

@@ -440,6 +440,7 @@ final class OfflineReplayUITests: XCTestCase {
         #else
         continueAfterFailure = false
         let app = XCUIApplication()
+        app.launchArguments.append("--diagnostic-replay-speed")
         // Keep Pause checks independent of the short recording's automatic end.
         openFixtureSession(app, sessionID: "offline-slider-fixture")
         app.buttons["replay-saved-session"].tap()

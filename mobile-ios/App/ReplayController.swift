@@ -120,13 +120,23 @@ final class ReplayController {
     }
 
     @discardableResult func setPlaybackRate(_ rate: Double, at uptime: Double) -> Bool {
+        let previousRate = playbackRate
+        let previousLastTime = lastPlaybackTime
         guard [0.5, 1.0, 2.0].contains(rate), uptime.isFinite,
-              !isPlaying || uptime >= lastPlaybackTime else { return false }
+              !isPlaying || uptime >= lastPlaybackTime else {
+            recordRateDiagnostic(requested: rate, uptime: uptime, previousRate: previousRate,
+                                 previousLastTime: previousLastTime, accepted: false, reason: "guard")
+            return false
+        }
         // Preserve elapsed time under the old rate even if a decode/tick has
         // not finished. Published position remains tied to its accepted snapshot.
         let logicalPosition = isPlaying
             ? playbackAnchorPosition + (uptime - playbackAnchorTime) * playbackRate : position
-        guard logicalPosition.isFinite else { return false }
+        guard logicalPosition.isFinite else {
+            recordRateDiagnostic(requested: rate, uptime: uptime, previousRate: previousRate,
+                                 previousLastTime: previousLastTime, accepted: false, reason: "position")
+            return false
+        }
         seekGeneration = UUID()
         seeking = false
         playbackGeneration = UUID()
@@ -134,7 +144,22 @@ final class ReplayController {
         playbackAnchorPosition = min(duration, max(position, logicalPosition))
         playbackAnchorTime = uptime
         lastPlaybackTime = uptime
+        recordRateDiagnostic(requested: rate, uptime: uptime, previousRate: previousRate,
+                             previousLastTime: previousLastTime, accepted: true, reason: "accepted")
         return true
+    }
+
+    private func recordRateDiagnostic(requested: Double, uptime: Double, previousRate: Double,
+                                      previousLastTime: Double, accepted: Bool, reason: String) {
+        guard ProcessInfo.processInfo.arguments.contains("--diagnostic-replay-speed"),
+              let cache = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return }
+        let path = cache.appendingPathComponent("replay-speed-diagnostic.log")
+        let line = String(format: "requested=%g previous=%g after=%g uptime=%.6f previousLast=%.6f playing=%d accepted=%d reason=%@\n",
+                          requested, previousRate, playbackRate, uptime, previousLastTime,
+                          isPlaying ? 1 : 0, accepted ? 1 : 0, reason)
+        var data = (try? Data(contentsOf: path)) ?? Data()
+        data.append(contentsOf: line.utf8)
+        try? data.write(to: path, options: .atomic)
     }
 
     func advancePlayback(at uptime: Double) async throws -> MeasurementReplay.Snapshot? {
