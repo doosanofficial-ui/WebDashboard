@@ -13,6 +13,8 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
     steps:
       - uses: actions/checkout@v7
+      - run: |
+          if ! brew list xcodegen >/dev/null 2>&1; then brew install xcodegen; fi
       - name: Verify hosted lifecycle and ReplayController race contracts
         run: python3 scripts/verify_ios_lifecycle.py --result-directory "$RUNNER_TEMP/replay-progress-lifecycle"
       - if: always()
