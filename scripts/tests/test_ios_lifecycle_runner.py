@@ -141,7 +141,7 @@ class LifecycleRunnerTests(unittest.TestCase):
         for path in sorted((root / "mobile-ios/LifecycleTests").glob("*.swift")):
             declarations.extend(re.findall(r"^\s+func (test\w+)\(", path.read_text(), re.MULTILINE))
         self.assertIn("sources: [LifecycleTests]", (root / "mobile-ios/lifecycle-tests.yml").read_text())
-        self.assertEqual(len(declarations), 92)
+        self.assertEqual(len(declarations), 93)
         self.assertEqual(runner.EXPECTED_TEST_COUNT, len(declarations))
         self.assertIn("testCancelledComputedManySignalSeekCannotPublish", declarations)
         self.assertIn("testStopAfterComputedManySignalSeekDiscardsResultAndAllOwnedState", declarations)
@@ -165,7 +165,7 @@ class LifecycleRunnerTests(unittest.TestCase):
         expected = runner.EXPECTED_TEST_COUNT
         runner.verify_summary({"totalTestCount": runner.EXPECTED_TEST_COUNT, "passedTests": runner.EXPECTED_TEST_COUNT, "failedTests": 0,
                                "skippedTests": 0, "expectedFailures": 0}, expected)
-        for count in [0, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 93]:
+        for count in [0, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 94]:
             with self.subTest(count=count), self.assertRaises(ValueError):
                 runner.verify_summary({"totalTestCount": count, "passedTests": count,
                                        "failedTests": 0, "skippedTests": 0}, expected)

@@ -86,13 +86,13 @@ final class ReplayController {
         return try await seekSnapshot(at: seconds)
     }
 
-    private func seekSnapshot(at seconds: Double) async throws -> MeasurementReplay.Snapshot? {
+    private func seekSnapshot(at seconds: Double, showsProgress: Bool = true) async throws -> MeasurementReplay.Snapshot? {
         guard seconds.isFinite else { throw MeasurementReplayError.invalidExport }
         guard let timeline, !loading else { return nil }
         let token = generation, request = UUID()
         seekGeneration = request
-        seeking = true
-        defer { if generation == token && seekGeneration == request { seeking = false } }
+        if showsProgress { seeking = true }
+        defer { if showsProgress && generation == token && seekGeneration == request { seeking = false } }
         let state = try await snapshotProvider(timeline, seconds)
         try Task.checkCancellation()
         guard generation == token, seekGeneration == request else { return nil }
@@ -143,7 +143,8 @@ final class ReplayController {
         let target = playbackAnchorPosition + (uptime - playbackAnchorTime) * playbackRate
         guard target.isFinite else { return nil }
         lastPlaybackTime = uptime
-        guard let state = try await seekSnapshot(at: target), playbackGeneration == token else { return nil }
+        guard let state = try await seekSnapshot(at: target, showsProgress: false),
+              playbackGeneration == token else { return nil }
         if target >= duration { pause() }
         return state
     }

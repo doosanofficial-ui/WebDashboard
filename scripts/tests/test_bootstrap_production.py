@@ -20,7 +20,7 @@ RUNTIME = 'com.apple.CoreSimulator.SimRuntime.iOS-27-0'
 
 
 class ProductionBootstrapTests(unittest.TestCase):
-    def fixtures(self, *, baseline='good', created=NEW, failure=None, shutdown_error=None):
+    def fixtures(self, *, baseline='good', created=NEW, failure=None, shutdown_error=None, delete_error=None):
         events = []
 
         def output(command, **kwargs):
@@ -56,6 +56,8 @@ class ProductionBootstrapTests(unittest.TestCase):
                     raise failure
                 if command[2] == 'shutdown' and shutdown_error is not None:
                     raise shutdown_error
+                if command[2] == 'delete' and delete_error is not None:
+                    raise delete_error
                 if command[2] not in ('boot', 'bootstatus', 'shutdown', 'delete'):
                     raise AssertionError(command)
             else:
@@ -369,8 +371,8 @@ class ProductionBootstrapTests(unittest.TestCase):
             self.assertFalse(coverage['controlSucceeded'])
             self.assertEqual(coverage['notObservedReason'], 'Neutral control not observed')
 
-    def test_boot_success_with_cleanup_failure_cannot_publish_pass(self):
-        events = self.fixtures(shutdown_error=OSError('fixture shutdown failure'))
+    def test_boot_success_with_delete_failure_cannot_publish_pass(self):
+        events = self.fixtures(delete_error=OSError('fixture delete failure'))
         with tempfile.TemporaryDirectory() as directory:
             results = Path(directory) / 'result'
             with self.assertRaisesRegex(RuntimeError, 'cleanup'):

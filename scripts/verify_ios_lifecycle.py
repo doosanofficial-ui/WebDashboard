@@ -20,7 +20,7 @@ import tempfile
 import failure_observation
 from failure_observation import observe_first_failure
 
-EXPECTED_TEST_COUNT = 92
+EXPECTED_TEST_COUNT = 93
 SUMMARY_READ_TIMEOUT_SECONDS = 180
 BOOTSTATUS_TIMEOUT_SECONDS = 600
 SIMULATOR_CLEANUP_TIMEOUT_SECONDS = 300
