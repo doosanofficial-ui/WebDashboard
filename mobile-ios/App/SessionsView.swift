@@ -29,15 +29,15 @@ struct SessionsView: View {
             TimelineView(.periodic(from: .now, by: 1)) { _ in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: TelemetryTheme.Spacing.medium) {
+                        if model.replayController.loading {
+                            HStack {
+                                ProgressView(AppLocalization.text("Loading recording"))
+                                Button(AppLocalization.text("Cancel loading"), action: model.stopReplay)
+                                    .accessibilityIdentifier("cancel-replay-loading")
+                            }
+                        }
                         if model.runMode == .replay {
                             replayHeader()
-                            if model.replayController.loading {
-                                HStack {
-                                    ProgressView(AppLocalization.text("Loading recording"))
-                                    Button(AppLocalization.text("Cancel loading"), action: model.stopReplay)
-                                        .accessibilityIdentifier("cancel-replay-loading")
-                                }
-                            }
                             replayTimeCard
                             ReplayAnalysisView(model: model)
                             DisclosureGroup(AppLocalization.text("Saved sessions"), isExpanded: $showingReplaySessionManagement) {

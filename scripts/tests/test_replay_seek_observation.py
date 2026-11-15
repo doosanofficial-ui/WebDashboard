@@ -137,8 +137,10 @@ final class XCUIElement {
 struct Elements {
     let kind: String
     subscript(_ id: String) -> XCUIElement { XCUIElement(id) }
+    func matching(identifier: String) -> Elements { Elements(kind: identifier) }
     var firstMatch: XCUIElement { XCUIElement(kind) }
 }
+enum XCUIElementType { case any }
 final class XCUIApplication {
     var buttons: Elements { Elements(kind: "buttons") }
     var otherElements: Elements { Elements(kind: "other") }
@@ -146,6 +148,7 @@ final class XCUIApplication {
     var textFields: Elements { Elements(kind: "fields") }
     var navigationBars: Elements { Elements(kind: "navigation") }
     var tabBars: Elements { Elements(kind: "tabs") }
+    func descendants(matching: XCUIElementType) -> Elements { Elements(kind: "descendants") }
     var frame: CGRect { CGRect(x: 0, y: 0, width: 402, height: 874) }
     var debugDescription: String { "fake-lazy-AX-viewport" }
     func coordinate(withNormalizedOffset value: CGVector) -> Coordinate { Coordinate(y: value.dy * 874) }

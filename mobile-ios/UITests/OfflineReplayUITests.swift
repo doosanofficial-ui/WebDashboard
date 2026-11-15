@@ -17,7 +17,7 @@ final class OfflineReplayUITests: XCTestCase {
 
     private func expandReplaySeek(in app: XCUIApplication) {
         guard !app.textFields["replay-seek-seconds"].exists else { return }
-        let disclosure = app.buttons["replay-seek-details"]
+        let disclosure = app.descendants(matching: .any).matching(identifier: "replay-seek-details").firstMatch
         XCTAssertTrue(revealHistoryElement(disclosure, in: app), app.debugDescription)
         disclosure.tap()
         XCTAssertTrue(app.textFields["replay-seek-seconds"].waitForExistence(timeout: 5))
@@ -97,7 +97,7 @@ final class OfflineReplayUITests: XCTestCase {
         let route = app.otherElements["replay-analysis-route"]
         XCTAssertTrue(revealHistoryElement(route, in: app))
         XCTAssertTrue(app.staticTexts["Recorded fixes: 0"].exists, "GPS from later recorded time must not leak into the accepted cursor")
-        let management = app.buttons["replay-session-management"]
+        let management = app.descendants(matching: .any).matching(identifier: "replay-session-management").firstMatch
         XCTAssertTrue(revealHistoryElement(management, in: app), app.debugDescription)
         management.tap()
         XCTAssertTrue(app.buttons["saved-session-picker"].waitForExistence(timeout: 5))
@@ -747,8 +747,8 @@ final class OfflineReplayUITests: XCTestCase {
         replay.tap()
         XCTAssertTrue(app.buttons["stop-replay-header"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["stop-replay-header"].isHittable)
-        let management = app.buttons["replay-session-management"]
-        XCTAssertTrue(management.waitForExistence(timeout: 5))
+        let management = app.descendants(matching: .any).matching(identifier: "replay-session-management").firstMatch
+        XCTAssertTrue(revealHistoryElement(management, in: app), app.debugDescription)
         management.tap()
         let savedCard = app.otherElements["saved-sessions-card"]
         for _ in 0..<5 where savedCard.frame.maxY > app.frame.height - 140 { app.swipeUp() }

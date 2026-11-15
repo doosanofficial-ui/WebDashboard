@@ -109,7 +109,7 @@ final class SmallViewportUIRegression: XCTestCase {
         capture(app, "replay-controls-portrait")
         XCTAssertTrue(revealInSessions(app.sliders["replay-time-slider"], app: app), app.debugDescription)
         capture(app, "replay-slider-portrait")
-        let management = app.buttons["replay-session-management"]
+        let management = app.descendants(matching: .any).matching(identifier: "replay-session-management").firstMatch
         XCTAssertTrue(revealInSessions(management, app: app), app.debugDescription)
         management.tap()
         XCTAssertTrue(revealInSessions(app.buttons["saved-session-picker"], app: app), app.debugDescription)

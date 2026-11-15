@@ -83,7 +83,7 @@ final class UIClarityUITests: XCTestCase {
     }
     private func expandReplaySeek(_ app: XCUIApplication) {
         guard !app.textFields["replay-seek-seconds"].exists else { return }
-        let disclosure = app.buttons["replay-seek-details"]
+        let disclosure = app.descendants(matching: .any).matching(identifier: "replay-seek-details").firstMatch
         XCTAssertTrue(reveal(disclosure, in: app), app.debugDescription)
         disclosure.tap()
         XCTAssertTrue(app.textFields["replay-seek-seconds"].waitForExistence(timeout: 5))
@@ -95,7 +95,7 @@ final class UIClarityUITests: XCTestCase {
     private func selectReplayFixture(_ app: XCUIApplication, sessionID: String) {
         app.tabBars.buttons["Sessions"].tap()
         if app.buttons["stop-replay-header"].exists {
-            let management = app.buttons["replay-session-management"]
+            let management = app.descendants(matching: .any).matching(identifier: "replay-session-management").firstMatch
             XCTAssertTrue(reveal(management, in: app), app.debugDescription)
             management.tap()
         }
