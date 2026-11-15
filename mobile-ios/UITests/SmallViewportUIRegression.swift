@@ -105,7 +105,10 @@ final class SmallViewportUIRegression: XCTestCase {
         XCTAssertTrue(app.buttons["stop-replay-header"].waitForExistence(timeout: 8))
         let play = app.buttons["session-replay-play"]
         XCTAssertTrue(revealInSessions(play, app: app), app.debugDescription)
-        XCTAssertTrue(revealInSessions(app.segmentedControls["replay-speed"], app: app), app.debugDescription)
+        let speed = app.segmentedControls["replay-speed"]
+        XCTAssertTrue(revealInSessions(speed, app: app), app.debugDescription)
+        XCTAssertEqual(speed.label, "Replay speed", "SE AX5 rate options need an accessible label")
+        XCTAssertGreaterThanOrEqual(speed.frame.height, 44, "SE AX5 rate options need a tappable height")
         capture(app, "replay-controls-portrait")
         XCTAssertTrue(revealInSessions(app.sliders["replay-time-slider"], app: app), app.debugDescription)
         capture(app, "replay-slider-portrait")

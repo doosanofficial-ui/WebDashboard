@@ -44,7 +44,9 @@ final class OfflineReplayUITests: XCTestCase {
         let quickPlay = app.buttons["session-replay-play"]
         XCTAssertTrue(quickPlay.waitForExistence(timeout: 5))
         XCTAssertTrue(quickPlay.isHittable, "Play must be visible in the single recorded-time card before analysis")
-        XCTAssertTrue(app.segmentedControls["replay-speed"].isHittable)
+        let speed = app.segmentedControls["replay-speed"]
+        XCTAssertTrue(speed.isHittable)
+        XCTAssertEqual(speed.label, "Replay speed", "Rate options need context for assistive navigation")
         XCTAssertTrue(app.buttons["stop-replay-header"].exists)
         XCTAssertFalse(app.buttons["stop-replay"].exists, "The saved-session card must not duplicate Stop Replay")
         let quickTime = app.staticTexts["replay-position"]

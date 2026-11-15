@@ -110,6 +110,7 @@ final class XCUIElement {
         return value
     }
     var label: String {
+        if id == "replay-speed" { return "Replay speed" }
         let seconds = id == "replay-analysis-time" && scenario == "wrong-analysis" ? 3.0 : acceptedSeconds
         let text = String(format: "%.1f / 5.0 seconds", seconds)
         events.append("label:" + id + ":" + text)
