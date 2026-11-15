@@ -857,7 +857,7 @@ def main():
     selection.add_argument("--se-viewport", action="store_true",
                            help="Re-execute the two viewport tests on iPhone SE (3rd generation), iOS 27.x only")
     selection.add_argument("--group", choices=TEST_GROUPS, help="Disjoint portion of the full 31-test CI gate")
-    selection.add_argument("--only-test", choices=["background-export-lifecycle", "active-slider-drag", "ui-clarity", "single-instant", "large-text", "recorded-history", "recorded-route", "native-save-reentry", "native-export-dismissal", "help-capture", "help-ko-landscape", "replay-speed", "seeded-picker", "setup-adapter-entry", "signal-dashboard", "profile-files", "invalid-custom-pid"],
+    selection.add_argument("--only-test", choices=["background-export-lifecycle", "active-slider-drag", "ui-clarity", "single-instant", "large-text", "recorded-history", "recorded-route", "native-save-reentry", "native-export-dismissal", "help-capture", "help-ko-landscape", "replay-speed", "seeded-picker", "setup-adapter-entry", "signal-dashboard", "profile-files", "invalid-custom-pid", "setup-replay-stop"],
                         help="Run one new native lifecycle test; default executes all twenty-five UI regressions")
     args = parser.parse_args()
     results = args.result_directory.resolve()
@@ -866,7 +866,8 @@ def main():
                        "active-slider-drag": "testPlayingLongSliderDragPreservesCapturedUserTarget",
                        "recorded-history": "testRecordedSignalHistoryContainsOnlySelectedTimePrefix",
                        "recorded-route": "testRecordedGPSRouteContainsOnlySelectedTimePrefix",
-                       "invalid-custom-pid": "testInvalidHexRequestIsRejectedBeforeAnyVehicleAction"}
+                       "invalid-custom-pid": "testInvalidHexRequestIsRejectedBeforeAnyVehicleAction",
+                       "setup-replay-stop": "testSetupStopIsDisabledDuringReplay"}
     app_focused_methods = {"setup-adapter-entry": "testAdapterProfileImportAndLiveControlsAreVisible",
                            "signal-dashboard": "testSignalCatalogAddsNumericWidgetToDashboard",
                            "profile-files": "testAdapterProfileFilesExportAndImportRoundTrip"}

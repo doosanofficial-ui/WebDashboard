@@ -18,6 +18,25 @@ final class OfflineReplayUITests: XCTestCase {
         fixture.tap()
     }
 
+    func testSetupStopIsDisabledDuringReplay() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        openFixtureSession(app)
+        app.buttons["replay-saved-session"].tap()
+        let replayPosition = app.staticTexts["session-replay-position"]
+        XCTAssertTrue(replayPosition.waitForExistence(timeout: 8), app.debugDescription)
+        let recordedTime = replayPosition.value as? String
+        XCTAssertNotNil(recordedTime)
+
+        app.tabBars.buttons["Setup"].tap()
+        let stopLive = app.buttons["stop-live-adapter"]
+        XCTAssertTrue(stopLive.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertFalse(stopLive.isEnabled, "A live-adapter Stop must not clear a Replay snapshot")
+        app.tabBars.buttons["Sessions"].tap()
+        XCTAssertTrue(app.buttons["stop-replay-header"].waitForExistence(timeout: 5))
+        XCTAssertEqual(replayPosition.value as? String, recordedTime)
+    }
+
     func testSessionReplayShowsAnalysisAndSynchronizedRecordedTime() throws {
         continueAfterFailure = false
         let app = XCUIApplication(); openFixtureSession(app, startedAt: 300)

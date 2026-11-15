@@ -316,6 +316,7 @@ private struct SetupView: View {
             actionLabel("Stop", wrapping: wrapping)
         }
         .buttonStyle(.bordered)
+        .disabled(model.runMode == .replay)
         .accessibilityIdentifier("stop-live-adapter")
     }
 

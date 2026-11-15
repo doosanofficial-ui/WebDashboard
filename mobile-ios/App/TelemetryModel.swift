@@ -510,6 +510,7 @@ final class TelemetryModel: NSObject {
     }
 
     func stopLiveAdapter() {
+        guard runMode != .replay else { return }
         stopDemoAdapter()
     }
 
