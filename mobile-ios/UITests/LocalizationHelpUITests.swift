@@ -177,7 +177,7 @@ final class LocalizationHelpUITests: XCTestCase {
         let play=app.buttons["session-replay-play"]
         reveal(play,in:app)
         XCTAssertEqual(play.label,"재생")
-        XCTAssertEqual(app.buttons["replay-speed"].label,"재생 속도")
+        XCTAssertEqual(app.segmentedControls["replay-speed"].label,"재생 속도")
         let replayShot=XCTAttachment(screenshot:app.windows.firstMatch.screenshot())
         replayShot.name="SYNTHETIC-KO-AX5-replay-controls"
         replayShot.lifetime = .keepAlways;add(replayShot)

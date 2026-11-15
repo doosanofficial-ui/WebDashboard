@@ -258,19 +258,16 @@ struct SessionsView: View {
                         .disabled(model.replayController.position >= model.replayController.duration)
                         .accessibilityIdentifier("session-replay-play")
                 }
-                Menu {
-                    ForEach([0.5, 1.0, 2.0], id: \.self) { rate in
-                        Button(AppLocalization.text(String(format: "%g×", rate))) {
-                            model.setReplayPlaybackRate(rate)
-                        }
-                    }
-                } label: {
-                    Label(AppLocalization.text(String(format: "%g×", model.replayController.playbackRate)), systemImage: "speedometer")
-                        .frame(minHeight: 44)
+                Picker(AppLocalization.text("Replay speed"), selection: Binding(
+                    get: { model.replayController.playbackRate },
+                    set: { model.setReplayPlaybackRate($0) }
+                )) {
+                    Text(AppLocalization.text("0.5×")).tag(0.5)
+                    Text(AppLocalization.text("1×")).tag(1.0)
+                    Text(AppLocalization.text("2×")).tag(2.0)
                 }
+                .pickerStyle(.segmented)
                 .disabled(!hasTimeRange)
-                .accessibilityLabel(AppLocalization.text("Replay speed"))
-                .accessibilityValue(AppLocalization.text(String(format: "%g times", model.replayController.playbackRate)))
                 .accessibilityIdentifier("replay-speed")
             }
             .buttonStyle(.bordered).controlSize(.large)

@@ -105,7 +105,7 @@ final class SmallViewportUIRegression: XCTestCase {
         XCTAssertTrue(app.buttons["stop-replay-header"].waitForExistence(timeout: 8))
         let play = app.buttons["session-replay-play"]
         XCTAssertTrue(revealInSessions(play, app: app), app.debugDescription)
-        XCTAssertTrue(revealInSessions(app.buttons["replay-speed"], app: app), app.debugDescription)
+        XCTAssertTrue(revealInSessions(app.segmentedControls["replay-speed"], app: app), app.debugDescription)
         capture(app, "replay-controls-portrait")
         XCTAssertTrue(revealInSessions(app.sliders["replay-time-slider"], app: app), app.debugDescription)
         capture(app, "replay-slider-portrait")

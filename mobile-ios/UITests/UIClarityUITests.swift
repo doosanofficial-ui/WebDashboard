@@ -388,7 +388,7 @@ final class UIClarityUITests: XCTestCase {
         XCTAssertFalse(app.buttons["replay-seek-end"].isEnabled)
         expandReplaySeek(app)
         XCTAssertFalse(app.buttons["replay-seek-go"].isEnabled)
-        XCTAssertFalse(app.buttons["replay-speed"].isEnabled)
+        XCTAssertFalse(app.segmentedControls["replay-speed"].isEnabled)
         XCTAssertTrue(app.buttons["stop-replay-header"].isEnabled)
         app.tabBars.buttons["Signals"].tap()
         XCTAssertTrue(app.staticTexts["48.5"].waitForExistence(timeout: 5))

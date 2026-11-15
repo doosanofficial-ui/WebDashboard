@@ -5,14 +5,12 @@ final class OfflineReplayUITests: XCTestCase {
 
     #if targetEnvironment(simulator)
     private func selectReplaySpeed(_ rate: String, in app: XCUIApplication) {
-        let menu = app.buttons["replay-speed"]
-        XCTAssertTrue(menu.waitForExistence(timeout: 5))
-        menu.tap()
-        let option = app.buttons[rate]
+        let speed = app.segmentedControls["replay-speed"]
+        XCTAssertTrue(speed.waitForExistence(timeout: 5))
+        let option = speed.buttons[rate]
         XCTAssertTrue(option.waitForExistence(timeout: 5), app.debugDescription)
         option.tap()
-        let expected = rate.replacingOccurrences(of: "×", with: " times")
-        XCTAssertEqual(menu.value as? String, expected, "Replay speed must match the selected rate")
+        XCTAssertTrue(option.isSelected, "Replay speed must match the selected rate")
     }
 
     private func expandReplaySeek(in app: XCUIApplication) {
@@ -46,7 +44,7 @@ final class OfflineReplayUITests: XCTestCase {
         let quickPlay = app.buttons["session-replay-play"]
         XCTAssertTrue(quickPlay.waitForExistence(timeout: 5))
         XCTAssertTrue(quickPlay.isHittable, "Play must be visible in the single recorded-time card before analysis")
-        XCTAssertTrue(app.buttons["replay-speed"].isHittable)
+        XCTAssertTrue(app.segmentedControls["replay-speed"].isHittable)
         XCTAssertTrue(app.buttons["stop-replay-header"].exists)
         XCTAssertFalse(app.buttons["stop-replay"].exists, "The saved-session card must not duplicate Stop Replay")
         let quickTime = app.staticTexts["replay-position"]
@@ -490,7 +488,7 @@ final class OfflineReplayUITests: XCTestCase {
             return button
         }
         reveal("replay-seek-start").tap()
-        let speed = app.buttons["replay-speed"]
+        let speed = app.segmentedControls["replay-speed"]
         XCTAssertTrue(speed.waitForExistence(timeout: 5), app.debugDescription)
         selectReplaySpeed("0.5×", in: app)
         reveal("session-replay-play").tap()

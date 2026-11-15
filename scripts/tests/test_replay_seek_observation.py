@@ -143,6 +143,7 @@ struct Elements {
 enum XCUIElementType { case any }
 final class XCUIApplication {
     var buttons: Elements { Elements(kind: "buttons") }
+    var segmentedControls: Elements { Elements(kind: "segments") }
     var otherElements: Elements { Elements(kind: "other") }
     var staticTexts: Elements { Elements(kind: "texts") }
     var textFields: Elements { Elements(kind: "fields") }
