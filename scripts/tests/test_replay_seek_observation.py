@@ -18,6 +18,8 @@ var offset = 0.0
 var goCount = 0
 var acceptedSeconds = 5.0
 var inputText = scenario == "existing-input" ? "5.0" : ""
+var seekExpanded = false
+var managementExpanded = false
 func finish(_ code: Int32, _ failure: String = "") -> Never {
     let result: [String: Any] = ["events": events, "gestures": gestures,
         "goCount": goCount, "input": inputText, "cursor": acceptedSeconds, "failure": failure]
@@ -49,7 +51,7 @@ struct Coordinate {
         let delta = y - end.y
         gestures.append(["start": y, "end": end.y, "delta": delta])
         events.append("scroll:\(delta)")
-        offset = min(1400, max(0, offset + delta))
+        offset = min(2200, max(0, offset + delta))
     }
 }
 final class XCUIElement {
@@ -58,10 +60,13 @@ final class XCUIElement {
     var exists: Bool {
         events.append("exists:" + id)
         if id == "always-missing" || id == "replay-cockpit-controls" || id == "cockpit-replay-stop" { return false }
-        // The lower input card remains mounted while upper lazy analysis is absent.
+        if id == "stop-replay" { return false }
+        if id == "replay-seek-seconds" || id == "replay-seek-go" { return seekExpanded }
+        if id == "saved-session-picker" { return managementExpanded }
+        // Analysis follows the recorded-time card and can leave the lazy AX tree.
         if id.hasPrefix("replay-analysis-") {
             if goCount > 0 && scenario == "permanent-analysis" { return false }
-            return offset < 400
+            return offset < 1900
         }
         if id == "Recorded samples: 1" { return scenario != "wrong-samples" }
         if id == "Recorded fixes: 0" { return scenario != "wrong-fixes" }
@@ -73,13 +78,15 @@ final class XCUIElement {
         let y: Double
         let height: Double
         switch id {
-        case "replay-seek-seconds", "replay-seek-go": y = 1117; height = 34
-        case "replay-position": y = 1040; height = 30
-        case "replay-analysis-time": y = 500; height = 30
-        case "replay-analysis-signal": y = 260; height = 44
-        case "replay-analysis-history": y = 350; height = 160
-        case "replay-analysis-route": y = 700; height = 160
-        case "session-replay-position": y = 190; height = 30
+        case "replay-position": y = 210; height = 30
+        case "replay-seek-details": y = 470; height = 44
+        case "replay-seek-seconds", "replay-seek-go": y = 525; height = 44
+        case "replay-analysis-time": y = 810; height = 30
+        case "replay-analysis-signal": y = 930; height = 44
+        case "replay-analysis-history": y = 1000; height = 160
+        case "replay-analysis-route": y = 1280; height = 160
+        case "replay-session-management": y = 1510; height = 44
+        case "sessions-export-json", "sessions-export-csv": y = 1840; height = 44
         default: y = 140; height = 44
         }
         return CGRect(x: 32, y: y - offset, width: 268, height: height)
@@ -115,6 +122,8 @@ final class XCUIElement {
             goCount += 1
             acceptedSeconds = scenario == "wrong-cursor" ? 3.0 : (Double(inputText) ?? 5.0)
         }
+        if id == "replay-seek-details" { seekExpanded = true }
+        if id == "replay-session-management" { managementExpanded = true }
     }
     func typeText(_ text: String) {
         events.append("type:" + text)
@@ -175,6 +184,7 @@ class ReplaySeekObservationTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[2] / "mobile-ios/UITests/OfflineReplayUITests.swift").read_text()
         body = declaration(source, "func testSessionReplayShowsAnalysisAndSynchronizedRecordedTime()")
         helper = declaration(source, "private func revealHistoryElement(")
+        disclosure = declaration(source, "private func expandReplaySeek(")
         direction = declaration(source, "private enum HistoryRevealDirection") if "private enum HistoryRevealDirection" in source else ""
         main = r'''
 if mode == "case" {
@@ -186,7 +196,7 @@ if mode == "case" {
 }
 '''
         program = root / "main.swift"
-        program.write_text(HOST_DOUBLES + "\n" + direction + "\n" + body + "\n" + helper + main)
+        program.write_text(HOST_DOUBLES + "\n" + direction + "\n" + body + "\n" + helper + "\n" + disclosure + main)
         cls.executable = root / "exercise"
         build = subprocess.run(["swiftc", "-swift-version", "5", "-module-cache-path", str(root / "cache"),
                                 str(program), "-o", str(cls.executable)], capture_output=True, text=True, timeout=45)
@@ -199,7 +209,7 @@ if mode == "case" {
             for line in run.stdout.splitlines() if line.startswith("HOST_REPLAY_SEEK_RESULT ")))
         return run.returncode, result
 
-    def test_exact_input_and_nearby_cursor_precede_upward_lazy_analysis_reveal(self):
+    def test_exact_input_and_nearby_cursor_precede_lazy_analysis_reveal(self):
         for scenario in ("accepted", "existing-input"):
             with self.subTest(scenario=scenario):
                 status, result = self.run_case(scenario)
@@ -213,7 +223,8 @@ if mode == "case" {
                 analysis = events.index("label:replay-analysis-time:2.0 / 5.0 seconds")
                 self.assertLess(go, cursor)
                 self.assertLess(cursor, analysis)
-                self.assertTrue(any(event.startswith("scroll:-") for event in events[cursor:analysis]))
+                self.assertTrue(any(event.startswith("scroll:") and float(event.split(":", 1)[1]) > 0
+                    for event in events[cursor:analysis]))
                 self.assertIn("exists:Recorded samples: 1", events)
                 self.assertIn("quick-value:2.0 of 5.0 seconds", events)
                 self.assertIn("exists:Recorded fixes: 0", events)
@@ -232,7 +243,8 @@ if mode == "case" {
                 if scenario == "permanent-analysis":
                     after_go = events[events.index("tap:replay-seek-go") + 1:]
                     self.assertEqual(sum(event.startswith("scroll:") for event in after_go), 24)
-                    self.assertTrue(all(event.startswith("scroll:-") for event in after_go if event.startswith("scroll:")))
+                    self.assertTrue(all(float(event.split(":", 1)[1]) > 0
+                        for event in after_go if event.startswith("scroll:")))
 
     def test_default_missing_direction_and_existing_gesture_budget_are_preserved(self):
         status, result = self.run_case("accepted", mode="missing-default")

@@ -81,12 +81,24 @@ final class UIClarityUITests: XCTestCase {
         let a = XCTAttachment(screenshot: app.screenshot())
         a.name = name; a.lifetime = .keepAlways; add(a)
     }
+    private func expandReplaySeek(_ app: XCUIApplication) {
+        guard !app.textFields["replay-seek-seconds"].exists else { return }
+        let disclosure = app.buttons["replay-seek-details"]
+        XCTAssertTrue(reveal(disclosure, in: app), app.debugDescription)
+        disclosure.tap()
+        XCTAssertTrue(app.textFields["replay-seek-seconds"].waitForExistence(timeout: 5))
+    }
     private func replayFixture(_ app: XCUIApplication, sessionID: String = "offline-replay-fixture") {
         launchPortrait(app)
         selectReplayFixture(app, sessionID: sessionID)
     }
     private func selectReplayFixture(_ app: XCUIApplication, sessionID: String) {
         app.tabBars.buttons["Sessions"].tap()
+        if app.buttons["stop-replay-header"].exists {
+            let management = app.buttons["replay-session-management"]
+            XCTAssertTrue(reveal(management, in: app), app.debugDescription)
+            management.tap()
+        }
         let picker = app.buttons["saved-session-picker"]
         XCTAssertTrue(reveal(picker, in: app), app.debugDescription)
         XCTAssertTrue(picker.isHittable, app.debugDescription)
@@ -317,6 +329,7 @@ final class UIClarityUITests: XCTestCase {
             app.frame.width > app.frame.height
         }, object: app)
         XCTAssertEqual(XCTWaiter.wait(for: [rotated], timeout: 5), .completed, app.debugDescription)
+        expandReplaySeek(app)
         let go = app.buttons["replay-seek-go"]
         XCTAssertTrue(go.waitForExistence(timeout: 5))
         // Keep gestures inside the content area. Whole-app swipes in a short
@@ -370,11 +383,12 @@ final class UIClarityUITests: XCTestCase {
         screenshot(app, "DEMO-single-instant-recording-time-controls")
         XCTAssertTrue(app.staticTexts["Single recorded instant · no time range"].exists, app.debugDescription)
         XCTAssertFalse(slider.isEnabled)
-        XCTAssertFalse(app.buttons["replay-play"].isEnabled)
+        XCTAssertFalse(app.buttons["session-replay-play"].isEnabled)
         XCTAssertFalse(app.buttons["replay-seek-start"].isEnabled)
         XCTAssertFalse(app.buttons["replay-seek-end"].isEnabled)
+        expandReplaySeek(app)
         XCTAssertFalse(app.buttons["replay-seek-go"].isEnabled)
-        XCTAssertFalse(app.segmentedControls["replay-speed"].isEnabled)
+        XCTAssertFalse(app.buttons["replay-speed"].isEnabled)
         XCTAssertTrue(app.buttons["stop-replay-header"].isEnabled)
         app.tabBars.buttons["Signals"].tap()
         XCTAssertTrue(app.staticTexts["48.5"].waitForExistence(timeout: 5))
@@ -392,6 +406,7 @@ final class UIClarityUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Single recorded instant · no time range"].exists)
         XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Recorded range:")).count, 0)
         XCTAssertFalse(emptySlider.isEnabled)
+        expandReplaySeek(app)
         XCTAssertFalse(app.buttons["replay-seek-go"].isEnabled)
         XCTAssertTrue(app.buttons["stop-replay-header"].isEnabled)
         app.tabBars.buttons["Signals"].tap()

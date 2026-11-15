@@ -4,6 +4,25 @@ import XCTest
 final class OfflineReplayUITests: XCTestCase {
 
     #if targetEnvironment(simulator)
+    private func selectReplaySpeed(_ rate: String, in app: XCUIApplication) {
+        let menu = app.buttons["replay-speed"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 5))
+        menu.tap()
+        let option = app.buttons[rate]
+        XCTAssertTrue(option.waitForExistence(timeout: 5), app.debugDescription)
+        option.tap()
+        let expected = rate.replacingOccurrences(of: "×", with: " times")
+        XCTAssertEqual(menu.value as? String, expected, "Replay speed must match the selected rate")
+    }
+
+    private func expandReplaySeek(in app: XCUIApplication) {
+        guard !app.textFields["replay-seek-seconds"].exists else { return }
+        let disclosure = app.buttons["replay-seek-details"]
+        XCTAssertTrue(revealHistoryElement(disclosure, in: app), app.debugDescription)
+        disclosure.tap()
+        XCTAssertTrue(app.textFields["replay-seek-seconds"].waitForExistence(timeout: 5))
+    }
+
     private func openFixtureSession(_ app: XCUIApplication, startedAt: Double = 100, sessionID: String? = nil) {
         app.launchArguments += ["--app-language", "en"]; app.launch()
         XCTAssertTrue(app.tabBars.buttons["Sessions"].waitForExistence(timeout: 10))
@@ -26,15 +45,20 @@ final class OfflineReplayUITests: XCTestCase {
         XCTAssertTrue(analysis.waitForExistence(timeout: 8), "Replay analysis must be in the selected session, not behind a Live tab switch")
         let quickPlay = app.buttons["session-replay-play"]
         XCTAssertTrue(quickPlay.waitForExistence(timeout: 5))
-        XCTAssertTrue(quickPlay.isHittable, "Play must be visible beside the analysis without scrolling to advanced time controls")
-        XCTAssertTrue(app.buttons["session-replay-speed"].isHittable)
-        let quickTime = app.staticTexts["session-replay-position"]
+        XCTAssertTrue(quickPlay.isHittable, "Play must be visible in the single recorded-time card before analysis")
+        XCTAssertTrue(app.buttons["replay-speed"].isHittable)
+        XCTAssertTrue(app.buttons["stop-replay-header"].exists)
+        XCTAssertFalse(app.buttons["stop-replay"].exists, "The saved-session card must not duplicate Stop Replay")
+        let quickTime = app.staticTexts["replay-position"]
         XCTAssertTrue(quickTime.exists)
         // Opening preserves the existing end-of-recording snapshot.
         XCTAssertEqual(quickTime.value as? String, "5.0 of 5.0 seconds")
         XCTAssertFalse(quickPlay.isEnabled)
         XCTAssertGreaterThanOrEqual(quickTime.frame.minY, app.navigationBars.firstMatch.frame.maxY)
         XCTAssertLessThanOrEqual(quickTime.frame.maxY, app.tabBars.firstMatch.frame.minY)
+        XCTAssertFalse(app.textFields["replay-seek-seconds"].exists, "Manual seconds should start collapsed")
+        XCTAssertFalse(app.buttons["saved-session-picker"].exists, "Session management should start collapsed")
+        expandReplaySeek(in: app)
         let input = app.textFields["replay-seek-seconds"]
         XCTAssertTrue(revealHistoryElement(input, in: app))
         XCTAssertTrue(input.isHittable, app.debugDescription)
@@ -55,7 +79,7 @@ final class OfflineReplayUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [cursorAccepted], timeout: 5), .completed,
             "The nearby recorded-time cursor must accept the seek before analysis lookup")
         let position = app.staticTexts["replay-analysis-time"]
-        XCTAssertTrue(revealHistoryElement(position, in: app, missingDirection: .above), app.debugDescription)
+        XCTAssertTrue(revealHistoryElement(position, in: app), app.debugDescription)
         let accepted = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             position.exists && position.label.hasPrefix("2.0 / ")
         }, object: app)
@@ -73,6 +97,12 @@ final class OfflineReplayUITests: XCTestCase {
         let route = app.otherElements["replay-analysis-route"]
         XCTAssertTrue(revealHistoryElement(route, in: app))
         XCTAssertTrue(app.staticTexts["Recorded fixes: 0"].exists, "GPS from later recorded time must not leak into the accepted cursor")
+        let management = app.buttons["replay-session-management"]
+        XCTAssertTrue(revealHistoryElement(management, in: app), app.debugDescription)
+        management.tap()
+        XCTAssertTrue(app.buttons["saved-session-picker"].waitForExistence(timeout: 5))
+        XCTAssertTrue(revealHistoryElement(app.buttons["sessions-export-json"], in: app), "Export must remain reachable below analysis")
+        XCTAssertTrue(app.buttons["sessions-export-csv"].exists)
         XCTAssertTrue(app.buttons["stop-replay-header"].isEnabled)
     }
 
@@ -205,6 +235,7 @@ final class OfflineReplayUITests: XCTestCase {
         }
         func seek(_ seconds: String) {
             app.tabBars.buttons["Sessions"].tap()
+            expandReplaySeek(in: app)
             let input = app.textFields["replay-seek-seconds"]
             XCTAssertTrue(revealHistoryElement(input, in: app), app.debugDescription)
             XCTAssertTrue(input.isHittable, app.debugDescription)
@@ -270,6 +301,7 @@ final class OfflineReplayUITests: XCTestCase {
         }
         func seek(_ seconds: String) {
             app.tabBars.buttons["Sessions"].tap()
+            expandReplaySeek(in: app)
             let input = app.textFields["replay-seek-seconds"]
             XCTAssertTrue(revealHistoryElement(input, in: app), app.debugDescription)
             XCTAssertTrue(input.isHittable, app.debugDescription)
@@ -310,8 +342,8 @@ final class OfflineReplayUITests: XCTestCase {
             return b
         }
         reveal("replay-seek-start").tap()
-        app.segmentedControls["replay-speed"].buttons["0.5×"].tap()
-        reveal("replay-play").tap()
+        selectReplaySpeed("0.5×", in: app)
+        reveal("session-replay-play").tap()
         XCTAssertTrue(app.buttons["replay-pause"].waitForExistence(timeout: 5))
         let slider = app.sliders["replay-time-slider"]
         XCTAssertTrue(slider.isHittable, app.debugDescription)
@@ -347,7 +379,7 @@ final class OfflineReplayUITests: XCTestCase {
         thumb.press(forDuration: 2, thenDragTo: target, withVelocity: .slow, thenHoldForDuration: 3)
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "DEMO-held-slider-target"; screenshot.lifetime = .keepAlways; add(screenshot)
-        XCTAssertTrue(app.buttons["replay-play"].exists,
+        XCTAssertTrue(app.buttons["session-replay-play"].exists,
             "Held drag must capture editing and pause playback; a stale start may miss the moving thumb")
         XCTAssertFalse(app.buttons["replay-pause"].exists)
         XCTAssertEqual(app.staticTexts["slider-editing-audit"].label, "Playback held during editing",
@@ -458,11 +490,10 @@ final class OfflineReplayUITests: XCTestCase {
             return button
         }
         reveal("replay-seek-start").tap()
-        let speed = app.segmentedControls["replay-speed"]
+        let speed = app.buttons["replay-speed"]
         XCTAssertTrue(speed.waitForExistence(timeout: 5), app.debugDescription)
-        speed.buttons["0.5×"].tap()
-        XCTAssertTrue(speed.buttons["0.5×"].isSelected, "Slow playback rate must be accepted")
-        reveal("replay-play").tap()
+        selectReplaySpeed("0.5×", in: app)
+        reveal("session-replay-play").tap()
         let position = app.staticTexts["replay-position"]
         let advanced = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             let fields = position.label.split(separator: " ")
@@ -472,9 +503,9 @@ final class OfflineReplayUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [advanced], timeout: 5), .completed)
         reveal("replay-pause").tap()
         // Confirm the Pause action took effect before observing its accepted position.
-        XCTAssertTrue(app.buttons["replay-play"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["session-replay-play"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["replay-pause"].exists)
-        XCTAssertTrue(app.buttons["replay-play"].isEnabled, "Pause must occur before automatic end")
+        XCTAssertTrue(app.buttons["session-replay-play"].isEnabled, "Pause must occur before automatic end")
         let paused = position.label
         let pausedFields = paused.split(separator: " ")
         XCTAssertEqual(pausedFields.count, 4)
@@ -491,20 +522,16 @@ final class OfflineReplayUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Sessions"].waitForExistence(timeout: 5))
         XCTAssertEqual(position.label, paused)
         reveal("replay-seek-start").tap()
-        speed.buttons["0.5×"].tap()
-        XCTAssertTrue(speed.buttons["0.5×"].isSelected, "Slow playback rate must be accepted")
-        reveal("replay-play").tap()
+        selectReplaySpeed("0.5×", in: app)
+        reveal("session-replay-play").tap()
         XCTAssertTrue(app.buttons["replay-pause"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["Seeking recorded time"].exists,
                        "Automatic playback must not show the manual seek spinner")
-        speed.buttons["2×"].tap() // Change rate during playback, not only while paused.
-        XCTAssertTrue(speed.buttons["2×"].isSelected, "Active playback must accept the changed rate")
+        selectReplaySpeed("2×", in: app) // Change rate during playback, not only while paused.
         XCTAssertTrue(app.buttons["replay-pause"].exists, "Rate change must occur during active playback")
-        for cycle in 0..<3 {
-            speed.buttons["0.5×"].tap()
-            XCTAssertTrue(speed.buttons["0.5×"].isSelected, "Active slow rate must be accepted in cycle \(cycle)")
-            speed.buttons["2×"].tap()
-            XCTAssertTrue(speed.buttons["2×"].isSelected, "Active fast rate must be accepted in cycle \(cycle)")
+        for _ in 0..<3 {
+            selectReplaySpeed("0.5×", in: app)
+            selectReplaySpeed("2×", in: app)
         }
         XCTAssertTrue(app.buttons["replay-pause"].exists)
         XCTAssertFalse(app.staticTexts["Seeking recorded time"].exists)
@@ -521,12 +548,11 @@ final class OfflineReplayUITests: XCTestCase {
         XCTAssertTrue(app.buttons["stop-replay-header"].waitForExistence(timeout: 5))
         reveal("replay-seek-start").tap()
         XCTAssertEqual(position.label, "0.0 / 5.0 seconds", "Automatic end still uses the original short recording")
-        speed.buttons["2×"].tap()
-        XCTAssertTrue(speed.buttons["2×"].isSelected, "Automatic end requires the selected fast rate")
-        reveal("replay-play").tap()
+        selectReplaySpeed("2×", in: app)
+        reveal("session-replay-play").tap()
         XCTAssertTrue(app.staticTexts["5.0 / 5.0 seconds"].waitForExistence(timeout: 8))
         XCTAssertFalse(app.buttons["replay-pause"].exists)
-        XCTAssertFalse(app.buttons["replay-play"].isEnabled)
+        XCTAssertFalse(app.buttons["session-replay-play"].isEnabled)
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "DEMO-recorded-playback-end"; screenshot.lifetime = .keepAlways; add(screenshot)
         app.tabBars.buttons["Signals"].tap()
@@ -561,6 +587,7 @@ final class OfflineReplayUITests: XCTestCase {
         app.tabBars.buttons["Sessions"].tap()
         XCTAssertTrue(app.navigationBars["Sessions"].waitForExistence(timeout: 5))
         func seek(_ text: String) {
+            expandReplaySeek(in: app)
             _ = reveal("replay-seek-go")
             let field = app.textFields["replay-seek-seconds"]
             field.tap()
@@ -720,6 +747,9 @@ final class OfflineReplayUITests: XCTestCase {
         replay.tap()
         XCTAssertTrue(app.buttons["stop-replay-header"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["stop-replay-header"].isHittable)
+        let management = app.buttons["replay-session-management"]
+        XCTAssertTrue(management.waitForExistence(timeout: 5))
+        management.tap()
         let savedCard = app.otherElements["saved-sessions-card"]
         for _ in 0..<5 where savedCard.frame.maxY > app.frame.height - 140 { app.swipeUp() }
         let saved = XCTAttachment(screenshot: app.screenshot())

@@ -197,9 +197,10 @@ final class ParallelFeatureUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 5)); row.tap()
         tapVisible("replay-saved-session")
         XCTAssertTrue(app.buttons["stop-replay-header"].waitForExistence(timeout: 8))
-        XCTAssertEqual(app.staticTexts["session-replay-position"].value as? String, "10.0 of 10.0 seconds")
+        XCTAssertEqual(app.staticTexts["replay-position"].value as? String, "10.0 of 10.0 seconds")
     }
     private func seek(_ seconds: String, duration: String) {
+        if !app.textFields["replay-seek-seconds"].exists { tapVisible("replay-seek-details") }
         let input = app.textFields["replay-seek-seconds"]
         XCTAssertTrue(reveal(input, missingAbove: true)); input.tap()
         if let current = input.value as? String, Double(current) != nil {

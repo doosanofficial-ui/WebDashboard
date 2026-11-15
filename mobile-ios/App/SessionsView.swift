@@ -14,6 +14,8 @@ struct SessionsView: View {
     @State private var showingSessionPicker = false
     @State private var seekText = ""
     @State private var seekError: String?
+    @State private var showingSeekToTime = false
+    @State private var showingReplaySessionManagement = false
     @FocusState private var seekFieldFocused: Bool
     @State private var exportRequest = MeasurementExportRequest()
     // Keep explicit choices when lazy/disclosure content is recreated.
@@ -29,16 +31,31 @@ struct SessionsView: View {
                     LazyVStack(alignment: .leading, spacing: TelemetryTheme.Spacing.medium) {
                         if model.runMode == .replay {
                             replayHeader()
-                            compactReplayControls()
-                            ReplayAnalysisView(model: model)
+                            if model.replayController.loading {
+                                HStack {
+                                    ProgressView(AppLocalization.text("Loading recording"))
+                                    Button(AppLocalization.text("Cancel loading"), action: model.stopReplay)
+                                        .accessibilityIdentifier("cancel-replay-loading")
+                                }
+                            }
                             replayTimeCard
-                            savedSessionCard
+                            ReplayAnalysisView(model: model)
+                            DisclosureGroup(AppLocalization.text("Saved sessions"), isExpanded: $showingReplaySessionManagement) {
+                                savedSessionCard(showTitle: false)
+                            }
+                            .accessibilityIdentifier("replay-session-management")
+                            DisclosureGroup(AppLocalization.text("About Replay")) {
+                                Text(AppLocalization.text("Explore recorded time without acquisition or recording. Use CSV/JSON to preserve the original measurements. Play advances only recorded time; seek pauses playback."))
+                                Text(AppLocalization.text("Play and seek rebuild recorded values and MARK without acquisition. Seek pauses playback. Signal freshness is unknown when the recording has no timeout policy. Values and original timestamps remain unchanged."))
+                            }
+                            .font(.caption)
+                            .accessibilityIdentifier("replay-explanation")
                             DisclosureGroup(AppLocalization.text("Session details")) { sessionStats }
                         } else {
                             sessionHero
                             sessionControls
                             sessionStats
-                            savedSessionCard
+                            savedSessionCard(showTitle: true)
                         }
                         exportCard
                         if model.runMode == .replay {
@@ -108,6 +125,7 @@ struct SessionsView: View {
             selectedVoltageSignalID = nil
             selectedCurrentSignalID = nil
             selectedCurrentSignConventionRawValue = nil
+            showingReplaySessionManagement = false
         }
     }
 
@@ -130,53 +148,12 @@ struct SessionsView: View {
         }
     }
 
-    // Quick analysis controls reuse the recorded-time controller. Detailed seeking remains below.
-    private func compactReplayControls() -> some View {
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
-            : AnyLayout(HStackLayout(spacing: 12))
-        return layout {
-            if model.replayController.isPlaying {
-                Button { model.pauseReplayPlayback() } label: {
-                    Label(AppLocalization.text("Pause"), systemImage: "pause.fill").frame(minHeight: 44)
-                }
-                .accessibilityIdentifier("session-replay-pause")
-            } else {
-                Button { model.playReplay() } label: {
-                    Label(AppLocalization.text("Play"), systemImage: "play.fill").frame(minHeight: 44)
-                }
-                .disabled(model.replayController.position >= model.replayController.duration)
-                .accessibilityIdentifier("session-replay-play")
-            }
-            Text(AppLocalization.text(String(format: "%.1f / %.1f s", model.replayController.position, model.replayController.duration)))
-                .font(.caption.monospacedDigit())
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityLabel(AppLocalization.text("Recorded time"))
-                .accessibilityValue(AppLocalization.text(String(format: "%.1f of %.1f seconds", model.replayController.position, model.replayController.duration)))
-                .accessibilityIdentifier("session-replay-position")
-            Menu {
-                ForEach([0.5, 1.0, 2.0], id: \.self) { rate in
-                    Button(AppLocalization.text(String(format: "%g×", rate))) { model.setReplayPlaybackRate(rate) }
-                }
-            } label: {
-                Label(AppLocalization.text(String(format: "%g×", model.replayController.playbackRate)), systemImage: "speedometer")
-                    .frame(minHeight: 44)
-            }
-            .disabled(model.replayController.duration <= 0)
-            .accessibilityLabel(AppLocalization.text("Replay speed"))
-            .accessibilityValue(AppLocalization.text(String(format: "%g times", model.replayController.playbackRate)))
-            .accessibilityIdentifier("session-replay-speed")
-        }
-        .buttonStyle(.bordered).tint(TelemetryTheme.accent)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("session-replay-quick-controls")
-    }
-
-    private var savedSessionCard: some View {
+    private func savedSessionCard(showTitle: Bool) -> some View {
         VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
-            Label(AppLocalization.text("SAVED SESSIONS"), systemImage: "archivebox")
-                .font(.headline)
+            if showTitle {
+                Label(AppLocalization.text("SAVED SESSIONS"), systemImage: "archivebox")
+                    .font(.headline)
+            }
             Button { showingSessionPicker = true } label: {
                 Text(AppLocalization.text(selectedSessionDescription))
                     .fixedSize(horizontal: false, vertical: true)
@@ -195,21 +172,7 @@ struct SessionsView: View {
                     .accessibilityIdentifier("replay-saved-session")
             }
             .buttonStyle(.bordered)
-            if model.runMode == .replay {
-                Button(AppLocalization.text("Stop Replay"), action: model.stopReplay)
-                    .buttonStyle(.bordered)
-                    .accessibilityIdentifier("stop-replay")
-            }
             Text(AppLocalization.text(model.archiveStatus)).font(.caption)
-            if model.replayController.loading {
-                HStack {
-                    ProgressView(AppLocalization.text("Loading recording"))
-                    Button(AppLocalization.text("Cancel loading"), action: model.stopReplay)
-                        .accessibilityIdentifier("cancel-replay-loading")
-                }
-            }
-            Text(AppLocalization.text("Explore recorded time without acquisition or recording. Use CSV/JSON to preserve the original measurements. Play advances only recorded time; seek pauses playback."))
-                .font(.caption2).foregroundStyle(TelemetryTheme.mutedText)
         }
         .telemetrySurface(.standard)
         .accessibilityElement(children: .contain)
@@ -271,6 +234,8 @@ struct SessionsView: View {
                 .accessibilityIdentifier("replay-recording-origin")
             Text(AppLocalization.text(String(format: "%.1f / %.1f seconds", model.replayController.position, model.replayController.duration)))
                 .monospacedDigit()
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityValue(AppLocalization.text(String(format: "%.1f of %.1f seconds", model.replayController.position, model.replayController.duration)))
                 .accessibilityIdentifier("replay-position")
             if !hasTimeRange && !model.replayController.loading && model.replayController.snapshot != nil {
                 Text(AppLocalization.text(model.replayController.measurementCount == 0
@@ -282,21 +247,30 @@ struct SessionsView: View {
             }
             controlsLayout {
                 if model.replayController.isPlaying {
-                    Button(AppLocalization.text("Pause")) { model.pauseReplayPlayback() }
+                    Button { model.pauseReplayPlayback() } label: {
+                        Label(AppLocalization.text("Pause"), systemImage: "pause.fill").frame(minHeight: 44)
+                    }
                         .accessibilityIdentifier("replay-pause")
                 } else {
-                    Button(AppLocalization.text("Play")) { model.playReplay() }
+                    Button { model.playReplay() } label: {
+                        Label(AppLocalization.text("Play"), systemImage: "play.fill").frame(minHeight: 44)
+                    }
                         .disabled(model.replayController.position >= model.replayController.duration)
-                        .accessibilityIdentifier("replay-play")
+                        .accessibilityIdentifier("session-replay-play")
                 }
-                Picker(AppLocalization.text("Speed"), selection: Binding(get: { model.replayController.playbackRate },
-                    set: { model.setReplayPlaybackRate($0) })) {
-                    Text(AppLocalization.text("0.5×")).tag(0.5)
-                    Text(AppLocalization.text("1×")).tag(1.0)
-                    Text(AppLocalization.text("2×")).tag(2.0)
+                Menu {
+                    ForEach([0.5, 1.0, 2.0], id: \.self) { rate in
+                        Button(AppLocalization.text(String(format: "%g×", rate))) {
+                            model.setReplayPlaybackRate(rate)
+                        }
+                    }
+                } label: {
+                    Label(AppLocalization.text(String(format: "%g×", model.replayController.playbackRate)), systemImage: "speedometer")
+                        .frame(minHeight: 44)
                 }
-                .pickerStyle(.segmented)
                 .disabled(!hasTimeRange)
+                .accessibilityLabel(AppLocalization.text("Replay speed"))
+                .accessibilityValue(AppLocalization.text(String(format: "%g times", model.replayController.playbackRate)))
                 .accessibilityIdentifier("replay-speed")
             }
             .buttonStyle(.bordered).controlSize(.large)
@@ -341,28 +315,31 @@ struct SessionsView: View {
                     .accessibilityIdentifier("replay-seek-end")
             }
             .buttonStyle(.bordered).controlSize(.large)
-            controlsLayout {
-                TextField(AppLocalization.text("Seconds"), text: $seekText)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($seekFieldFocused)
-                    .submitLabel(.go)
-                    .onSubmit(performSeekFromText)
-                    .disabled(!hasTimeRange)
-                    .accessibilityLabel(AppLocalization.text("Seek to recorded seconds"))
-                    .accessibilityIdentifier("replay-seek-seconds")
-                Button(AppLocalization.text("Go"), action: performSeekFromText)
-                    .disabled(!hasTimeRange)
-                    .accessibilityIdentifier("replay-seek-go")
+            DisclosureGroup(AppLocalization.text("Seek to time"), isExpanded: $showingSeekToTime) {
+                controlsLayout {
+                    TextField(AppLocalization.text("Seconds"), text: $seekText)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($seekFieldFocused)
+                        .submitLabel(.go)
+                        .onSubmit(performSeekFromText)
+                        .disabled(!hasTimeRange)
+                        .accessibilityLabel(AppLocalization.text("Seek to recorded seconds"))
+                        .accessibilityIdentifier("replay-seek-seconds")
+                    Button(AppLocalization.text("Go"), action: performSeekFromText)
+                        .disabled(!hasTimeRange)
+                        .accessibilityIdentifier("replay-seek-go")
+                }
+                .buttonStyle(.bordered).controlSize(.large)
+                if let seekError {
+                    Text(AppLocalization.text(seekError)).font(.caption).foregroundStyle(TelemetryTheme.critical)
+                        .accessibilityIdentifier("replay-seek-error")
+                }
+                if hasTimeRange {
+                    Text(AppLocalization.text(String(format: "Recorded range: 0–%.1f seconds. Values outside this range seek to the nearest end.", model.replayController.duration)))
+                        .font(.caption).foregroundStyle(TelemetryTheme.mutedText)
+                }
             }
-            .buttonStyle(.bordered).controlSize(.large)
-            if let seekError {
-                Text(AppLocalization.text(seekError)).font(.caption).foregroundStyle(TelemetryTheme.critical)
-                    .accessibilityIdentifier("replay-seek-error")
-            }
-            if hasTimeRange {
-                Text(AppLocalization.text(String(format: "Recorded range: 0–%.1f seconds. Values outside this range seek to the nearest end.", model.replayController.duration)))
-                    .font(.caption).foregroundStyle(TelemetryTheme.mutedText)
-            }
+            .accessibilityIdentifier("replay-seek-details")
             if model.replayController.duration > 0 && model.replayController.position >= model.replayController.duration {
                 Text(AppLocalization.text("End reached · Start to replay"))
                     .font(.caption.weight(.semibold)).foregroundStyle(TelemetryTheme.accent)
@@ -381,8 +358,6 @@ struct SessionsView: View {
                     .accessibilityIdentifier("slider-editing-audit")
             }
             #endif
-            Text(AppLocalization.text("Play and seek rebuild recorded values and MARK without acquisition. Seek pauses playback. Signal freshness is unknown when the recording has no timeout policy. Values and original timestamps remain unchanged."))
-                .font(.caption2).foregroundStyle(TelemetryTheme.mutedText)
         }
         .telemetrySurface(.standard)
         .accessibilityElement(children: .contain)
@@ -390,7 +365,7 @@ struct SessionsView: View {
         .onAppear { if !isScrubbing { scrubSeconds = model.replayController.position } }
         .onDisappear { isScrubbing = false; seekFieldFocused = false }
         .onChange(of: model.replayController.sessionID) { _, _ in
-            seekText = ""; seekError = nil; isScrubbing = false
+            seekText = ""; seekError = nil; isScrubbing = false; showingSeekToTime = false
         }
         .onChange(of: model.replayController.position) { _, value in
             #if DEBUG
