@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Seed and test Replay UI on a new disposable Simulator; never contacts a physical device."""
 import argparse
+import hashlib
 import json
 import datetime
 import os
@@ -854,16 +855,20 @@ def main():
     selection.add_argument("--se-viewport", action="store_true",
                            help="Re-execute the two viewport tests on iPhone SE (3rd generation), iOS 27.x only")
     selection.add_argument("--group", choices=TEST_GROUPS, help="Disjoint portion of the full 31-test CI gate")
-    selection.add_argument("--only-test", choices=["background-export-lifecycle", "active-slider-drag", "ui-clarity", "single-instant", "large-text", "recorded-history", "recorded-route", "native-save-reentry", "native-export-dismissal", "help-capture", "replay-speed"],
+    selection.add_argument("--only-test", choices=["background-export-lifecycle", "active-slider-drag", "ui-clarity", "single-instant", "large-text", "recorded-history", "recorded-route", "native-save-reentry", "native-export-dismissal", "help-capture", "help-ko-landscape", "replay-speed", "seeded-picker", "setup-adapter-entry", "signal-dashboard", "profile-files", "invalid-custom-pid"],
                         help="Run one new native lifecycle test; default executes all twenty-five UI regressions")
     args = parser.parse_args()
     results = args.result_directory.resolve()
     create_result_directory(results)
-    focused_methods = {"native-export-dismissal": "testNativeExportCancelReentryAndReplayAcrossTabs", "background-export-lifecycle": "testNativeExportBackgroundReturnCancelAndReentry",
+    focused_methods = {"native-export-dismissal": "testNativeExportCancelReentryAndReplayAcrossTabs", "background-export-lifecycle": "testNativeExportBackgroundReturnCancelAndReentry", "seeded-picker": "testSeededSessionPickerSnapshotAndReadOnlyControls",
                        "active-slider-drag": "testPlayingLongSliderDragPreservesCapturedUserTarget",
                        "recorded-history": "testRecordedSignalHistoryContainsOnlySelectedTimePrefix",
-                       "recorded-route": "testRecordedGPSRouteContainsOnlySelectedTimePrefix"}
-    selected_tests = ["-only-testing:TelemetryUITests/OfflineReplayUITests/testRecordedPlaybackPauseSpeedAndAutomaticEnd"] if args.only_test == "replay-speed" else ["-only-testing:" + test for test in HELP_CAPTURE_TESTS] if args.only_test == "help-capture" else ["-only-testing:TelemetryUITests/OfflineReplayUITests/testNativeExportBackgroundReturnCancelAndReentry", "-only-testing:TelemetryUITests/OfflineReplayUITests/testNativeJSONCSVSaveConfirmsCompletion"] if args.only_test == "native-save-reentry" else ["-only-testing:TelemetryUITests/UIClarityUITests/testRecordedTimeAccessibilityAtLargeTextAndLandscape"] if args.only_test == "large-text" else ["-only-testing:TelemetryUITests/UIClarityUITests/testSingleInstantRecordingExplainsUnavailableTimeNavigation"] if args.only_test == "single-instant" else ["-only-testing:TelemetryUITests/UIClarityUITests"] if args.only_test == "ui-clarity" else ["-only-testing:TelemetryUITests/OfflineReplayUITests/" + focused_methods[args.only_test]] if args.only_test else [
+                       "recorded-route": "testRecordedGPSRouteContainsOnlySelectedTimePrefix",
+                       "invalid-custom-pid": "testInvalidHexRequestIsRejectedBeforeAnyVehicleAction"}
+    app_focused_methods = {"setup-adapter-entry": "testAdapterProfileImportAndLiveControlsAreVisible",
+                           "signal-dashboard": "testSignalCatalogAddsNumericWidgetToDashboard",
+                           "profile-files": "testAdapterProfileFilesExportAndImportRoundTrip"}
+    selected_tests = ["-only-testing:TelemetryUITests/TelemetryUITests/" + app_focused_methods[args.only_test]] if args.only_test in app_focused_methods else ["-only-testing:TelemetryUITests/LocalizationHelpUITests/testKoreanHelpAtMaximumTextAndLandscape"] if args.only_test == "help-ko-landscape" else ["-only-testing:TelemetryUITests/OfflineReplayUITests/testRecordedPlaybackPauseSpeedAndAutomaticEnd"] if args.only_test == "replay-speed" else ["-only-testing:" + test for test in HELP_CAPTURE_TESTS] if args.only_test == "help-capture" else ["-only-testing:TelemetryUITests/OfflineReplayUITests/testNativeExportBackgroundReturnCancelAndReentry", "-only-testing:TelemetryUITests/OfflineReplayUITests/testNativeJSONCSVSaveConfirmsCompletion"] if args.only_test == "native-save-reentry" else ["-only-testing:TelemetryUITests/UIClarityUITests/testRecordedTimeAccessibilityAtLargeTextAndLandscape"] if args.only_test == "large-text" else ["-only-testing:TelemetryUITests/UIClarityUITests/testSingleInstantRecordingExplainsUnavailableTimeNavigation"] if args.only_test == "single-instant" else ["-only-testing:TelemetryUITests/UIClarityUITests"] if args.only_test == "ui-clarity" else ["-only-testing:TelemetryUITests/OfflineReplayUITests/" + focused_methods[args.only_test]] if args.only_test else [
         "-only-testing:TelemetryUITests/OfflineReplayUITests",
         "-only-testing:TelemetryUITests/TelemetryUITests/testMeasurementExportControlIsVisible",
         "-only-testing:TelemetryUITests/TelemetryUITests/testMeasurementCSVExportControlIsVisible",
@@ -872,6 +877,8 @@ def main():
         "-only-testing:TelemetryUITests/SmallViewportUIRegression",
         "-only-testing:TelemetryUITests/SmallViewportStatusUIRegression",
         "-only-testing:TelemetryUITests/LocalizationHelpUITests"]
+    if args.only_test == "invalid-custom-pid":
+        selected_tests = ["-only-testing:TelemetryUITests/CustomPIDUITests/testInvalidHexRequestIsRejectedBeforeAnyVehicleAction"]
     expected_count = 2 if args.only_test == "native-save-reentry" else 5 if args.only_test == "ui-clarity" else 1 if args.only_test else 31
     if args.only_test == "help-capture":
         selected_tests = ["-only-testing:" + test for test in HELP_CAPTURE_TESTS]
@@ -967,6 +974,21 @@ def main():
                                      timeout=APP_CONTAINER_TIMEOUT_SECONDS).strip())
             failure_phase = "fixture-install"
             install_fixture(fixture, container / "Library/Application Support/Telemetry")
+            if args.only_test == "profile-files":
+                profile_source = root / "scripts/fixtures/synthetic-profile-files.json"
+                profile_bytes = profile_source.read_bytes()
+                profile_json = json.loads(profile_bytes)
+                if (profile_json.get("id") != "synthetic.files.roundtrip"
+                        or profile_json.get("host") != "127.0.0.1"
+                        or profile_json.get("schema_version") != 1):
+                    raise ValueError("Profile Files test requires the exact local-only synthetic fixture")
+                target = container / "Library/Application Support/Telemetry/adapter-profile.json"
+                target.write_bytes(profile_bytes)
+                (results / "profile-files-fixture.json").write_text(json.dumps({
+                    "source": str(profile_source), "sha256": hashlib.sha256(profile_bytes).hexdigest(),
+                    "target": "owned Simulator app container/Library/Application Support/Telemetry/adapter-profile.json",
+                    "scope": "synthetic loopback profile; no adapter connection"
+                }, indent=2))
             if export_audit_enabled:
                 export_audit.install_marker(container, current_commit(root))
             bundle = results / "ReplayUI.xcresult"

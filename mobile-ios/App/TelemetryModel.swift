@@ -1028,25 +1028,32 @@ final class TelemetryModel: NSObject {
         persistDashboardProfile()
     }
 
-    func addDashboardWidget(pageID: String, type: DashboardWidgetType) {
+    @discardableResult
+    func addDashboardWidget(
+        pageID: String,
+        type: DashboardWidgetType,
+        binding: (id: String, label: String, unit: String, decimals: Int,
+                  minimum: Double?, maximum: Double?)? = nil
+    ) -> Bool {
         guard var profile = dashboardProfile,
-              let page = profile.pages.first(where: { $0.id == pageID }) else { return }
+              let page = profile.pages.first(where: { $0.id == pageID }) else { return false }
         let id = "widget-\(type.rawValue)-\(UUID().uuidString.prefix(8).lowercased())"
         let maxRow = page.widgets.map { $0.rect.y + $0.rect.height }.max() ?? 0
         let dimensions: (width: Int, height: Int) = type == .map
             ? (6, 3)
             : (type == .timeSeries ? (3, 2) : (2, 1))
-        let signalID: String? = [
+        let defaultSignalID: String? = [
             .numericGauge, .circularGauge, .semiCircularGauge,
             .horizontalBar, .verticalBar, .led, .timeSeries
         ].contains(type) ? "ws_fl" : nil
-        let unit = signalID == nil ? "" : "km/h"
+        let signalID = binding?.id ?? defaultSignalID
+        let unit = binding?.unit ?? (signalID == nil ? "" : "km/h")
         let configuration = DashboardWidgetConfiguration(
-            label: Self.widgetLabel(type),
+            label: binding?.label ?? Self.widgetLabel(type),
             unit: unit,
-            decimals: 1,
-            minimum: signalID == nil ? nil : 0,
-            maximum: signalID == nil ? nil : 240,
+            decimals: binding?.decimals ?? 1,
+            minimum: binding?.id == nil && signalID != nil ? 0 : binding?.minimum,
+            maximum: binding?.id == nil && signalID != nil ? 240 : binding?.maximum,
             warningThreshold: nil,
             criticalThreshold: nil
         )
@@ -1058,9 +1065,10 @@ final class TelemetryModel: NSObject {
             zIndex: (page.widgets.map(\.zIndex).max() ?? 0) + 1,
             configuration: configuration
         )
-        guard (try? profile.addWidget(widget, toPage: pageID)) != nil else { return }
+        guard (try? profile.addWidget(widget, toPage: pageID)) != nil else { return false }
         dashboardProfile = profile
         persistDashboardProfile()
+        return dashboardSaveError == nil
     }
 
     func snapDashboard(pageID: String, grid: Int = 1) {

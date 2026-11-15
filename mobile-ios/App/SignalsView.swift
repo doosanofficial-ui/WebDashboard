@@ -9,6 +9,7 @@ struct SignalsView: View {
     @State private var searchText = ""
     @State private var showStaleOnly = false
     @State private var showDeveloperControls = false
+    @State private var dashboardActionStatus: String?
 
     var body: some View {
         NavigationStack {
@@ -19,6 +20,12 @@ struct SignalsView: View {
                     LazyVStack(alignment: .leading, spacing: TelemetryTheme.Spacing.medium) {
                         healthCard(at: displayDate)
                         filterBar()
+                        if let dashboardActionStatus {
+                            Text(dashboardActionStatus)
+                                .font(.caption)
+                                .foregroundStyle(TelemetryTheme.accent)
+                                .accessibilityIdentifier("signal-dashboard-action-status")
+                        }
                         signalCatalog(at: displayDate)
                         rawCANCard()
                         NavigationLink {
@@ -176,27 +183,59 @@ struct SignalsView: View {
         let color = label.contains("INVALID") ? TelemetryTheme.critical
             : model.runMode == .replay ? TelemetryTheme.mutedText : fresh ? TelemetryTheme.valid : TelemetryTheme.warning
         return VStack(alignment: .leading, spacing: 7) {
-            Text(row.name)
-                .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(AppLocalization.text(format(value, decimals: row.decimals)))
-                    .font(.system(size: 30, weight: .semibold, design: .rounded)).monospacedDigit()
-                    .foregroundStyle(value?.isFinite == true ? .white : TelemetryTheme.mutedText)
-                Text(verbatim: row.unit.isEmpty ? "-" : row.unit)
-                    .font(.caption).foregroundStyle(TelemetryTheme.mutedText)
+            VStack(alignment: .leading, spacing: 7) {
+                Text(row.name)
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(AppLocalization.text(format(value, decimals: row.decimals)))
+                        .font(.system(size: 30, weight: .semibold, design: .rounded)).monospacedDigit()
+                        .foregroundStyle(value?.isFinite == true ? .white : TelemetryTheme.mutedText)
+                    Text(verbatim: row.unit.isEmpty ? "-" : row.unit)
+                        .font(.caption).foregroundStyle(TelemetryTheme.mutedText)
+                }
+                Text(AppLocalization.text(label)).font(.caption.weight(.semibold)).foregroundStyle(color)
+                if model.runMode == .replay {
+                    Text(AppLocalization.text(TelemetryDisplayState.freshnessLabel(model.replaySignalFreshness[row.id])))
+                        .font(.caption).foregroundStyle(TelemetryTheme.mutedText)
+                }
+                Text(AppLocalization.text(row.detail)).font(.caption2.monospaced()).foregroundStyle(TelemetryTheme.quietText)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Text(AppLocalization.text(label)).font(.caption.weight(.semibold)).foregroundStyle(color)
-            if model.runMode == .replay {
-                Text(AppLocalization.text(TelemetryDisplayState.freshnessLabel(model.replaySignalFreshness[row.id])))
-                    .font(.caption).foregroundStyle(TelemetryTheme.mutedText)
+            .accessibilityElement(children: .combine)
+            if let dashboard = model.dashboardProfile {
+                Menu {
+                    ForEach(dashboard.pages) { page in
+                        Menu(page.name) {
+                            Button(AppLocalization.text("Numeric Gauge")) {
+                                addSignalWidget(row, to: page.id, type: .numericGauge)
+                            }
+                            if let minimum = row.minimum, let maximum = row.maximum, maximum > minimum {
+                                Button(AppLocalization.text("Circular Gauge")) {
+                                    addSignalWidget(row, to: page.id, type: .circularGauge)
+                                }
+                                Button(AppLocalization.text("Horizontal Bar")) {
+                                    addSignalWidget(row, to: page.id, type: .horizontalBar)
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Label(AppLocalization.text("Add to dashboard"), systemImage: "plus.square")
+                }
+                .accessibilityIdentifier("add-signal-widget-\(row.id)")
             }
-            Text(AppLocalization.text(row.detail)).font(.caption2.monospaced()).foregroundStyle(TelemetryTheme.quietText)
-                .fixedSize(horizontal: false, vertical: true)
         }
         .telemetrySurface(.standard, padding: TelemetryTheme.Spacing.small)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("signal-row-\(row.id)")
+    }
+
+    private func addSignalWidget(_ row: SignalRow, to pageID: String, type: DashboardWidgetType) {
+        let saved = model.addDashboardWidget(pageID: pageID, type: type,
+            binding: (id: row.id, label: row.name, unit: row.unit, decimals: row.decimals,
+                      minimum: row.minimum, maximum: row.maximum))
+        dashboardActionStatus = AppLocalization.text(saved ? "Widget added to dashboard" : "Widget could not be saved")
     }
 
     private func rawCANCard() -> some View {
@@ -284,6 +323,8 @@ struct SignalsView: View {
                     name: $0.name,
                     unit: $0.unit,
                     decimals: decimals(for: $0.factor),
+                    minimum: $0.minimum,
+                    maximum: $0.maximum,
                     detail: "0x\(String($0.canID, radix: 16, uppercase: true)) · \($0.byteOrder.rawValue.uppercased()) · \($0.bitLength) bit"
                 )
             }
@@ -294,6 +335,8 @@ struct SignalsView: View {
                         name: signal.name,
                         unit: signal.unit,
                         decimals: decimals(for: signal.factor),
+                        minimum: signal.minimum,
+                        maximum: signal.maximum,
                         detail: "DIAGNOSTIC · 0x\(String(query.requestCANID, radix: 16, uppercase: true)) → 0x\(String(query.responseCANID, radix: 16, uppercase: true)) · \(query.service.rawValue) \(query.command) · \(query.pollInterval)s"
                     )
                 }
@@ -375,5 +418,7 @@ private struct SignalRow: Identifiable {
     let name: String
     let unit: String
     let decimals: Int
+    var minimum: Double? = nil
+    var maximum: Double? = nil
     let detail: String
 }

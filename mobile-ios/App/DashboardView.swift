@@ -59,6 +59,8 @@ private struct SetupView: View {
     @Bindable var model: TelemetryModel
     @State private var credential = ""
     @State private var importingAdapterProfile = false
+    @State private var exportingAdapterProfile = false
+    @State private var adapterProfileDocument: MeasurementExportDocument?
     @State private var signalEditorPresented = false
     @State private var developerExpanded = false
     @State private var bleExpanded = false
@@ -90,6 +92,18 @@ private struct SetupView: View {
                     return
                 }
                 model.importAdapterProfile(data)
+            }
+            .fileExporter(
+                isPresented: $exportingAdapterProfile,
+                document: adapterProfileDocument,
+                contentType: .json,
+                defaultFilename: "telemetry-adapter-profile"
+            ) { result in
+                switch result {
+                case .success: model.adapterProfileStatus = "Adapter profile JSON saved"
+                case .failure: model.adapterProfileStatus = "Adapter profile export cancelled or failed"
+                }
+                adapterProfileDocument = nil
             }
             .sheet(isPresented: $signalEditorPresented) {
                 if let profile = model.adapterProfile {
@@ -223,26 +237,31 @@ private struct SetupView: View {
 
     private var adapterCard: some View {
         VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
-            HStack {
-                Label(AppLocalization.text("ADAPTER PROFILE"), systemImage: "cable.connector.horizontal")
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(.white)
-                Spacer()
-                Text(AppLocalization.text(model.adapterProfile == nil ? "NOT CONFIGURED" : "LOADED"))
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(model.adapterProfile == nil ? TelemetryTheme.warning : TelemetryTheme.valid)
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    adapterProfileHeading.fixedSize(horizontal: true, vertical: false)
+                    Spacer()
+                    adapterProfileState.fixedSize(horizontal: true, vertical: false)
+                }
+                VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
+                    adapterProfileHeading.fixedSize(horizontal: false, vertical: true)
+                    adapterProfileState.fixedSize(horizontal: false, vertical: true)
+                }
             }
             Text(AppLocalization.text(model.adapterProfileStatus))
                 .font(.caption)
                 .foregroundStyle(TelemetryTheme.mutedText)
-            HStack(spacing: TelemetryTheme.Spacing.small) {
-                Button(AppLocalization.text("Import JSON")) { importingAdapterProfile = true }
-                    .buttonStyle(.bordered)
-                    .accessibilityIdentifier("import-adapter-profile")
-                Button(AppLocalization.text("Edit signals")) { signalEditorPresented = true }
-                    .buttonStyle(.bordered)
-                    .disabled(model.adapterProfile == nil)
-                    .accessibilityIdentifier("edit-signal-catalog")
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: TelemetryTheme.Spacing.small) { adapterProfileActions(wrapping: false) }
+                VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) { adapterProfileActions(wrapping: true) }
+            }
+            Text(AppLocalization.text(model.adapterStatus))
+                .font(.caption)
+                .foregroundStyle(TelemetryTheme.mutedText)
+                .accessibilityIdentifier("setup-live-adapter-status")
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: TelemetryTheme.Spacing.small) { liveAdapterActions(wrapping: false) }
+                VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) { liveAdapterActions(wrapping: true) }
             }
             Text(AppLocalization.text("The profile must contain observed BLE UUIDs or a verified Wi-Fi endpoint. No ELM327 identifiers are guessed."))
                 .font(.caption)
@@ -253,18 +272,74 @@ private struct SetupView: View {
         .accessibilityIdentifier("setup-adapter-card")
     }
 
+    private var adapterProfileHeading: some View {
+        Label(AppLocalization.text("ADAPTER PROFILE"), systemImage: "cable.connector.horizontal")
+            .font(.headline.weight(.semibold))
+            .foregroundStyle(.white)
+    }
+
+    private var adapterProfileState: some View {
+        Text(AppLocalization.text(model.adapterProfile == nil ? "NOT CONFIGURED" : "LOADED"))
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(model.adapterProfile == nil ? TelemetryTheme.warning : TelemetryTheme.valid)
+    }
+
+    @ViewBuilder private func adapterProfileActions(wrapping: Bool) -> some View {
+        Button { importingAdapterProfile = true } label: {
+            actionLabel("Import JSON", wrapping: wrapping)
+        }
+            .buttonStyle(.bordered)
+            .accessibilityIdentifier("import-adapter-profile")
+        Button(action: exportAdapterProfile) {
+            actionLabel("Export JSON", wrapping: wrapping)
+        }
+            .buttonStyle(.bordered)
+            .disabled(model.adapterProfile == nil)
+            .accessibilityIdentifier("export-adapter-profile")
+        Button { signalEditorPresented = true } label: {
+            actionLabel("Edit signals", wrapping: wrapping)
+        }
+            .buttonStyle(.bordered)
+            .disabled(model.adapterProfile == nil)
+            .accessibilityIdentifier("edit-signal-catalog")
+    }
+
+    @ViewBuilder private func liveAdapterActions(wrapping: Bool) -> some View {
+        Button(action: model.startLiveAdapter) {
+            actionLabel("Start live adapter", wrapping: wrapping)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(TelemetryTheme.accent)
+        .disabled(model.adapterProfile == nil || model.runMode == .replay)
+        .accessibilityIdentifier("start-live-adapter")
+        Button(role: .destructive, action: model.stopLiveAdapter) {
+            actionLabel("Stop", wrapping: wrapping)
+        }
+        .buttonStyle(.bordered)
+        .accessibilityIdentifier("stop-live-adapter")
+    }
+
+    private func actionLabel(_ key: String, wrapping: Bool) -> some View {
+        Text(AppLocalization.text(key))
+            .fixedSize(horizontal: !wrapping, vertical: true)
+            .frame(maxWidth: wrapping ? .infinity : nil, alignment: .leading)
+    }
+
+    private func exportAdapterProfile() {
+        guard let profile = model.adapterProfile else { return }
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            adapterProfileDocument = MeasurementExportDocument(data: try encoder.encode(profile))
+            exportingAdapterProfile = true
+        } catch {
+            model.adapterProfileStatus = "Adapter profile export could not be prepared"
+        }
+    }
+
     private var developerCard: some View {
         DisclosureGroup(isExpanded: $developerExpanded) {
             VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.medium) {
-                HStack(spacing: TelemetryTheme.Spacing.small) {
-                    Button(AppLocalization.text("Start live adapter"), action: model.startLiveAdapter)
-                        .buttonStyle(.borderedProminent)
-                        .tint(TelemetryTheme.accent)
-                        .disabled(model.adapterProfile == nil)
-                        .accessibilityIdentifier("start-live-adapter")
-                    Button(AppLocalization.text("Stop"), role: .destructive, action: model.stopLiveAdapter)
-                        .buttonStyle(.bordered)
-                }
                 DisclosureGroup(isExpanded: $bleExpanded) {
                     VStack(alignment: .leading, spacing: TelemetryTheme.Spacing.small) {
                         HStack(spacing: TelemetryTheme.Spacing.small) {

@@ -54,6 +54,28 @@ final class DashboardModelTests: XCTestCase {
         XCTAssertEqual(page.widgets.map(\.id), ["speed-copy"])
     }
 
+    func testOneSOCSignalCanDriveMultiplePersistedWidgetStyles() throws {
+        var original = try profile()
+        let configuration = DashboardWidgetConfiguration(
+            label: "Battery SOC", unit: "%", decimals: 1,
+            minimum: 0, maximum: 100, warningThreshold: nil, criticalThreshold: nil
+        )
+        let styles: [DashboardWidgetType] = [.numericGauge, .circularGauge, .horizontalBar]
+        for (index, style) in styles.enumerated() {
+            try original.addWidget(DashboardWidgetDefinition(
+                id: "soc-\(index)", type: style, signalID: "battery.soc",
+                rect: DashboardRect(x: 0, y: index + 1, width: 2, height: 1),
+                zIndex: index + 2, configuration: configuration
+            ), toPage: "main")
+        }
+
+        let restored = try JSONDecoder().decode(DashboardProfile.self, from: JSONEncoder().encode(original))
+        let socWidgets = restored.pages[0].widgets.filter { $0.signalID == "battery.soc" }
+        XCTAssertEqual(socWidgets.map(\.type), styles)
+        XCTAssertTrue(socWidgets.allSatisfy { $0.configuration == configuration })
+        XCTAssertEqual(Set(socWidgets.map(\.id)).count, 3)
+    }
+
     func testProfileCanAddEverySupportedWidgetType() throws {
         var profile = try profile()
         for type in DashboardWidgetType.allCases {

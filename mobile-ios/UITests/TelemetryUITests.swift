@@ -160,15 +160,159 @@ final class TelemetryUITests: XCTestCase {
         XCTAssertTrue(app.buttons["start-adapter-demo"].waitForExistence(timeout: 5))
     }
 
+    func testSignalCatalogAddsNumericWidgetToDashboard() {
+        let app = XCUIApplication()
+        app.launchArguments += ["--app-language", "en"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
+        app.tabBars.buttons["Signals"].tap()
+        app.buttons["Developer / Adapter"].tap()
+        app.buttons["start-adapter-demo"].tap()
+        let addControl = app.buttons["add-signal-widget-demo.signal"]
+        for _ in 0..<12 where !addControl.exists { app.swipeUp() }
+        XCTAssertTrue(addControl.waitForExistence(timeout: 10), "The synthetic signal needs a direct dashboard action")
+        addControl.tap()
+        // The offline fixture restores its own dashboard page; a fresh install uses Main.
+        let fixturePage = app.buttons["Fixture"]
+        let targetPage = fixturePage.exists ? fixturePage : app.buttons["Main"]
+        XCTAssertTrue(targetPage.waitForExistence(timeout: 5))
+        targetPage.tap()
+        let numeric = app.buttons["Numeric Gauge"]
+        XCTAssertTrue(numeric.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.frame.contains(numeric.frame), "The menu action must be on screen")
+        numeric.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.staticTexts["signal-dashboard-action-status"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["signal-dashboard-action-status"].label, "Widget added to dashboard")
+        func revealAddedWidget() {
+            let addedWidget = app.staticTexts["DEMO SIGNAL"]
+            for _ in 0..<20 where !addedWidget.isHittable { app.swipeUp() }
+            XCTAssertTrue(addedWidget.isHittable, "The added signal must appear on the dashboard")
+        }
+        app.tabBars.buttons["Live"].tap()
+        revealAddedWidget()
+        let capture = XCTAttachment(screenshot: app.screenshot())
+        capture.name = "signal-added-to-dashboard-synthetic"
+        capture.lifetime = .keepAlways
+        add(capture)
+
+        app.terminate()
+        app.launch()
+        revealAddedWidget()
+    }
+
     func testAdapterProfileImportAndLiveControlsAreVisible() {
+        func reveal(_ control: XCUIElement, in app: XCUIApplication) -> Bool {
+            for _ in 0..<24 {
+                if control.exists {
+                    let frame = control.frame
+                    let viewport = app.frame
+                    if frame.height > 0, frame.minX >= viewport.minX + 8,
+                       frame.maxX <= viewport.maxX - 8,
+                       frame.midY > viewport.minY + 140,
+                       frame.midY < viewport.maxY - 140 { return true }
+                }
+                app.swipeUp()
+            }
+            return false
+        }
+
         let app = XCUIApplication()
         app.launchArguments += ["--app-language", "en"]; app.launch()
         XCTAssertTrue(app.navigationBars["Telemetry"].waitForExistence(timeout: 10))
         app.tabBars.buttons["Setup"].tap()
-        app.buttons["Developer / diagnostics"].tap()
-        XCTAssertTrue(app.buttons["import-adapter-profile"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["start-live-adapter"].waitForExistence(timeout: 5))
+        let export = app.buttons["export-adapter-profile"]
+        XCTAssertTrue(reveal(export, in: app), "Profile actions must be reachable above the tab bar")
+        XCTAssertTrue(app.buttons["import-adapter-profile"].exists)
+        XCTAssertFalse(export.isEnabled)
+        let englishActions = XCTAttachment(screenshot: app.screenshot())
+        englishActions.name = "setup-en-profile-actions-visible"
+        englishActions.lifetime = .keepAlways
+        add(englishActions)
+        let start = app.buttons["start-live-adapter"]
+        XCTAssertTrue(reveal(start, in: app), "Live acquisition must be reachable without opening developer tools")
+        XCTAssertFalse(start.isEnabled, "A verified adapter profile is required before acquisition")
+        XCTAssertTrue(app.staticTexts["setup-live-adapter-status"].exists)
+        XCTAssertTrue(app.buttons["stop-live-adapter"].exists)
         XCTAssertTrue(app.buttons["edit-signal-catalog"].waitForExistence(timeout: 5))
+        let englishCapture = XCTAttachment(screenshot: app.screenshot())
+        englishCapture.name = "setup-en-live-controls-visible"
+        englishCapture.lifetime = .keepAlways
+        add(englishCapture)
+
+        app.terminate()
+        let korean = XCUIApplication()
+        korean.launchArguments = ["--app-language", "ko", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        korean.launch()
+        XCTAssertTrue(korean.tabBars.buttons["설정"].waitForExistence(timeout: 10))
+        korean.tabBars.buttons["설정"].tap()
+        let koreanExport = korean.buttons["export-adapter-profile"]
+        XCTAssertTrue(reveal(koreanExport, in: korean), "Korean profile actions must be reachable above the tab bar")
+        let koreanActions = XCTAttachment(screenshot: korean.screenshot())
+        koreanActions.name = "setup-ko-max-profile-actions-visible"
+        koreanActions.lifetime = .keepAlways
+        add(koreanActions)
+        let koreanStart = korean.buttons["start-live-adapter"]
+        XCTAssertTrue(reveal(koreanStart, in: korean), "Korean live controls must be reachable above the tab bar")
+        XCTAssertFalse(koreanStart.isEnabled)
+        XCTAssertTrue(reveal(korean.buttons["stop-live-adapter"], in: korean), "Korean Stop must fit within the screen")
+        let koreanLive = XCTAttachment(screenshot: korean.screenshot())
+        koreanLive.name = "setup-ko-max-live-controls-visible"
+        koreanLive.lifetime = .keepAlways
+        add(koreanLive)
+    }
+
+    func testAdapterProfileFilesExportAndImportRoundTrip() {
+        func reveal(_ element: XCUIElement, in app: XCUIApplication) {
+            for _ in 0..<18 where !element.isHittable { app.swipeUp() }
+            XCTAssertTrue(element.isHittable, app.debugDescription)
+        }
+        let app = XCUIApplication()
+        app.launchArguments += ["--app-language", "en"]
+        app.launch()
+        app.tabBars.buttons["Setup"].tap()
+        let export = app.buttons["export-adapter-profile"]
+        reveal(export, in: app)
+        XCTAssertTrue(app.staticTexts["Profile loaded: SYNTHETIC Files profile"].waitForExistence(timeout: 5),
+                      "This test requires only the owned Simulator's loopback profile")
+        export.tap()
+        let save = app.buttons["DOCPicker.actionButton"]
+        XCTAssertTrue(save.waitForExistence(timeout: 30), app.debugDescription)
+        XCTAssertTrue(save.isEnabled)
+        let exportSheet = XCTAttachment(screenshot: app.screenshot())
+        exportSheet.name = "synthetic-profile-native-files-export"
+        exportSheet.lifetime = .keepAlways
+        add(exportSheet)
+        save.tap()
+        XCTAssertTrue(app.staticTexts["Adapter profile JSON saved"].waitForExistence(timeout: 15), app.debugDescription)
+
+        let importProfile = app.buttons["import-adapter-profile"]
+        reveal(importProfile, in: app)
+        importProfile.tap()
+        let browse = app.buttons.matching(
+            NSPredicate(format: "label IN %@", ["Browse", "둘러보기"])
+        ).firstMatch
+        XCTAssertTrue(browse.waitForExistence(timeout: 10), app.debugDescription)
+        browse.tap()
+        let localFiles = app.staticTexts.matching(
+            NSPredicate(format: "label IN %@", ["On My iPhone", "나의 iPhone"])
+        ).firstMatch
+        if localFiles.exists { localFiles.tap() }
+        let file = app.cells.matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "telemetry-adapter-profile.json")
+        ).firstMatch
+        XCTAssertTrue(file.waitForExistence(timeout: 15), app.debugDescription)
+        file.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
+        let pickerDismissed = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == false"), object: file
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [pickerDismissed], timeout: 15), .completed,
+                       "Selecting the saved JSON must dismiss the native Files picker: \(app.debugDescription)")
+        XCTAssertTrue(app.staticTexts["Profile loaded: SYNTHETIC Files profile"].waitForExistence(timeout: 15),
+                      app.debugDescription)
+        let imported = XCTAttachment(screenshot: app.screenshot())
+        imported.name = "synthetic-profile-files-reimported"
+        imported.lifetime = .keepAlways
+        add(imported)
     }
 
     func testBLEObservationCaptureControlIsVisible() {

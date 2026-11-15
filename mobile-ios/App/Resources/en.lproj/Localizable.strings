@@ -26,6 +26,13 @@
 "NOT CONFIGURED" = "NOT CONFIGURED";
 "LOADED" = "LOADED";
 "Import JSON" = "Import JSON";
+"Export JSON" = "Export JSON";
+"Add to dashboard" = "Add to dashboard";
+"Widget added to dashboard" = "Widget added to dashboard";
+"Widget could not be saved" = "Widget could not be saved";
+"Adapter profile JSON saved" = "Adapter profile JSON saved";
+"Adapter profile export cancelled or failed" = "Adapter profile export cancelled or failed";
+"Adapter profile export could not be prepared" = "Adapter profile export could not be prepared";
 "Edit signals" = "Edit signals";
 "The profile must contain observed BLE UUIDs or a verified Wi-Fi endpoint. No ELM327 identifiers are guessed." = "The profile must contain observed BLE UUIDs or a verified Wi-Fi endpoint. No ELM327 identifiers are guessed.";
 "Start live adapter" = "Start live adapter";

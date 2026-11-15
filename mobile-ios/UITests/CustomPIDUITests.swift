@@ -2,6 +2,34 @@ import XCTest
 
 /// Runs on a disposable simulator only. No radio, connection or permission action.
 final class CustomPIDUITests: XCTestCase {
+    func testInvalidHexRequestIsRejectedBeforeAnyVehicleAction() throws {
+        #if !targetEnvironment(simulator)
+        throw XCTSkip("Synthetic Simulator scope only")
+        #endif
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--app-language", "en"]
+        app.launch()
+        app.tabBars.buttons["Signals"].tap()
+        app.buttons["signals-new-custom-pid"].tap()
+        enter(app, "id", "synthetic.invalid")
+        enter(app, "name", "SYNTHETIC invalid query")
+        enter(app, "command", "05G")
+        enter(app, "request", "7E0")
+        enter(app, "response", "7E8")
+        XCTAssertFalse(app.buttons["custom-pid-save"].isEnabled)
+        app.buttons["custom-pid-validate"].tap()
+        let alert = app.alerts["Custom PID"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertFalse(alert.staticTexts.matching(
+            NSPredicate(format: "label BEGINSWITH %@", "Valid read-only request:")
+        ).firstMatch.exists)
+        capture(app, "SYNTHETIC-invalid-hex-query-rejected")
+        alert.buttons["OK"].tap()
+        app.buttons["custom-pid-cancel"].tap()
+        XCTAssertTrue(app.buttons["signals-new-custom-pid"].waitForExistence(timeout: 5))
+    }
+
     func testDraftValidationAndCancelKeepProfileUnchanged() throws {
         #if !targetEnvironment(simulator)
         throw XCTSkip("Synthetic Simulator scope only")

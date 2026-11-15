@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "id": "synthetic.files.roundtrip",
+  "name": "SYNTHETIC Files profile",
+  "transport": "wifi",
+  "host": "127.0.0.1",
+  "port": 35000,
+  "signals": [
+    {
+      "id": "synthetic.soc",
+      "name": "SYNTHETIC SOC",
+      "canID": 291,
+      "isExtended": false,
+      "startBit": 0,
+      "bitLength": 8,
+      "byteOrder": "intel",
+      "isSigned": false,
+      "factor": 1,
+      "offset": 0,
+      "minimum": 0,
+      "maximum": 100,
+      "unit": "%",
+      "timeout": 1.5,
+      "enumMap": []
+    }
+  ]
+}

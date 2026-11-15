@@ -26,6 +26,13 @@
 "NOT CONFIGURED" = "설정 안 됨";
 "LOADED" = "불러옴";
 "Import JSON" = "JSON 가져오기";
+"Export JSON" = "JSON 내보내기";
+"Add to dashboard" = "대시보드에 추가";
+"Widget added to dashboard" = "대시보드에 위젯을 추가했습니다";
+"Widget could not be saved" = "위젯을 저장할 수 없습니다";
+"Adapter profile JSON saved" = "어댑터 프로필 JSON을 저장했습니다";
+"Adapter profile export cancelled or failed" = "어댑터 프로필 내보내기가 취소되었거나 실패했습니다";
+"Adapter profile export could not be prepared" = "어댑터 프로필 내보내기를 준비할 수 없습니다";
 "Edit signals" = "신호 편집";
 "The profile must contain observed BLE UUIDs or a verified Wi-Fi endpoint. No ELM327 identifiers are guessed." = "프로필에는 실제 확인한 BLE UUID 또는 검증된 Wi-Fi 주소가 필요합니다. ELM327 식별자를 추측하지 않습니다.";
 "Start live adapter" = "실차 어댑터 시작";
