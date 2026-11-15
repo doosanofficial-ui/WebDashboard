@@ -851,6 +851,8 @@ def main():
                         help="Qualified executable for this exact commit; no shard rebuild fallback")
     parser.add_argument("--seed-manifest-sha256", required=True,
                         help="Trusted producer job output, supplied separately from the downloaded artifact")
+    parser.add_argument("--build-jobs", type=int, choices=range(1, 9),
+                        help="Limit local xcodebuild compile jobs; omitted for CI's existing behavior")
     selection = parser.add_mutually_exclusive_group()
     selection.add_argument("--se-viewport", action="store_true",
                            help="Re-execute the two viewport tests on iPhone SE (3rd generation), iOS 27.x only")
@@ -951,6 +953,8 @@ def main():
                     "-destination", "platform=iOS Simulator,id=" + simulator,
                     "-derivedDataPath", str(derived), "CODE_SIGNING_ALLOWED=NO",
                     "-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never"]
+            if args.build_jobs is not None:
+                base.extend(["-jobs", str(args.build_jobs)])
             if export_audit_enabled:
                 base.append(export_fixture.SWIFT_CONDITION)
             run_owned_phase(base + ["build-for-testing" if help_capture_enabled else "build"], results / "build.log",
