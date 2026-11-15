@@ -267,6 +267,7 @@ struct SessionsView: View {
                     Text(AppLocalization.text("2×")).tag(2.0)
                 }
                 .pickerStyle(.segmented)
+                .accessibilityLabel(AppLocalization.text("Replay speed"))
                 .disabled(!hasTimeRange)
                 .accessibilityIdentifier("replay-speed")
             }
