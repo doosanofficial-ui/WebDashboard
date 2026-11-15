@@ -46,6 +46,8 @@
 "Exports are in Sessions. Demo adapter controls stay out of the operator setup path." = "Exports are in Sessions. Demo adapter controls stay out of the operator setup path.";
 "Developer / diagnostics" = "Developer / diagnostics";
 "Session details" = "Session details";
+"About Replay" = "About Replay";
+"Seek to time" = "Seek to time";
 "Stop Replay" = "Stop Replay";
 "Pause" = "Pause";
 "Play" = "Play";

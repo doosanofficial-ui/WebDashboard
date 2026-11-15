@@ -1,6 +1,14 @@
 import XCTest
 
 final class SmallViewportUIRegression: XCTestCase {
+    private func revealInSessions(_ element: XCUIElement, app: XCUIApplication) -> Bool {
+        for _ in 0..<24 {
+            if element.exists && element.isHittable { return true }
+            app.swipeUp()
+        }
+        return false
+    }
+
     private func capture(_ app: XCUIApplication, _ name: String) {
         let image = app.windows.firstMatch.screenshot()
         let attachment = XCTAttachment(screenshot: image)
@@ -84,6 +92,34 @@ final class SmallViewportUIRegression: XCTestCase {
         XCTAssertTrue(liveVisible, "First Live card must be fully exposed by scrolling.\n" + app.debugDescription)
         XCTAssertTrue(app.buttons["toggle-recording"].isHittable)
         XCTAssertTrue(app.buttons["toggle-gps"].isHittable)
+        app.tabBars.buttons["Sessions"].tap()
+        let sessionPicker = app.buttons["saved-session-picker"]
+        XCTAssertTrue(revealInSessions(sessionPicker, app: app), app.debugDescription)
+        sessionPicker.tap()
+        let fixture = app.buttons["saved-session-offline-seek-fixture"]
+        XCTAssertTrue(fixture.waitForExistence(timeout: 5), app.debugDescription)
+        fixture.tap()
+        let openReplay = app.buttons["replay-saved-session"]
+        XCTAssertTrue(revealInSessions(openReplay, app: app), app.debugDescription)
+        openReplay.tap()
+        XCTAssertTrue(app.buttons["stop-replay-header"].waitForExistence(timeout: 8))
+        let play = app.buttons["session-replay-play"]
+        XCTAssertTrue(revealInSessions(play, app: app), app.debugDescription)
+        let speed = app.segmentedControls["replay-speed"]
+        XCTAssertTrue(revealInSessions(speed, app: app), app.debugDescription)
+        XCTAssertEqual(speed.label, "Replay speed", "SE AX5 rate options need an accessible label")
+        XCTAssertGreaterThanOrEqual(speed.frame.height, 44, "SE AX5 rate options need a tappable height")
+        capture(app, "replay-controls-portrait")
+        XCTAssertTrue(revealInSessions(app.sliders["replay-time-slider"], app: app), app.debugDescription)
+        capture(app, "replay-slider-portrait")
+        let management = app.descendants(matching: .any).matching(identifier: "replay-session-management").firstMatch
+        XCTAssertTrue(revealInSessions(management, app: app), app.debugDescription)
+        management.tap()
+        XCTAssertTrue(revealInSessions(app.buttons["saved-session-picker"], app: app), app.debugDescription)
+        XCTAssertTrue(revealInSessions(app.buttons["sessions-export-json"], app: app), app.debugDescription)
+        capture(app, "replay-export-portrait")
+        app.buttons["stop-replay-header"].tap()
+        app.tabBars.buttons["Live"].tap()
         app.buttons["edit-dashboard"].tap()
         XCTAssertTrue(app.buttons["undo-dashboard-layout"].waitForExistence(timeout: 5))
         capture(app, "editor-portrait-initial")

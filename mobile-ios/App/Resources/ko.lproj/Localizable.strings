@@ -46,6 +46,8 @@
 "Exports are in Sessions. Demo adapter controls stay out of the operator setup path." = "내보내기는 기록 탭에 있습니다. Demo 어댑터는 일반 설정 흐름과 분리됩니다.";
 "Developer / diagnostics" = "개발자 / 진단";
 "Session details" = "기록 상세";
+"About Replay" = "Replay 안내";
+"Seek to time" = "시간으로 이동";
 "Stop Replay" = "Replay 종료";
 "Pause" = "일시정지";
 "Play" = "재생";

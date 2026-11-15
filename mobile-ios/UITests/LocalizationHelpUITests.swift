@@ -117,8 +117,8 @@ final class LocalizationHelpUITests: XCTestCase {
         app.launch();tab(app,"Sessions","기록","en")
         let picker=app.buttons["saved-session-picker"];reveal(picker,in:app);picker.tap()
         app.buttons["saved-session-offline-seek-fixture"].tap();app.buttons["replay-saved-session"].tap()
-        XCTAssertTrue(app.staticTexts["session-replay-position"].waitForExistence(timeout:8))
-        XCTAssertEqual(app.staticTexts["session-replay-position"].value as? String,"5.0 of 5.0 seconds")
+        XCTAssertTrue(app.staticTexts["replay-position"].waitForExistence(timeout:8))
+        XCTAssertEqual(app.staticTexts["replay-position"].value as? String,"5.0 of 5.0 seconds")
         tab(app,"Help","도움말","en")
         let language=app.segmentedControls["app-language-picker"]
         XCTAssertTrue(language.waitForExistence(timeout:5));language.buttons["한국어"].tap()
@@ -135,7 +135,7 @@ final class LocalizationHelpUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["help-step-progress"].label,"3단계 중 2단계")
         app.navigationBars.buttons.firstMatch.tap()
         tab(app,"Sessions","기록","ko")
-        XCTAssertEqual(app.staticTexts["session-replay-position"].value as? String,"전체 5.0초 중 5.0초")
+        XCTAssertEqual(app.staticTexts["replay-position"].value as? String,"전체 5.0초 중 5.0초")
         XCTAssertFalse(app.buttons["session-replay-play"].isEnabled)
         app.terminate();app.launchArguments=["-AppleLanguages","(en)","-AppleLocale","en_US"];app.launch()
         XCTAssertTrue(app.tabBars.buttons["도움말"].waitForExistence(timeout:8),"Saved choice must win over system English after relaunch")
@@ -166,6 +166,21 @@ final class LocalizationHelpUITests: XCTestCase {
         let shot=XCTAttachment(screenshot:app.windows.firstMatch.screenshot());shot.name="App-help-Korean-AX5-landscape-zoom";shot.lifetime = .keepAlways;add(shot)
         app.buttons["완료"].tap();let next=app.buttons["help-next"];reveal(next,in:app);next.tap()
         XCTAssertEqual(app.staticTexts["help-step-progress"].label,"3단계 중 2단계")
+        XCUIDevice.shared.orientation = .portrait
+        app.navigationBars.buttons.firstMatch.tap()
+        tab(app,"Sessions","기록","ko")
+        let picker=app.buttons["saved-session-picker"];reveal(picker,in:app);picker.tap()
+        let fixture=app.buttons["saved-session-offline-seek-fixture"]
+        XCTAssertTrue(fixture.waitForExistence(timeout:5));fixture.tap()
+        let open=app.buttons["replay-saved-session"];reveal(open,in:app);open.tap()
+        XCTAssertTrue(app.buttons["stop-replay-header"].waitForExistence(timeout:8))
+        let play=app.buttons["session-replay-play"]
+        reveal(play,in:app)
+        XCTAssertEqual(play.label,"재생")
+        XCTAssertEqual(app.segmentedControls["replay-speed"].label,"재생 속도")
+        let replayShot=XCTAttachment(screenshot:app.windows.firstMatch.screenshot())
+        replayShot.name="SYNTHETIC-KO-AX5-replay-controls"
+        replayShot.lifetime = .keepAlways;add(replayShot)
         app.terminate()
     }
     func testEveryGuideAtMaximumTextShowsWholeNumberedImageAndClosesZoomInEnglish() {

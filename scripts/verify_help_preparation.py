@@ -18,8 +18,8 @@ HELP_SOURCE = "mobile-ios/App/AppHelpView.swift"
 LANGUAGE_SOURCE = "mobile-ios/App/AppLocalization.swift"
 CAPTURE_SOURCE = "mobile-ios/UITests/LocalizationHelpUITests.swift"
 CAPTURE_BODY_SHA256 = "8061fcc04f3f18379678bae35c063182d1d3503b1b258a1c0f6e30d3fdfd0a2d"
-# Reviewed Replay copy now directs END-position readers to Recorded time > Start.
-HELP_SOURCE_SHA256 = "245564cfac9be2b859c2f34a44e4f6716559fe296093d258cf9bc66fccc1720c"
+# Reviewed Replay copy also names the collapsed Seek to time step.
+HELP_SOURCE_SHA256 = "6da5bbd18af8170fae1c8dbbad555be607d8850a0e5c02a229fcc117e67c4389"
 LANGUAGE_PREFIX_SHA256 = "26c84edc11934f388e62b8d2bb27eadc8d6f1b35651507af3f5991506f4aa55c"
 
 
