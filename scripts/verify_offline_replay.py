@@ -882,6 +882,8 @@ def main():
         "-only-testing:TelemetryUITests/LocalizationHelpUITests"]
     if args.only_test == "invalid-custom-pid":
         selected_tests = ["-only-testing:TelemetryUITests/CustomPIDUITests/testInvalidHexRequestIsRejectedBeforeAnyVehicleAction"]
+    if args.only_test == "setup-replay-stop":
+        selected_tests = ["-only-testing:TelemetryUITests/SetupReplaySafetyUITests/testSetupStopIsDisabledDuringReplay"]
     expected_count = 2 if args.only_test == "native-save-reentry" else 5 if args.only_test == "ui-clarity" else 1 if args.only_test else 31
     if args.only_test == "help-capture":
         selected_tests = ["-only-testing:" + test for test in HELP_CAPTURE_TESTS]
