@@ -83,3 +83,17 @@ Original capture metadata/digests: [capture.json](evidence/replay-rate-2026-11-1
 Automated functional evidence is separate: original playback3/3, active slider1/1, large/landscape1/1 and Core474/474 passed. One separate Go-result attachment was black/unusable and is UNVERIFIED, not a visual PASS; three other generated menu states were not directly inspected. Shared Simulator pixels showed an active recording and remain private; that recording/device was not interrupted. Physical iPhone and vehicle UI were not inspected in this work.
 
 Parent review: Standards and Spec checked against the single-control fix and captured verifier. Binding closures intentionally are not compared; model identity plus visible inputs prevent stale-owner reuse. The verifier preserves real wrong-value failures even when the Controller accepts them, rejects incomplete or uncorrelated captures and keeps checks active under Python-O. This was primary review, not an unperformed external-agent approval. Remaining source-media qualification and full-product gates are listed in [the report](reports/replay-rate-fix-2026-11-17.md).
+
+## Diagnostic Profile And Host Verification - 2026-11-17
+
+The primary agent directly opened these unchanged synthetic capture pixels, on iPhone17/iOS27.0 Simulator, App0.22.5(21), basecb0a7ef plus the recorded admission/resource/test updates. Exact tested input hashes and image digests are in [capture.json](evidence/profile-guard-2026-11-17/capture.json).
+
+| Image | Actual Pixel Finding / Limit |
+| --- | --- |
+| [known-zero-korean](evidence/profile-guard-2026-11-17/known-zero-korean.png) | Numeric0.0, Status and LED quality are visibly `유효`. The English-only OCR failure was not a zero/validity product regression. It does not prove vehicle data. |
+| [count-two-visible](evidence/profile-guard-2026-11-17/count-two-visible.png) | Recorded samples label wraps and2 is fully visible in its leading column. The prior full-image OCR interleaved the trailing time column. Renderer source/fonts were not changed; spatially scoped count verification retains the expected2. |
+| [combined-rate-two](evidence/profile-guard-2026-11-17/combined-rate-two.png) | Combined production build, DEMO/acquisition off, active2x selected at38.8/600.0. Final automatic5/5 attachment was separately opened and showed disabled Play/end state. This is a scoped Simulator replay check only. |
+
+The test host's white screen was also directly opened and is not consumer-UI readiness evidence. The actual MobileCal report window was captured/read through agent-desktop without focus/input and correlated with its original owned-Simulator watchdog record; private crash keys/window inventory remain local. No dismissal, framework deletion or shared recording interruption occurred.
+
+Hosted96/96 and combined UI1/1 are automated results, separate from these pixel findings. The new rejection message has static EN/KO review and Model coverage, not a claimed physical UI permission/adapter test. Independent read-only Standards/Spec reviews used explicit gpt-6.1-sol, returned nonempty final reports and were closed. See [the diagnostic guard report](reports/diagnostic-profile-guard-2026-11-17.md) for exact limits and rejected partial runs.

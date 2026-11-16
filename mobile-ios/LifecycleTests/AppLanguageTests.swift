@@ -28,6 +28,8 @@ final class AppLanguageTests: XCTestCase {
         XCTAssertEqual(model.rawCANText, original.3)
     }
     func testPresentationTranslatesStatusParametersWithoutChangingOriginal() {
+        XCTAssertEqual(AppLanguageStore.shared.language, .english,
+                       "Hosted OCR fixtures require the test-only startup language override")
         let original = "Recorded time: 17 original rows; acquisition and recording off"
         XCTAssertEqual(AppLocalization.text(original, language: .english), original)
         XCTAssertEqual(AppLocalization.text(original, language: .korean), "기록 시간: 원본 17행 · 수집 및 기록 꺼짐")

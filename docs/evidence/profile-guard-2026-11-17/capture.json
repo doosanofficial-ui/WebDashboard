@@ -1,0 +1,58 @@
+{
+  "scope": "Synthetic iPhone17/iOS27 Simulator, not physical/vehicle evidence",
+  "baseMain": "cb0a7eff7e784f3d8cf310518d7a7a07a3d640b8",
+  "appVersion": "0.22.5",
+  "build": "21",
+  "currentInputHashes": [
+    {
+      "file": "App/TelemetryModel.swift",
+      "SHA256": "fa37c4a3d0efefba786ea348bbe5f9fa25ec1e9d82e48154e0dd0d9eaf111dc7"
+    },
+    {
+      "file": "App/Resources/en.lproj/Localizable.strings",
+      "SHA256": "01649290c0c8626ddba67a7565c38d67f454d335879ee394411c9b2c1d0a34e2"
+    },
+    {
+      "file": "App/Resources/ko.lproj/Localizable.strings",
+      "SHA256": "affeaf3048d1c563593453c2e4ea81fac43115b3478b9fb85fe0d01e307272f4"
+    },
+    {
+      "file": "LifecycleTests/AdapterProfileHostedTests.swift",
+      "SHA256": "1aae11a726b37b14dc3ec9a237e3d24e05ba1923354a2fe6518cd99cebd81122"
+    },
+    {
+      "file": "LifecycleTests/ReplayRateChangeTests.swift",
+      "SHA256": "a15af6d8270f5d391e65b841fee64d3c3c58c2d12098a5c823487c3abb583e79"
+    },
+    {
+      "file": "LifecycleTests/AppLanguageTests.swift",
+      "SHA256": "141eb50919ca2e5f3f9d19d1983ddef02ee8d322d967de3a9dd30569e023623c"
+    },
+    {
+      "file": "LifecycleTests/WidgetPresentationHostedTests.swift",
+      "SHA256": "128b2f21b70cbf9a3640a78ca9232d10e4dd1e8e679e385f41411e2458f079c2"
+    },
+    {
+      "file": "lifecycle-tests.yml",
+      "SHA256": "0376365eab722701f9e805e75d885a6c0e16fb299c301abe0ded7d7d7b3490d9"
+    }
+  ],
+  "images": [
+    {
+      "name": "known-zero-korean.png",
+      "sha256": "b6d29695e7b968bd23f083eea6b3e0a56471fbda8cbee30ab789c5458e62ef5f",
+      "directPixelInspection": "primary agent"
+    },
+    {
+      "name": "count-two-visible.png",
+      "sha256": "7a853e8779883ffb744ca64b2634522bce8c852d12dfa9cb06fc5572ff03f519",
+      "directPixelInspection": "primary agent"
+    },
+    {
+      "name": "combined-rate-two.png",
+      "sha256": "583f708af66aae1efec6e1220f832dab6602fd73713dd1b1ba5a8b101df8922b",
+      "directPixelInspection": "primary agent"
+    }
+  ],
+  "privateExcluded": "ProblemReporter desktop screenshot, crash reporter key, broad window inventory and original user recording"
+}

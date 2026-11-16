@@ -332,6 +332,7 @@
 "Adapter profile invalid; previous profile retained" = "Adapter profile invalid; previous profile retained";
 "Profile could not be saved; previous profile retained" = "Profile could not be saved; previous profile retained";
 "Load an adapter profile before editing signals" = "Load an adapter profile before editing signals";
+"Stop acquisition before changing the adapter profile" = "Stop acquisition before changing the adapter profile";
 "Signal catalog invalid" = "Signal catalog invalid";
 "Demo adapter monitoring" = "Demo adapter monitoring";
 "Adapter" = "Adapter";

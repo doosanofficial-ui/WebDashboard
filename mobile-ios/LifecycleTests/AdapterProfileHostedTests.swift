@@ -142,6 +142,52 @@ final class AdapterProfileHostedTests: XCTestCase {
     }
 
     @MainActor
+    func testActiveDiagnosticAcquisitionRejectsProfileReplacement() throws {
+        try withProfile { model, url, original, originalBytes in
+            let timeouts = model.localSignalTimeouts
+            let replacement = try makeProfile("fixture.replacement", timeout: 9, diagnostic: true)
+            let replacementBytes = try JSONEncoder().encode(replacement)
+            model.diagnosticWorkspace.setAcquiring(true)
+            defer { model.diagnosticWorkspace.setAcquiring(false) }
+
+            XCTAssertFalse(model.importAdapterProfile(replacementBytes),
+                "A running decoder must not publish a different profile's signal metadata")
+            XCTAssertEqual(model.adapterProfile, original)
+            XCTAssertEqual(model.localSignalTimeouts, timeouts)
+            XCTAssertEqual(try Data(contentsOf: url), originalBytes)
+            model.diagnosticWorkspace.setAcquiring(false)
+            XCTAssertTrue(model.importAdapterProfile(replacementBytes))
+            XCTAssertEqual(model.adapterProfile, replacement)
+            XCTAssertEqual(try Data(contentsOf: url), replacementBytes)
+            XCTAssertEqual(model.localSignalTimeouts["fixture.replacement"], 9)
+        }
+    }
+
+    @MainActor
+    func testActiveDiagnosticAcquisitionRejectsSignalCatalogReplacement() throws {
+        try withProfile { model, url, original, originalBytes in
+            let timeouts = model.localSignalTimeouts
+            model.diagnosticWorkspace.setAcquiring(true)
+            defer { model.diagnosticWorkspace.setAcquiring(false) }
+
+            XCTAssertFalse(model.replaceAdapterProfileSignals([try makeSignal("fixture.edit", timeout: 5)]),
+                "A running decoder must not receive a new persisted signal catalogue")
+            XCTAssertEqual(model.adapterProfile, original)
+            XCTAssertEqual(model.localSignalTimeouts, timeouts)
+            XCTAssertEqual(try Data(contentsOf: url), originalBytes)
+            model.diagnosticWorkspace.setAcquiring(false)
+            let signal = try makeSignal("fixture.after-stop", timeout: 5)
+            XCTAssertTrue(model.replaceAdapterProfileSignals([signal]))
+            XCTAssertEqual(model.adapterProfile?.signals, [signal])
+            XCTAssertEqual(model.localSignalTimeouts[signal.id], 5)
+            let persisted = try JSONDecoder().decode(AdapterProfile.self, from: Data(contentsOf: url))
+            XCTAssertEqual(persisted.id, original.id)
+            XCTAssertEqual(persisted.signals, [signal])
+            XCTAssertEqual(persisted.diagnosticQueries, original.diagnosticQueries)
+        }
+    }
+
+    @MainActor
     func testSignalEditorRejectedCatalogPreservesPreviousProfile() throws {
         try withProfile { model, url, profile, bytes in
             let timeouts = model.localSignalTimeouts

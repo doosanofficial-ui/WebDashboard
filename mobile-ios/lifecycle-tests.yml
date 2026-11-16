@@ -38,6 +38,9 @@ schemes:
         TelemetryLifecycleTests: [test]
     test:
       config: Debug
+      commandLineArguments:
+        "--app-language": true
+        "en": true
       targets:
         - name: TelemetryLifecycleTests
           parallelizable: false

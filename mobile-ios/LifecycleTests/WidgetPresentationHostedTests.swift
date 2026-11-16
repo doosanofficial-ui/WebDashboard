@@ -227,8 +227,17 @@ final class WidgetPresentationHostedTests: XCTestCase {
             let observations = request.results ?? []
             let text = observations.compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ").uppercased()
             let suffix = type == .map ? "FIXES:2" : "SAMPLES:2"
-            XCTAssertTrue(text.filter { !$0.isWhitespace }.contains(suffix),
-                          "Count must remain readable even when its label wraps at \(size): \(text)")
+            // A wrapped count in the leading column must not be interleaved
+            // with the trailing time range by Vision's full-image reading order.
+            let countRequest = VNRecognizeTextRequest()
+            countRequest.recognitionLevel = .accurate
+            countRequest.usesLanguageCorrection = false
+            countRequest.regionOfInterest = CGRect(x: 0, y: 0, width: 0.5, height: 1)
+            try VNImageRequestHandler(cgImage: cg, options: [:]).perform([countRequest])
+            let countText = (countRequest.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+                .joined(separator: " ").uppercased()
+            XCTAssertTrue(countText.filter { !$0.isWhitespace }.contains(suffix),
+                          "Count must remain readable in its own column at \(size): \(countText); full=\(text)")
             let footer = type == .map ? "NOT CURRENT POSITION" : "HISTORICAL FRESHNESS UNKNOWN"
             XCTAssertTrue(text.contains(footer), "Full history footer must remain visible at \(size): \(text)")
             let fontCategory: UIContentSizeCategory = size == .large ? .large : .extraExtraExtraLarge

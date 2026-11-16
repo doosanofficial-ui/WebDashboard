@@ -332,6 +332,7 @@
 "Adapter profile invalid; previous profile retained" = "잘못된 어댑터 프로필 · 이전 프로필 보존됨";
 "Profile could not be saved; previous profile retained" = "프로필을 저장할 수 없음 · 이전 프로필 보존됨";
 "Load an adapter profile before editing signals" = "신호를 편집하기 전에 어댑터 프로필을 불러오세요";
+"Stop acquisition before changing the adapter profile" = "어댑터 프로필을 변경하기 전에 수집을 중지하세요";
 "Signal catalog invalid" = "잘못된 신호 목록";
 "Demo adapter monitoring" = "Demo 어댑터 수집 중";
 "Adapter" = "어댑터";

@@ -569,6 +569,7 @@ final class TelemetryModel: NSObject {
 
     @discardableResult
     func importAdapterProfile(_ data: Data) -> Bool {
+        guard admitAdapterProfileMutation() else { return false }
         guard let adapterProfileURL else {
             adapterProfileStatus = "Profile storage unavailable; previous profile retained"
             return false
@@ -619,6 +620,7 @@ final class TelemetryModel: NSObject {
     }
 
     func replaceAdapterProfileSignals(_ signals: [SignalDefinition]) -> Bool {
+        guard admitAdapterProfileMutation() else { return false }
         guard let profile = adapterProfile, let adapterProfileURL, !signals.isEmpty else {
             adapterProfileStatus = "Load an adapter profile before editing signals"
             return false
@@ -648,6 +650,14 @@ final class TelemetryModel: NSObject {
             adapterProfileStatus = "Signal catalog invalid"
             return false
         }
+    }
+
+    private func admitAdapterProfileMutation() -> Bool {
+        guard !diagnosticWorkspace.acquiring else {
+            adapterProfileStatus = "Stop acquisition before changing the adapter profile"
+            return false
+        }
+        return true
     }
 
     private func handleDemoFrame(_ frame: CANFrame, decoded: DecodedSignal) {
