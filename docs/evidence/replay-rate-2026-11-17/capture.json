@@ -1,0 +1,39 @@
+{
+  "scope": "Synthetic iPhone17/iOS27 Simulator; not vehicle or physical evidence",
+  "sourceBaseMain": "6ec1376409546cb6e9d2bdc14bed04c0498fa2f2",
+  "appVersion": "0.22.5",
+  "appBuild": "21",
+  "changedAppFile": "mobile-ios/App/SessionsView.swift",
+  "testedCanonicalSourceSHA256": "dfd843b1db2fbb66494749eb92187e42e34f02ff74ddb4d0c0488feb11791eab",
+  "buildTransform": "Existing export-dismissal DEBUG fixture only; no rate audit in fixed regression build",
+  "inspectedBy": "primary agent, direct view_image pixel inspection of each source image",
+  "imageEditing": false,
+  "files": [
+    {
+      "name": "before-rate-stays-half.png",
+      "sha256": "7cb7614bec4194e8f440addff399c7ae39882ede9c10dfc90e34c19ec219001f",
+      "original": "replay-rate-60s.png"
+    },
+    {
+      "name": "after-rate-two.png",
+      "sha256": "b6de32c8b43d000482737965b4812b662c21eed63b3b10e40be8d9f28395a1a4",
+      "original": "4A7C4C66-ADFC-4906-B4C4-8F522AC0A398.png"
+    },
+    {
+      "name": "after-auto-end.png",
+      "sha256": "e7592e9f9121a2949670af7d86bb510f78f6f16d831e56b972c2ebbe98a1dae2",
+      "original": "F6A72E42-ECD6-4511-9D21-D0A6DE322C79.png"
+    },
+    {
+      "name": "large-portrait.png",
+      "sha256": "c64ce60944f14281afe57247794678a8eb877df972b0957a0396b218cdc83d33",
+      "original": "4A418FF8-916A-4622-BAE4-6F0E6055242B.png"
+    },
+    {
+      "name": "large-landscape.png",
+      "sha256": "3c4c1693f31534bda15272aa0c975dffbe28058d3c228ea6602717679e21ee38",
+      "original": "A27C0E4B-5252-4BDC-AC4A-413891BC5D34.png"
+    }
+  ],
+  "unverified": "Separate landscape-go result capture was black; other generated menu frames not visually reviewed. Landscape control capture directly reviewed. No physical UI."
+}

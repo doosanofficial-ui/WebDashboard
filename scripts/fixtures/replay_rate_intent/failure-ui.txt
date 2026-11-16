@@ -1,0 +1,17 @@
+    t =     0.02s Start Test at 2026-11-16 23:50:02.246
+    t =    11.20s Tap "Sessions" Button
+    t =    15.76s Tap "saved-session-picker" Button
+    t =    17.55s Tap "saved-session-offline-slider-fixture" Button
+    t =    18.37s Tap "replay-saved-session" Button
+    t =    23.23s Tap "replay-seek-start" Button
+    t =    24.81s Tap "0.5×" Button
+    t =    27.10s Tap "replay-play" Button
+    t =    29.05s Tap "replay-pause" Button
+    t =    32.17s Tap "Signals" Button
+    t =    34.88s Tap "Sessions" Button
+    t =    38.66s Tap "replay-seek-start" Button
+    t =    39.54s Tap "0.5×" Button
+    t =    42.03s Tap "replay-play" Button
+    t =    43.80s Tap "2×" Button
+    t =    46.06s Tap "0.5×" Button
+    t =    48.17s Tap "2×" Button

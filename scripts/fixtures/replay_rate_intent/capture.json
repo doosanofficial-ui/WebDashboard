@@ -1,0 +1,21 @@
+{
+  "scope": "Actual synthetic iPhone17/iOS27 UI captures; not vehicle evidence",
+  "baseMain": "6ec1376409546cb6e9d2bdc14bed04c0498fa2f2",
+  "transform": "Preserve actual wallclock, timed taps and rate boundaries; remove process IDs, paths, unrelated logs. No measurement/GPS/credentials.",
+  "captures": [
+    {
+      "label": "pass",
+      "rawUI_SHA256": "872cc7c3a195d0e02d8f0835f0b3d4a6189f4a8f975d72756dc786f30fb93cfd",
+      "rawRates_SHA256": "2a47e4062b7062a00b584ee5fb3a49507e344cc9999e3dbd5ff8e26263544e3d",
+      "minimalUI_SHA256": "188d302552df24701beb294503c35cb565b8cf82d7f0a5318056553b0b9b869c",
+      "minimalRates_SHA256": "b59f3d5e617e6281756259e7235abacd2cc0fc85ede2d4efccbac21760a830b9"
+    },
+    {
+      "label": "failure",
+      "rawUI_SHA256": "6f6922f23f5af15d3d28ac5ca944e4de1589556ce3c40b1ce1fe623e593cb983",
+      "rawRates_SHA256": "b82d44a0f9007cee26051d99be8d3945b456e013a3136be275450e041e523aec",
+      "minimalUI_SHA256": "b3b60d5276be182e6ac17c611cd683219091e866772a163723dda085ae509f6d",
+      "minimalRates_SHA256": "894047e3110feec9ab497371f92606cc8051f52e90b0f9ab0b11e51cf4580493"
+    }
+  ]
+}

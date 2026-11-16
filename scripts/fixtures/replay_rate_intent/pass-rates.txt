@@ -1,0 +1,39 @@
+2026-11-16 23:40:07.771 [DEBUG-replay-rate-W2] stage=armed scope=synthetic-export-fixture
+2026-11-16 23:40:24.239 [DEBUG-replay-rate-W2] id=1 stage=picker.proposed requested=0.500000 effective=-1.000000 clock=-1.000000 last=-1.000000 accepted=unknown
+2026-11-16 23:40:24.239 [DEBUG-replay-rate-W2] id=1 stage=model.received requested=0.500000 effective=-1.000000 clock=-1.000000 last=-1.000000 accepted=unknown
+2026-11-16 23:40:24.239 [DEBUG-replay-rate-W2] id=1 stage=controller.received requested=0.500000 effective=1.000000 clock=4078390.339544 last=0.000000 accepted=unknown
+2026-11-16 23:40:24.239 [DEBUG-replay-rate-W2] id=1 stage=model.result requested=0.500000 effective=0.500000 clock=-1.000000 last=-1.000000 accepted=true
+2026-11-16 23:40:37.295 [DEBUG-replay-rate-W2] stage=armed scope=synthetic-export-fixture
+2026-11-16 23:40:45.914 [DEBUG-replay-rate-W2] id=2 stage=picker.proposed requested=2.000000 effective=-1.000000 clock=-1.000000 last=-1.000000 accepted=unknown
+2026-11-16 23:40:45.914 [DEBUG-replay-rate-W2] id=2 stage=model.received requested=2.000000 effective=-1.000000 clock=-1.000000 last=-1.000000 accepted=unknown
+2026-11-16 23:40:45.914 [DEBUG-replay-rate-W2] id=2 stage=controller.received requested=2.000000 effective=0.500000 clock=4078412.014452 last=4078411.963924 accepted=unknown
+2026-11-16 23:40:45.914 [DEBUG-replay-rate-W2] id=2 stage=model.result requested=2.000000 effective=2.000000 clock=-1.000000 last=-1.000000 accepted=true
+2026-11-16 23:40:48.295 [DEBUG-replay-rate-W2] id=3 stage=picker.proposed requested=0.500000 effective=-1.000000 clock=-1.000000 last=-1.000000 accepted=unknown
+2026-11-16 23:40:48.295 [DEBUG-replay-rate-W2] id=3 stage=model.received requested=0.500000 effective=-1.000000 clock=-1.000000 last=-1.000000 accepted=unknown
+2026-11-16 23:40:48.295 [DEBUG-replay-rate-W2] id=3 stage=controller.received requested=0.500000 effective=2.000000 clock=4078414.395722 last=4078414.352758 accepted=unknown
+2026-11-16 23:40:48.295 [DEBUG-replay-rate-W2] id=3 stage=model.result requested=0.500000 effective=0.500000 clock=-1.000000 last=-1.000000 accepted=true
+2026-11-16 23:40:50.382 [DEBUG-replay-rate-W2] id=4 stage=picker.proposed requested=2.000000 effective=-1.000000 clock=-1.000000 last=-1.000000 accepted=unknown
+2026-11-16 23:40:50.382 [DEBUG-replay-rate-W2] id=4 stage=model.received requested=2.000000 effective=-1.000000 clock=-1.000000 last=-1.000000 accepted=unknown
+2026-11-16 23:40:50.383 [DEBUG-replay-rate-W2] id=4 stage=controller.received requested=2.000000 effective=0.500000 clock=4078416.482952 last=4078416.450187 accepted=unknown
+2026-11-16 23:40:50.383 [DEBUG-replay-rate-W2] id=4 stage=model.result requested=2.000000 effective=2.000000 clock=-1.000000 last=-1.000000 accepted=true
+2026-11-16 23:40:52.495 [DEBUG-replay-rate-W2] id=5 stage=picker.proposed requested=0.500000 effective=-1.000000 clock=-1.000000 last=-1.000000 accepted=unknown
+2026-11-16 23:40:52.495 [DEBUG-replay-rate-W2] id=5 stage=model.received requested=0.500000 effective=-1.000000 clock=-1.000000 last=-1.000000 accepted=unknown
+2026-11-16 23:40:52.495 [DEBUG-replay-rate-W2] id=5 stage=controller.received requested=0.500000 effective=2.000000 clock=4078418.595653 last=4078418.556278 accepted=unknown
+2026-11-16 23:40:52.495 [DEBUG-replay-rate-W2] id=5 stage=model.result requested=0.500000 effective=0.500000 clock=-1.000000 last=-1.000000 accepted=true
+2026-11-16 23:40:54.660 [DEBUG-replay-rate-W2] id=6 stage=picker.proposed requested=2.000000 effective=-1.000000 clock=-1.000000 last=-1.000000 accepted=unknown
+2026-11-16 23:40:54.660 [DEBUG-replay-rate-W2] id=6 stage=model.received requested=2.000000 effective=-1.000000 clock=-1.000000 last=-1.000000 accepted=unknown
+2026-11-16 23:40:54.661 [DEBUG-replay-rate-W2] id=6 stage=controller.received requested=2.000000 effective=0.500000 clock=4078420.760917 last=4078420.697781 accepted=unknown
+2026-11-16 23:40:54.661 [DEBUG-replay-rate-W2] id=6 stage=model.result requested=2.000000 effective=2.000000 clock=-1.000000 last=-1.000000 accepted=true
+2026-11-16 23:40:56.762 [DEBUG-replay-rate-W2] id=7 stage=picker.proposed requested=0.500000 effective=-1.000000 clock=-1.000000 last=-1.000000 accepted=unknown
+2026-11-16 23:40:56.762 [DEBUG-replay-rate-W2] id=7 stage=model.received requested=0.500000 effective=-1.000000 clock=-1.000000 last=-1.000000 accepted=unknown
+2026-11-16 23:40:56.762 [DEBUG-replay-rate-W2] id=7 stage=controller.received requested=0.500000 effective=2.000000 clock=4078422.862485 last=4078422.820053 accepted=unknown
+2026-11-16 23:40:56.762 [DEBUG-replay-rate-W2] id=7 stage=model.result requested=0.500000 effective=0.500000 clock=-1.000000 last=-1.000000 accepted=true
+2026-11-16 23:40:58.979 [DEBUG-replay-rate-W2] id=8 stage=picker.proposed requested=2.000000 effective=-1.000000 clock=-1.000000 last=-1.000000 accepted=unknown
+2026-11-16 23:40:58.979 [DEBUG-replay-rate-W2] id=8 stage=model.received requested=2.000000 effective=-1.000000 clock=-1.000000 last=-1.000000 accepted=unknown
+2026-11-16 23:40:58.980 [DEBUG-replay-rate-W2] id=8 stage=controller.received requested=2.000000 effective=0.500000 clock=4078425.079934 last=4078425.023854 accepted=unknown
+2026-11-16 23:40:58.980 [DEBUG-replay-rate-W2] id=8 stage=model.result requested=2.000000 effective=2.000000 clock=-1.000000 last=-1.000000 accepted=true
+2026-11-16 23:41:10.328 [DEBUG-replay-rate-W2] id=9 stage=picker.proposed requested=2.000000 effective=-1.000000 clock=-1.000000 last=-1.000000 accepted=unknown
+2026-11-16 23:41:10.328 [DEBUG-replay-rate-W2] id=9 stage=model.received requested=2.000000 effective=-1.000000 clock=-1.000000 last=-1.000000 accepted=unknown
+2026-11-16 23:41:10.328 [DEBUG-replay-rate-W2] id=9 stage=controller.received requested=2.000000 effective=1.000000 clock=4078436.428780 last=4078427.589716 accepted=unknown
+2026-11-16 23:41:10.329 [DEBUG-replay-rate-W2] id=9 stage=model.result requested=2.000000 effective=2.000000 clock=-1.000000 last=-1.000000 accepted=true
+2026-11-16 23:41:20.457 [DEBUG-replay-rate-W2] stage=armed scope=synthetic-export-fixture

@@ -289,15 +289,14 @@ struct SessionsView: View {
                         .disabled(model.replayController.position >= model.replayController.duration)
                         .accessibilityIdentifier("replay-play")
                 }
-                Picker(AppLocalization.text("Speed"), selection: Binding(get: { model.replayController.playbackRate },
-                    set: { model.setReplayPlaybackRate($0) })) {
-                    Text(AppLocalization.text("0.5×")).tag(0.5)
-                    Text(AppLocalization.text("1×")).tag(1.0)
-                    Text(AppLocalization.text("2×")).tag(2.0)
-                }
-                .pickerStyle(.segmented)
-                .disabled(!hasTimeRange)
-                .accessibilityIdentifier("replay-speed")
+                ReplayPlaybackRatePicker(
+                    selection: Binding(get: { model.replayController.playbackRate },
+                                       set: { model.setReplayPlaybackRate($0) }),
+                    rate: model.replayController.playbackRate,
+                    enabled: hasTimeRange,
+                    owner: ObjectIdentifier(model),
+                    language: AppLanguageStore.shared.language.rawValue
+                ).equatable()
             }
             .buttonStyle(.bordered).controlSize(.large)
             Slider(value: $scrubSeconds, in: 0...max(model.replayController.duration, 0.000_001)) { editing in
@@ -547,5 +546,30 @@ struct SessionsView: View {
 
     private func formatDuration(_ seconds: Int) -> String {
         String(format: "%02d:%02d", seconds / 60, seconds % 60)
+    }
+}
+
+private struct ReplayPlaybackRatePicker: View, Equatable {
+    let selection: Binding<Double>
+    let rate: Double
+    let enabled: Bool
+    let owner: ObjectIdentifier
+    let language: String
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.rate == rhs.rate && lhs.enabled == rhs.enabled
+            && lhs.owner == rhs.owner && lhs.language == rhs.language
+    }
+
+    var body: some View {
+        // Position ticks must not rebuild a native control during its gesture.
+        Picker(AppLocalization.text("Speed"), selection: selection) {
+            Text(AppLocalization.text("0.5×")).tag(0.5)
+            Text(AppLocalization.text("1×")).tag(1.0)
+            Text(AppLocalization.text("2×")).tag(2.0)
+        }
+        .pickerStyle(.segmented)
+        .disabled(!enabled)
+        .accessibilityIdentifier("replay-speed")
     }
 }

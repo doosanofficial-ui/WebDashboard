@@ -65,3 +65,21 @@ The preceding sections are the reusable template. Scoped completed reviews follo
 | Help-signals-en-1, Help-signals-en-2, Help-signals-ko-1, Help-signals-ko-2 | Recorded diagnostic response, 53.0-percent fixture and unknown recorded freshness visible. STALE is the source-confirmed filter button, not a row-quality assertion. Its badge-like appearance is potentially ambiguous. Diagnostic bytes are not represented as passive raw CAN. |
 
 All listed original PNG/JSON pairs reside in `mobile-ios/App/Resources/HelpScreenshots`. No retouching, invented marker position or changed source fingerprint was used to disguise a historical capture. Other Replay, maximum-text, landscape and physical scopes are not marked visually verified by this entry. Existing data, layouts, app version and acquisition behavior were not changed by this evidence refresh.
+
+## REP-02 Actual Input Regression - 2026-11-17
+
+Environment: owned iPhone17/iOS27.0 Simulator, Xcode27.0/27A266a, App0.22.5(21), synthetic fixture, device foreground via actual XCTest. The Mac foreground was not taken from another task. Source base6ec1376 plus `SessionsView.swift` SHA256 `dfd843b1db2fbb66494749eb92187e42e34f02ff74ddb4d0c0488feb11791eab`, with the existing export-audit fixture transform; no diagnostic rate hooks in the fixed runs.
+
+| Directly Opened Image | Inspected State / Limits |
+| --- | --- |
+| [before-rate-stays-half](evidence/replay-rate-2026-11-17/before-rate-stays-half.png) | Actual failure video frame:0.5x remains selected during playback after the2x attempt; later frame also remained0.5x. Not a frozen position or a passing fast-rate selection. |
+| [after-rate-two](evidence/replay-rate-2026-11-17/after-rate-two.png) | Actual third fixed-run attachment, active2x selected at21.0/600s, Pause visible, DEMO/acquisition off. Labels/control are readable. Header partly under navigation in this scrolled state; no whole-layout perfection claim. |
+| [after-auto-end](evidence/replay-rate-2026-11-17/after-auto-end.png) | Actual fixed-run automatic5.0/5.0 end; Play disabled,2x retained, End reached text visible. Footer overlays scroll-under copy, not evaluated as whole-product layout acceptance. |
+| [large-portrait](evidence/replay-rate-2026-11-17/large-portrait.png) | Accessibility5 audit, vertical controls and native segmented labels visible; zero-range0.0/0.0 fixture means playback is disabled. Huge text requires scrolling; this is not proof of populated large-text playback. |
+| [large-landscape](evidence/replay-rate-2026-11-17/large-landscape.png) | Following landscape control frame directly opened, Go visible. Zero-range fixture and scroll-under caption remain explicit; no physical-device or all-viewport claim. |
+
+Original capture metadata/digests: [capture.json](evidence/replay-rate-2026-11-17/capture.json). No raster retouching, cropping or invented values. Failure frames were extracted from the actual recording using AVAssetImageGenerator and retain requested/actual frame timestamps in private receipts.
+
+Automated functional evidence is separate: original playback3/3, active slider1/1, large/landscape1/1 and Core474/474 passed. One separate Go-result attachment was black/unusable and is UNVERIFIED, not a visual PASS; three other generated menu states were not directly inspected. Shared Simulator pixels showed an active recording and remain private; that recording/device was not interrupted. Physical iPhone and vehicle UI were not inspected in this work.
+
+Parent review: Standards and Spec checked against the single-control fix and captured verifier. Binding closures intentionally are not compared; model identity plus visible inputs prevent stale-owner reuse. The verifier preserves real wrong-value failures even when the Controller accepts them, rejects incomplete or uncorrelated captures and keeps checks active under Python-O. This was primary review, not an unperformed external-agent approval. Remaining source-media qualification and full-product gates are listed in [the report](reports/replay-rate-fix-2026-11-17.md).
