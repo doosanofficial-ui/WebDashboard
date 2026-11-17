@@ -4,8 +4,8 @@ from pathlib import Path
 import subprocess, sys, hashlib, tempfile
 path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parents[1] / 'mobile-ios/App/TelemetryModel.swift'
 source = path.read_text(encoding='utf-8')
-def method(name):
-    marker = '    func '+name+'('
+def method(name, private=False):
+    marker = '    '+('private ' if private else '')+'func '+name+'('
     if source.count(marker) != 1:
         raise ValueError('Expected exactly one production method: '+name)
     start = source.index(marker)
@@ -17,12 +17,14 @@ def method(name):
         i+=1
     prefix = '    @discardableResult\n' if source[:start].endswith('    @discardableResult\n') else ''
     return prefix + source[start:i]
-methods = '\n'.join(method(n) for n in ['importAdapterProfile','createSantaFeDiagnosticProfile'])
+methods = '\n'.join([method('admitAdapterProfileMutation', private=True)] +
+                    [method(n) for n in ['importAdapterProfile','createSantaFeDiagnosticProfile']])
 pre = r'''
 import Foundation
 struct Signal: Codable, Equatable { let id: String; let timeout: Double }
 struct Query: Codable, Equatable { let signals: [Signal] }
 struct AdapterProfile: Codable, Equatable { let name: String; let signals: [Signal]; let diagnosticQueries: [Query] }
+struct DiagnosticWorkspace { var acquiring = false }
 enum BLEObservedProfileError: Error { case serviceCountIsAmbiguous, writeCharacteristicIsAmbiguous, notifyCharacteristicIsAmbiguous }
 enum SantaFeMX5HybridQueryCatalog { static func initialQueries() throws -> [Query] { [] } }
 struct Discovery {
@@ -37,6 +39,7 @@ final class Model {
     var localSignalTimeouts: [String: Double] = [:]
     var calls = 0
     var bleDiscovery: Discovery
+    var diagnosticWorkspace = DiagnosticWorkspace()
     init(_ url: URL?, _ profile: AdapterProfile) { adapterProfileURL=url; bleDiscovery=Discovery(profile: profile) }
     func configureLocalSignalTimeouts(_ signals: [Signal]) { calls += 1; localSignalTimeouts=Dictionary(uniqueKeysWithValues: signals.map{($0.id,$0.timeout)}) }
     func configureDiagnosticSignalTimeouts(_ queries: [Query]) { calls += 1; for signal in queries.flatMap(\.signals) { localSignalTimeouts[signal.id]=signal.timeout } }
@@ -54,6 +57,16 @@ let next=AdapterProfile(name:"new",signals:[Signal(id:"new",timeout:9)], diagnos
 let oldData=try JSONEncoder().encode(old); let newData=try JSONEncoder().encode(next)
 let model=Model(url,next)
 model.importAdapterProfile(oldData)
+let callsBeforeAcquisition = model.calls
+model.diagnosticWorkspace.acquiring = true
+check(!model.importAdapterProfile(newData), "active acquisition rejects profile replacement")
+check(model.adapterProfileStatus == "Stop acquisition before changing the adapter profile", "actual admission guard reports the acquisition boundary")
+check(model.adapterProfile==old && model.localSignalTimeouts==["old":1], "active acquisition preserves profile and timeouts")
+check(model.calls==callsBeforeAcquisition, "active acquisition does not schedule new configuration")
+check(try Data(contentsOf:url)==oldData, "active acquisition preserves saved profile bytes")
+model.createSantaFeDiagnosticProfile(from:UUID())
+check(!model.bleDiscoveryStatus.hasPrefix("Observed GATT profile converted"), "BLE caller propagates active acquisition rejection")
+model.diagnosticWorkspace.acquiring = false
 model.importAdapterProfile(Data("{invalid".utf8))
 check(model.adapterProfile==old, "invalid JSON preserves previous profile")
 check(model.localSignalTimeouts==["old":1], "invalid JSON preserves previous timeouts")
@@ -78,12 +91,12 @@ model.adapterProfileURL=nil
 model.importAdapterProfile(oldData)
 check(model.adapterProfile==next && model.localSignalTimeouts==["new":9], "missing destination preserves profile and timeouts")
 check(!model.adapterProfileStatus.hasPrefix("Profile loaded:"), "missing destination cannot report saved success")
-print("PROFILE CONTROL-FLOW PROBE: \(count) assertions, \(failures) failures; profile/GATT substitutes, real Foundation file I/O")
+print("PROFILE CONTROL-FLOW PROBE: \(count) assertions, \(failures) failures; profile/GATT/acquisition-state substitutes, actual guard, real Foundation file I/O")
 exit(failures==0 ? 0:1)
 '''
 code = pre + methods + post
 print('Source SHA256:',hashlib.sha256(source.encode()).hexdigest(),flush=True)
-print('Actual import/caller methods; profile and GATT are substitutes, Foundation file I/O is real.',flush=True)
+print('Actual admission/import/caller methods; profile, GATT and acquisition state are substitutes, Foundation file I/O is real.',flush=True)
 with tempfile.TemporaryDirectory(prefix='profile-import-probe-') as directory:
     out=Path(directory)/'probe.swift'
     binary=Path(directory)/'probe'
