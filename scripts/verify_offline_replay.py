@@ -857,13 +857,14 @@ def main():
     selection.add_argument("--se-viewport", action="store_true",
                            help="Re-execute the two viewport tests on iPhone SE (3rd generation), iOS 27.x only")
     selection.add_argument("--group", choices=TEST_GROUPS, help="Disjoint portion of the full 31-test CI gate")
-    selection.add_argument("--only-test", choices=["background-export-lifecycle", "active-slider-drag", "ui-clarity", "single-instant", "large-text", "recorded-history", "recorded-route", "native-save-reentry", "native-export-dismissal", "help-capture", "help-ko-landscape", "replay-speed", "seeded-picker", "setup-adapter-entry", "signal-dashboard", "profile-files", "invalid-custom-pid", "setup-replay-stop"],
+    selection.add_argument("--only-test", choices=["background-export-lifecycle", "active-slider-drag", "ui-clarity", "single-instant", "large-text", "recorded-history", "recorded-route", "native-save-reentry", "native-export-dismissal", "help-capture", "help-ko-landscape", "replay-speed", "analysis-sync", "seeded-picker", "setup-adapter-entry", "signal-dashboard", "profile-files", "invalid-custom-pid", "setup-replay-stop"],
                         help="Run one new native lifecycle test; default executes all twenty-five UI regressions")
     args = parser.parse_args()
     results = args.result_directory.resolve()
     create_result_directory(results)
     focused_methods = {"native-export-dismissal": "testNativeExportCancelReentryAndReplayAcrossTabs", "background-export-lifecycle": "testNativeExportBackgroundReturnCancelAndReentry", "seeded-picker": "testSeededSessionPickerSnapshotAndReadOnlyControls",
                        "active-slider-drag": "testPlayingLongSliderDragPreservesCapturedUserTarget",
+                       "analysis-sync": "testSessionReplayShowsAnalysisAndSynchronizedRecordedTime",
                        "recorded-history": "testRecordedSignalHistoryContainsOnlySelectedTimePrefix",
                        "recorded-route": "testRecordedGPSRouteContainsOnlySelectedTimePrefix",
                        "invalid-custom-pid": "testInvalidHexRequestIsRejectedBeforeAnyVehicleAction",
